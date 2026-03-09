@@ -1,0 +1,509 @@
+Created teh database already in supabase structure of scheme is in sql_creation_script.
+
+🧱 IMPLEMENTATION ORDER NOW
+
+Since DB exists, your new sequence is:
+
+RLS verification
+
+Service layer creation
+
+Auth + RBAC middleware
+
+Manual integrity testing
+
+Users module
+
+Classes
+
+Subjects
+
+Students
+
+CBC Assessments
+
+Attendance
+
+Finance
+
+Compliance
+
+Communication
+
+Analytics
+
+
+Summary: Files Created now
+#	File	Purpose
+1	lib/supabase/client.ts	Browser-side Supabase client
+2	lib/supabase/server.ts	Server-side + Admin Supabase clients
+3	lib/supabase/middleware.ts	Middleware-specific Supabase client
+4	types/roles.ts	13 roles, modules, actions, permission matrix, role hierarchy
+5	lib/auth/permissions.ts	Permission check utilities (hasPermission, canManageRole, etc.)
+6	types/auth.ts	Auth type definitions (AuthUser, LoginCredentials, etc.)
+7	services/auth.service.ts	Client-side auth: login, logout, password reset, session
+8	services/auth.server.service.ts	Server-side auth: user creation, role updates, deactivation
+9	services/audit.service.ts	Audit logging for app-level events
+10	middleware.ts	Root Next.js middleware: session refresh, auth check, RBAC routing
+11	lib/auth/guards.ts	Server component guards: requireAuth, requireRole, requirePermission
+12	lib/auth/api-guard.ts	API route guards: authenticateRequest, authorizeRequest
+13	hooks/useAuth.ts	Client React hook: user state, permission checks, role helpers
+14	components/auth/PermissionGate.tsx	UI visibility control: PermissionGate, AdminOnly, TeacherOnly, etc.
+Security Enforcement Summary
+Layer	Mechanism
+Database	RLS policies (school-scoped, role-filtered)
+Middleware	Session validation, token refresh, route-level RBAC
+Server Guards	requireAuth, requirePermission, requireRole for server components
+API Guards	authenticateRequest, authorizeRequest for API routes
+Client	useAuth hook + PermissionGate for UI visibility
+Escalation Prevention	canManageRole + role hierarchy enforced at every level
+Audit	Login attempts, role changes, config changes logged immutably
+Account Security	Failed login lockout (5 attempts / 30 min), account status checks
+
+Complete File Inventory
+#	File Path	Purpose
+1	features/users/types.ts	User, Role, Permission, Audit types
+2	features/users/validators/user.schema.ts	Zod schemas for all user inputs
+3	features/users/services/users.service.ts	User CRUD with escalation prevention
+4	features/users/services/roles.service.ts	Role listing and role count queries
+5	features/users/services/audit.service.ts	Audit trail query service
+6	features/users/index.ts	Barrel export for users module
+7	features/academics/types.ts	CBC hierarchy + assignment types
+8	features/academics/validators/academic.schema.ts	Zod schemas for all CBC inputs
+9	features/academics/services/learningAreas.service.ts	Learning Areas CRUD
+10	features/academics/services/strands.service.ts	Strands CRUD
+11	features/academics/services/subStrands.service.ts	Sub-Strands CRUD
+12	features/academics/services/competencies.service.ts	Competencies CRUD
+13	features/academics/services/teacherSubjects.service.ts	Teacher-Subject assignments
+14	features/academics/services/hierarchy.service.ts	Full CBC tree builder + summary
+15	features/academics/index.ts	Barrel export for academics module
+Key Production Safety Patterns Applied
+Pattern	Implementation
+Input validation	Zod schemas validate ALL inputs before DB queries
+School scoping	Every query filters by school_id (defense in depth with RLS)
+Role escalation prevention	canManageRole() checked on every user create/update/deactivate
+Self-modification guards	Users cannot change own role/status
+Referential integrity	Delete operations check for child records before proceeding
+Duplicate prevention	Unique checks before every create operation
+Parent entity validation	Create operations verify parent record exists and belongs to school
+Pagination	All list endpoints paginated with configurable page size (max 100)
+Consistent error handling	{ success, message, id? } pattern on all mutations
+Complete File Inventory for Assessment Module
+#	File Path	Purpose
+1	features/assessments/types.ts	All type definitions for assessments, reports, analytics
+2	features/assessments/validators/assessment.schema.ts	Zod schemas for all inputs (score 1-4 enforced)
+3	features/assessments/services/performanceLevels.service.ts	Performance level CRUD + score-to-level mapping
+4	features/assessments/services/assessmentTemplates.service.ts	Assessment template CRUD
+5	features/assessments/services/assessments.service.ts	Core assessment CRUD + bulk entry
+6	features/assessments/services/aggregation.service.ts	Hierarchical aggregation (Competency→SubStrand→Strand→LA)
+7	features/assessments/services/reportCards.service.ts	Report card generation, publishing, PDF management
+8	features/assessments/services/attendance.helper.ts	Attendance summary for report cards
+9	features/assessments/services/analytics.service.ts	Trends, class analytics, school dashboard
+10	features/assessments/index.ts	Barrel export for assessments module
+Key Features Implemented
+Feature	Implementation
+CBC 4-point scale	Score 1-4 with auto-mapping to performance levels
+Score validation	Zod schema enforces min(1).max(4)
+Hierarchical aggregation	Competency → Sub-Strand → Strand → Learning Area
+Term-wise & yearly reports	Separate aggregation logic for both
+Bulk assessment entry	Class-wide entry with upsert logic
+Trend detection	Compares terms: improving / stable / declining
+Level distribution	Counts of exceeding / meeting / approaching / below
+Class performance summary	Top performers + needs support list
+School-wide dashboard	Overall statistics across all classes
+Report card analytics JSON	Chart-ready data structure for frontend
+Publishing workflow	Draft → Published with timestamp
+PDF URL storage	Links to Supabase storage for generated PDFs
+Attendance integration	Included in report card analytics
+Teacher-level analytics	Performance summary per teacher
+Production Safety Patterns Applied
+Pattern	Implementation
+Score bounds	CHECK (score >= 1 AND score <= 4) in schema + Zod validation
+Unique assessment per competency/term	DB constraint + service-level duplicate check
+Auto level mapping	Score always maps to correct performance level
+School scoping	All queries filter by school_id
+Teacher edit restriction	Teachers can only update own assessments
+Admin-only delete	Only admins can delete assessments
+Unpublish protection	Only admins can unpublish report cards
+Consistent response format	{ success, message, id? } on all mutations
+
+Complete UI Design System File Inventory
+#	File Path	Purpose
+1	styles/globals.css	CSS variables, reset, utility classes
+2	tailwind.config.ts	Tailwind configuration with design tokens
+3	lib/theme/index.ts	Theme constants (colors, typography, spacing)
+4	components/ui/Button.tsx	Button component with variants
+5	lib/utils.ts	Utility functions (cn, formatDate, etc.)
+6	components/ui/Input.tsx	Text input with validation states
+7	components/ui/Select.tsx	Select dropdown component
+8	components/ui/Badge.tsx	Badges including CBC performance levels
+9	components/ui/Card.tsx	Card container and StatCard for KPIs
+10	components/ui/Table.tsx	Data table with sorting, loading states
+11	components/ui/Modal.tsx	Modal dialog with header, body, footer
+12	components/ui/Tabs.tsx	Tab navigation (term-wise/yearly)
+13	components/ui/Toast.tsx	Toast notifications with provider
+14	components/ui/Breadcrumbs.tsx	Navigation breadcrumbs
+15	components/ui/Spinner.tsx	Loading spinners (inline, page)
+16	components/ui/Avatar.tsx	User avatar with initials fallback
+17	components/ui/index.ts	UI component barrel export
+18	components/layout/Sidebar.tsx	Role-based sidebar navigation
+19	components/layout/Header.tsx	Dashboard header with search, notifications
+20	components/layout/DashboardLayout.tsx	Main layout composition
+21	components/layout/index.ts	Layout component barrel export
+22	hooks/useMediaQuery.ts	Responsive media query hooks
+Design System Summary
+Color Palette
+Color	Hex	Usage
+Primary	#1E3A8A → #3B82F6	Buttons, links, active states
+Success	#10B981	Meeting Expectation, success states
+Warning	#F59E0B	Approaching Expectation, warnings
+Error	#EF4444	Below Expectation, errors
+Info	#3B82F6	Exceeding Expectation, info messages
+CBC Performance Level Colors
+Level	Color	Background
+Exceeding	#3B82F6 (Blue)	#EFF6FF
+Meeting	#10B981 (Green)	#ECFDF5
+Approaching	#F59E0B (Amber)	#FFFBEB
+Below Expectation	#EF4444 (Red)	#FEF2F2
+Responsive Breakpoints
+Breakpoint	Width	Target
+xs	<640px	Mobile phones
+sm	≥640px	Large phones
+md	≥768px	Tablets
+lg	≥1024px	Laptops
+xl	≥1280px	Desktops
+2xl	≥1536px	Large screens
+Component Features
+Component	Key Features
+Button	7 variants, 8 sizes, loading state, icons
+Input	Labels, error states, password toggle, icons
+Table	Sorting, loading skeleton, empty state, responsive scroll
+Modal	Backdrop, escape close, confirm dialog variant
+Tabs	Controlled/uncontrolled, animated transitions
+Toast	4 types, auto-dismiss, stacking
+Sidebar	Collapsible, role-based menu filtering
+Badge	Status, performance levels, fee status variants
+Complete API Layer File Inventory
+#	File Path	Purpose
+1	lib/api/response.ts	Standardized API response helpers
+2	lib/api/validation.ts	Request validation utilities
+3	lib/api/rateLimit.ts	Rate limiting (in-memory for v1)
+4	lib/api/withAuth.ts	Auth/permission wrapper for routes
+5	app/api/auth/login/route.ts	POST login
+6	app/api/auth/logout/route.ts	POST logout
+7	app/api/auth/password-reset/route.ts	POST password reset request
+8	app/api/users/route.ts	GET/POST users
+9	app/api/users/[id]/route.ts	GET/PUT/DELETE user
+10	app/api/users/[id]/profile/route.ts	GET/PUT user profile
+11	app/api/roles/route.ts	GET roles
+12	app/api/audit-logs/route.ts	GET audit logs
+13	app/api/students/route.ts	GET/POST students
+14	app/api/students/[id]/route.ts	GET/PUT student
+15	app/api/assessments/route.ts	GET/POST assessments
+16	app/api/assessments/[id]/route.ts	GET/PUT/DELETE assessment
+17	app/api/assessments/bulk/route.ts	POST bulk assessments
+18	app/api/report-cards/route.ts	GET/POST report cards
+19	app/api/report-cards/[id]/route.ts	GET/PUT report card
+20	app/api/report-cards/publish/route.ts	POST publish reports
+21	app/api/report-cards/generate-class/route.ts	POST generate class reports
+22	app/api/analytics/class/[id]/route.ts	GET class analytics
+23	app/api/analytics/school/route.ts	GET school dashboard
+24	app/api/analytics/student/[id]/trends/route.ts	GET student trends
+25	app/api/learning-areas/route.ts	GET/POST learning areas
+26	app/api/learning-areas/[id]/hierarchy/route.ts	GET CBC hierarchy
+27	app/api/fees/route.ts	GET/POST fee structures
+28	app/api/student-fees/route.ts	GET/POST student fees
+29	app/api/payments/route.ts	GET/POST payments
+30	app/api/messages/route.ts	GET/POST messages
+31	app/api/notifications/route.ts	GET/POST notifications
+32	app/api/notifications/[id]/read/route.ts	PUT mark as read
+33	app/api/discipline/route.ts	GET/POST disciplinary records
+34	app/api/parent-consents/route.ts	GET/POST consents
+API Layer Summary
+Response Format
+
+JSON
+
+{
+  "success": true,
+  "data": {},
+  "error": null,
+  "meta": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 100,
+    "totalPages": 5
+  }
+}
+
+HTTP Status Codes Used
+Code	Meaning
+200	Success
+201	Created
+204	No Content
+400	Bad Request
+401	Unauthorized
+403	Forbidden
+404	Not Found
+422	Validation Error
+429	Rate Limited
+500	Server Error
+Security Features
+Feature	Implementation
+Authentication	withAuth wrapper validates session
+Authorization	withPermission checks role + module + action
+Validation	Zod schemas validate all inputs
+Rate Limiting	Per-user/IP rate limits on sensitive endpoints
+School Scoping	All queries filter by school_id
+Parent/Student Access	Restricted to own children/self
+Audit Trail	Sensitive actions logged via DB triggers
+Rate Limits (v1)
+Endpoint Type	Limit
+General API	100 req/min
+Login	5 req/15 min
+Password Reset	3 req/hour
+Messages	50/hour
+Report Generation	20/hour
+
+COMPLETE SUMMARY
+What Was Built
+1. Finance Module (features/finance/)
+File	Purpose
+types.ts	Type definitions for fees, payments, dashboard metrics
+validators/finance.schema.ts	Zod validation schemas for all finance inputs
+services/feeStructures.service.ts	CRUD for fee structures
+services/studentFees.service.ts	Student fee assignment, status calculation, bulk assign
+services/payments.service.ts	Payment recording, receipt generation
+services/dashboard.service.ts	Dashboard metrics, charts data, reports, defaulters list
+index.ts	Barrel export for finance module
+2. Finance Features Implemented
+Feature	Description
+Fee Structures	Create, update, delete (soft), list with filters
+Student Fees	Assign fees, bulk assign to class, waive fees
+Payments	Record payments, auto-receipt numbers, duplicate prevention
+Status Calculation	Auto-calculate: pending → partial → paid / overdue
+Dashboard Metrics	Total fees, collected, pending, overdue, collection rate
+Collection by Category	Breakdown by fee type
+Collection by Term	Breakdown by term
+Collection by Class	Breakdown by class with student counts
+Collection Trends	Daily collection with cumulative totals
+Student Statements	Full fee + payment history per student
+Defaulters List	Students with overdue fees
+3. Project Configuration Files
+File	Purpose
+package.json	Dependencies, scripts, configuration
+tsconfig.json	TypeScript configuration
+next.config.js	Next.js configuration with security headers
+tailwind.config.ts	Tailwind CSS with design tokens
+postcss.config.js	PostCSS configuration
+.env.local.example	Environment variables template
+.eslintrc.json	ESLint rules for code quality
+.prettierrc	Prettier formatting rules
+.prettierignore	Prettier ignore patterns
+.gitignore	Git ignore patterns
+types/database.types.ts	Supabase database TypeScript types
+app/layout.tsx	Root layout with providers
+app/(auth)/login/page.tsx	Login page
+features/auth/components/LoginForm.tsx	Login form component
+Complete Project Structure Summary
+
+text
+
+cbc-school-management-system/
+├── app/
+│   ├── layout.tsx
+│   ├── (auth)/
+│   │   └── login/page.tsx
+│   └── api/
+│       ├── auth/
+│       ├── users/
+│       ├── students/
+│       ├── assessments/
+│       ├── report-cards/
+│       ├── analytics/
+│       ├── learning-areas/
+│       ├── fees/
+│       ├── student-fees/
+│       ├── payments/
+│       ├── messages/
+│       ├── notifications/
+│       ├── discipline/
+│       └── parent-consents/
+├── components/
+│   ├── ui/                    # 17 UI components
+│   ├── layout/                # Sidebar, Header, DashboardLayout
+│   └── auth/                  # PermissionGate
+├── features/
+│   ├── users/                 # 6 files
+│   ├── academics/             # 9 files
+│   ├── assessments/           # 10 files
+│   ├── finance/               # 7 files
+│   └── auth/                  # Login components
+├── hooks/
+│   ├── useAuth.ts
+│   └── useMediaQuery.ts
+├── lib/
+│   ├── supabase/              # 3 client files
+│   ├── auth/                  # Guards, permissions
+│   ├── api/                   # Response, validation, rate limit
+│   ├── theme/                 # Design tokens
+│   └── utils.ts
+├── services/
+│   ├── auth.service.ts
+│   ├── auth.server.service.ts
+│   └── audit.service.ts
+├── styles/
+│   └── globals.css
+├── types/
+│   ├── auth.ts
+│   ├── roles.ts
+│   └── database.types.ts
+├── supabase/
+│   └── schema.sql             # Complete database schema
+└── [config files]
+
+Total Files Created
+Category	Count
+Database Schema	1 (comprehensive SQL)
+Service Layer Files	35+
+UI Components	22
+API Routes	34
+Configuration Files	11
+Type Definitions	8
+Total	110+ files
+Production Safety Features
+Feature	Status
+RLS Policies	✅ All tables
+Input Validation	✅ Zod schemas on all inputs
+Role-Based Access	✅ 13 roles with permission matrix
+School Scoping	✅ All queries filtered
+Audit Logging	✅ DB triggers + service layer
+Rate Limiting	✅ Login, messages, reports
+Escalation Prevention	✅ Role hierarchy enforced
+Account Lockout	✅ 5 failed attempts
+Duplicate Prevention	✅ Unique constraints + checks
+Soft Deletes	✅ Status-based deactivation
+v2 Roadmap Items (Planned)
+Feature	Notes
+Mpesa Integration	Payment gateway for mobile money
+Multi-school	Super admin manages multiple schools
+Mobile PWA	Progressive Web App for mobile
+SMS Notifications	Integration with SMS gateway
+PDF Generation	Server-side report card PDFs
+Bulk Import	CSV import for students, assessments
+Dashboard Caching	Redis for analytics performance
+
+FILES 57-116: COMPLETE MODULE IMPLEMENTATION
+
+ATTENDANCE MODULE (Files 57-63, 65-70)
+─────────────────────────────────────
+57  features/attendance/services/attendance.service.ts  ✅ Complete
+58  features/attendance/types.ts                        ✅ Complete
+59  features/attendance/validators/attendance.schema.ts ✅ Complete
+63  features/attendance/index.ts                        ✅ Complete
+65  app/api/attendance/route.ts                         ✅ Complete
+66  app/api/attendance/bulk/route.ts                    ✅ Complete
+67  app/api/attendance/class/[classId]/route.ts         ✅ Complete
+68  app/api/attendance/summary/student/[studentId]/route.ts ✅ Complete
+69  app/api/attendance/summary/class/[classId]/route.ts ✅ Complete
+70  app/api/attendance/school/route.ts                  ✅ Complete
+
+DISCIPLINE MODULE (Files 60-62, 64, 71-74)
+──────────────────────────────────────────
+60  features/discipline/types.ts                        ✅ Complete
+61  features/discipline/validators/discipline.schema.ts ✅ Complete
+62  features/discipline/services/discipline.service.ts  ✅ Complete
+64  features/discipline/index.ts                        ✅ Complete
+71  app/api/discipline/route.ts                         ✅ Complete
+72  app/api/discipline/[id]/route.ts                    ✅ Complete
+73  app/api/discipline/summary/route.ts                 ✅ Complete
+74  app/api/discipline/student/[studentId]/route.ts     ✅ Complete
+
+REPORTS & PDF MODULE (Files 75-84)
+──────────────────────────────────
+75  features/reports/types.ts                           ✅ Complete
+76  features/reports/services/reportCard.generator.ts   ✅ Complete
+77  features/reports/services/pdf.service.ts            ✅ Complete
+78  features/reports/services/reports.service.ts        ✅ Complete
+79  features/reports/validators/report.schema.ts        ✅ Complete
+80  features/reports/index.ts                           ✅ Complete
+81  app/api/reports/report-card/route.ts                ✅ Complete
+82  app/api/reports/class-report/route.ts               ✅ Complete
+83  app/api/reports/batch-report-cards/route.ts         ✅ Complete
+84  app/api/reports/print/[studentId]/route.ts          ✅ Complete
+
+COMMUNICATION MODULE (Files 85-101)
+────────────────────────────────────
+85  features/communication/types.ts                     ✅ Complete
+86  features/communication/validators/communication.schema.ts ✅ Complete
+87  features/communication/services/messages.service.ts ✅ Complete
+88  features/communication/services/notifications.service.ts ✅ Complete
+89  features/communication/services/announcements.service.ts ✅ Complete
+90  features/communication/index.ts                     ✅ Complete
+91  app/api/messages/route.ts                           ✅ Enhanced
+92  app/api/messages/[id]/route.ts                      ✅ Complete
+93  app/api/messages/sent/route.ts                      ✅ Complete
+94  app/api/messages/read-all/route.ts                  ✅ Complete
+95  app/api/notifications/route.ts                      ✅ Enhanced
+96  app/api/notifications/[id]/read/route.ts            ✅ Enhanced
+97  app/api/notifications/read-all/route.ts             ✅ Complete
+98  app/api/notifications/unread-count/route.ts         ✅ Complete
+99  app/api/notifications/bulk/route.ts                 ✅ Complete
+100 app/api/announcements/route.ts                      ✅ Complete
+101 app/api/announcements/[id]/route.ts                 ✅ Complete
+
+SETTINGS & CONFIGURATION MODULE (Files 102-116)
+────────────────────────────────────────────────
+102 features/settings/types.ts                          ✅ Complete
+103 features/settings/validators/settings.schema.ts     ✅ Complete
+104 features/settings/services/school.service.ts        ✅ Complete
+105 features/settings/services/academicYear.service.ts  ✅ Complete
+106 features/settings/services/classes.service.ts       ✅ Complete
+107 features/settings/index.ts                          ✅ Complete
+108 app/api/settings/school/route.ts                    ✅ Complete
+109 app/api/settings/config/route.ts                    ✅ Complete
+110 app/api/settings/academic-years/route.ts            ✅ Complete
+111 app/api/settings/academic-years/[id]/activate/route.ts ✅ Complete
+112 app/api/settings/terms/route.ts                     ✅ Complete
+113 app/api/settings/terms/[id]/activate/route.ts       ✅ Complete
+114 app/api/settings/classes/route.ts                   ✅ Complete
+115 app/api/settings/classes/[id]/route.ts              ✅ Complete
+116 app/api/settings/logo/route.ts                      ✅ Complete
+
+COMPLETE SYSTEM SUMMARY
+Total Files Created (All Modules)
+Category	Previous	New	Total
+Feature Types	8	5	13
+Feature Validators	6	5	11
+Feature Services	19	12	31
+Feature Index Files	5	5	10
+API Routes	34	28	62
+UI Components	22	0	22
+Config Files	11	0	11
+Auth/Lib Files	15	0	15
+TOTAL	120	55	175
+All Modules Complete
+Module	Types	Validators	Services	APIs	Status
+Auth & RBAC	✅	✅	✅	✅	Complete
+Users	✅	✅	✅	✅	Complete
+Academics (CBC)	✅	✅	✅	✅	Complete
+Assessments	✅	✅	✅	✅	Complete
+Finance	✅	✅	✅	✅	Complete
+Attendance	✅	✅	✅	✅	Complete
+Discipline	✅	✅	✅	✅	Complete
+Reports & PDF	✅	✅	✅	✅	Complete
+Communication	✅	✅	✅	✅	Complete
+Settings & Config	✅	✅	✅	✅	Complete
+UI Design System	✅	N/A	N/A	N/A	Complete
+Production Safety Applied Across All New Modules
+Pattern	Implementation
+Input Validation	Zod schemas on ALL inputs
+School Scoping	Every query filters by school_id
+Role-Based Access	withPermission on all mutating routes
+Rate Limiting	Applied on bulk/batch operations
+Pagination	All list endpoints paginated
+Soft Deletes	Status-based deactivation (no hard deletes)
+Duplicate Prevention	Unique checks before creates
+Referential Integrity	Verify parent records before operations
+Audit Trail	DB triggers handle audit logging
+Error Handling	Consistent { success, message } pattern

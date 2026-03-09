@@ -1,0 +1,180 @@
+// components/layout/Header.tsx
+// ============================================================
+// Dashboard Header
+// Contains: page title, breadcrumbs, search, notifications, user menu
+// ============================================================
+
+"use client";
+
+import { useState } from "react";
+import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { Avatar } from "@/components/ui/Avatar";
+import { Breadcrumbs, type BreadcrumbItem } from "@/components/ui/Breadcrumbs";
+import {
+  Search,
+  Bell,
+  Menu,
+  ChevronDown,
+  User,
+  Settings,
+  LogOut,
+} from "lucide-react";
+
+// ============================================================
+// Header Component
+// ============================================================
+interface HeaderProps {
+  title?: string;
+  breadcrumbs?: BreadcrumbItem[];
+  onMenuClick?: () => void;
+  className?: string;
+}
+
+function Header({
+  title,
+  breadcrumbs = [],
+  onMenuClick,
+  className,
+}: HeaderProps) {
+  const { user, logout } = useAuth();
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  return (
+    <header
+      className={cn(
+        "sticky top-0 z-sticky flex h-header items-center justify-between border-b border-secondary-200 bg-white px-6",
+        className,
+      )}
+    >
+      {/* Left Section */}
+      <div className="flex items-center gap-4">
+        {/* Mobile Menu Toggle */}
+        <button
+          onClick={onMenuClick}
+          className="lg:hidden rounded-lg p-2 text-secondary-400 hover:bg-secondary-100 hover:text-secondary-600"
+          aria-label="Toggle menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+
+        {/* Breadcrumbs / Title */}
+        <div className="flex flex-col gap-0.5">
+          {breadcrumbs.length > 0 && (
+            <Breadcrumbs items={breadcrumbs} showHome={true} />
+          )}
+          {title && (
+            <h1 className="text-lg font-semibold text-secondary-900">
+              {title}
+            </h1>
+          )}
+        </div>
+      </div>
+
+      {/* Right Section */}
+      <div className="flex items-center gap-2">
+        {/* Search */}
+        <div className="hidden md:flex items-center">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-secondary-400" />
+            <input
+              type="text"
+              placeholder="Search..."
+              className="h-9 w-64 rounded-lg border border-secondary-200 bg-secondary-50 pl-9 pr-3 text-sm placeholder:text-secondary-400 focus:border-primary-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/20"
+            />
+          </div>
+        </div>
+
+        {/* Notifications */}
+        <div className="relative">
+          <button
+            onClick={() => setShowNotifications(!showNotifications)}
+            className="relative rounded-lg p-2 text-secondary-400 hover:bg-secondary-100 hover:text-secondary-600"
+            aria-label="Notifications"
+          >
+            <Bell className="h-5 w-5" />
+            {/* Notification Badge */}
+            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-error-500" />
+          </button>
+
+          {/* Notifications Dropdown */}
+          {showNotifications && (
+            <div className="absolute right-0 top-full mt-2 w-80 rounded-lg border border-secondary-200 bg-white shadow-lg animate-scale-in">
+              <div className="border-b border-secondary-100 px-4 py-3">
+                <h3 className="font-semibold text-secondary-900">
+                  Notifications
+                </h3>
+              </div>
+              <div className="max-h-80 overflow-y-auto">
+                <div className="px-4 py-8 text-center text-sm text-secondary-500">
+                  No new notifications
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* User Menu */}
+        <div className="relative">
+          <button
+            onClick={() => setShowUserMenu(!showUserMenu)}
+            className="flex items-center gap-2 rounded-lg p-1.5 hover:bg-secondary-100"
+          >
+            <Avatar
+              name={user ? `${user.firstName} ${user.lastName}` : undefined}
+              size="sm"
+            />
+            <ChevronDown className="h-4 w-4 text-secondary-400" />
+          </button>
+
+          {/* User Dropdown */}
+          {showUserMenu && (
+            <div className="absolute right-0 top-full mt-2 w-56 rounded-lg border border-secondary-200 bg-white shadow-lg animate-scale-in">
+              {user && (
+                <div className="border-b border-secondary-100 px-4 py-3">
+                  <p className="font-medium text-secondary-900">
+                    {user.firstName} {user.lastName}
+                  </p>
+                  <p className="text-sm text-secondary-500">{user.email}</p>
+                </div>
+              )}
+              <div className="py-1">
+                <button className="flex w-full items-center gap-3 px-4 py-2 text-sm text-secondary-600 hover:bg-secondary-50">
+                  <User className="h-4 w-4" />
+                  Profile
+                </button>
+                <button className="flex w-full items-center gap-3 px-4 py-2 text-sm text-secondary-600 hover:bg-secondary-50">
+                  <Settings className="h-4 w-4" />
+                  Settings
+                </button>
+              </div>
+              <div className="border-t border-secondary-100 py-1">
+                <button
+                  onClick={logout}
+                  className="flex w-full items-center gap-3 px-4 py-2 text-sm text-error-600 hover:bg-error-50"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Click outside to close dropdowns */}
+      {(showUserMenu || showNotifications) && (
+        <div
+          className="fixed inset-0 z-[-1]"
+          onClick={() => {
+            setShowUserMenu(false);
+            setShowNotifications(false);
+          }}
+        />
+      )}
+    </header>
+  );
+}
+
+export { Header };

@@ -1,0 +1,519 @@
+
+    app/(dashboard)/finance/components/FeeAssignmentForm.tsx
+    app/(dashboard)/academics/components/HierarchyManager.tsx
+    app/(dashboard)/academics/page.tsx
+    features/assessments/services/scoreEntry.service.ts
+    app/(dashboard)/assessments/components/ScoreEntryGrid.tsx
+    app/(dashboard)/assessments/page.tsx
+    app/(dashboard)/attendance/components/RollCallGrid.tsx
+    app/(dashboard)/attendance/page.tsx
+    app/(dashboard)/discipline/components/DisciplineForm.tsx
+    app/(dashboard)/discipline/components/DisciplineHistory.tsx
+    app/(dashboard)/discipline/page.tsx
+    features/timetable/index.ts
+    app/(dashboard)/timetable/components/TimetableGrid.tsx
+    app/(dashboard)/timetable/components/LessonForm.tsx
+    app/(dashboard)/timetable/page.tsx
+    features/reports/services/reportCardPdf.service.ts
+    app/(dashboard)/reports/components/ReportCardPreview.tsx
+    app/(dashboard)/reports/page.tsx
+    app/(dashboard)/communication/page.tsx
+    app/(dashboard)/settings/page.tsx
+    app/(dashboard)/settings/academic/page.tsx
+    API routes for students (app/api/students/route.ts, etc.)
+    Additional supporting components as needed
+
+Markdown
+
+# KENYAN CBC SCHOOL MANAGEMENT SYSTEM - PROJECT CONTINUATION BRIEF
+
+You are taking over a **production-grade Next.js 14 school management system** that is **60% complete** (18 of ~30 core files implemented). This document contains ALL context needed to continue seamlessly.
+
+---
+
+## 🎯 PROJECT OVERVIEW
+
+**Purpose**: Complete CBC (Competency-Based Curriculum) school management system for Kenyan schools  
+**Current Status**: Core infrastructure complete, 6 major modules operational, API routes needed  
+**Your Mission**: Implement remaining pages, API routes, and type definitions without breaking existing code
+
+---
+
+## 📁 COMPLETE FILE INVENTORY
+
+### ✅ IMPLEMENTED (18 files)
+
+#### **Core Layout & Auth**
+1. `app/(dashboard)/layout.tsx` — Server-side auth wrapper, DashboardLayout integration
+2. `app/(dashboard)/dashboard/page.tsx` — Role-specific dashboards (Admin/Teacher/Parent/Student)
+
+#### **Students Module (100% Complete)**
+3. `features/students/types.ts` — Full type definitions (Student, Guardian, Filters, etc.)
+4. `features/students/services/students.service.ts` — 16 functions (CRUD, guardians, promotion, bulk import)
+5. `features/students/validators/student.schema.ts` — Zod schemas with custom validators
+6. `features/students/index.ts` — Barrel exports
+7. `app/(dashboard)/students/page.tsx` — List with filters/search/pagination
+8. `app/(dashboard)/students/new/page.tsx` — Multi-step creation form
+9. `app/(dashboard)/students/[id]/page.tsx` — Detail page with 5 tabs
+
+#### **Finance Module (90% Complete)**
+10. `app/(dashboard)/finance/page.tsx` — Dashboard with metrics
+11. `app/(dashboard)/finance/payments/new/page.tsx` — Payment recording form
+12. `app/(dashboard)/finance/fee-structures/page.tsx` — Fee structure management
+13. `app/(dashboard)/finance/fee-structures/new/page.tsx` — Fee creation form
+
+#### **Attendance Module (100% Complete)**
+14. `app/(dashboard)/attendance/page.tsx` — Daily roll call grid with bulk actions
+
+#### **Discipline Module (100% Complete)**
+15. `app/(dashboard)/discipline/page.tsx` — Incident records with severity tracking
+
+#### **Assessments Module (100% Complete)**
+16. `app/(dashboard)/assessments/page.tsx` — CBC competency score entry grid
+
+#### **Timetable Module (90% Complete)**
+17. `app/(dashboard)/timetable/page.tsx` — Weekly schedule grid view
+18. `app/(dashboard)/timetable/components/TimetableGrid.tsx` — Interactive grid component
+
+### ❌ CRITICAL MISSING FILES (Priority Order)
+
+#### **Type Definitions**
+- `features/timetable/types.ts` ⚠️ **BLOCKING** — Referenced by timetable.service.ts
+- `features/timetable/index.ts`
+
+#### **API Routes (Essential for Frontend)**
+- `app/api/students/route.ts` — GET (list with filters), POST (create)
+- `app/api/students/[id]/route.ts` — GET (single), PATCH (update), DELETE
+- `app/api/students/[id]/fees/route.ts` — GET student fees for payment form
+- `app/api/assessments/bulk/route.ts` — POST bulk assessment save
+- `app/api/attendance/bulk/route.ts` — POST bulk attendance save
+- `app/api/payments/route.ts` — POST payment recording
+- `app/api/fee-structures/route.ts` — GET, POST
+- `app/api/discipline/route.ts` — GET, POST
+- `app/api/timetable/route.ts` — GET, POST, PATCH, DELETE
+
+#### **Report Generation (In Progress)**
+- `app/(dashboard)/reports/page.tsx` ⚠️ **YOUR NEXT TASK**
+- `app/(dashboard)/reports/generate/page.tsx` — Bulk generation form
+- `features/reports/services/pdf.service.ts` — Enhance existing PDF generator
+
+---
+
+## 🏗️ ARCHITECTURE RULES (MANDATORY)
+
+### 1. Feature-First Structure
+
+features/
+[module_name]/
+types.ts ← All TypeScript interfaces
+services/ ← Business logic (Supabase queries)
+validators/ ← Zod schemas
+components/ ← Module-specific UI (optional)
+index.ts ← Barrel exports
+
+text
+
+
+**Example Service Pattern:**
+```typescript
+// features/students/services/students.service.ts
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+
+export async function getStudents(schoolId: string, options: StudentQueryOptions) {
+  const supabase = await createSupabaseServerClient(); // ALWAYS await
+  
+  let query = supabase
+    .from('students')
+    .select('*, classes ( name )')
+    .eq('school_id', schoolId); // ALWAYS filter by school_id
+    
+  // Apply filters, pagination, etc.
+  const { data, error } = await query;
+  
+  if (error) throw new Error(`Failed: ${error.message}`);
+  return data.map(mapRowToDomain);
+}
+
+2. Supabase Client Usage (CRITICAL)
+
+TypeScript
+
+// ✅ Server Components & API Routes
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+const supabase = await createSupabaseServerClient(); // ASYNC
+
+// ✅ Client Components
+'use client';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+const supabase = createSupabaseBrowserClient(); // SYNC singleton
+
+// ❌ NEVER use @supabase/supabase-js createClient() directly
+
+3. Mandatory Auth Pattern (Every Page)
+
+TypeScript
+
+export default async function MyPage() {
+  const supabase = await createSupabaseServerClient();
+
+  // 1. Verify session
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) redirect('/login');
+
+  // 2. Fetch user with role
+  const { data: user } = await supabase
+    .from('users')
+    .select('user_id, school_id, roles ( name )')
+    .eq('user_id', session.user.id)
+    .single();
+
+  if (!user || !user.school_id) redirect('/login');
+
+  const roleName = (user.roles as any)?.name ?? 'student';
+  const schoolId = user.school_id;
+
+  // 3. Role-based access control
+  const allowedRoles = ['super_admin', 'school_admin', 'principal', 'teacher'];
+  if (!allowedRoles.includes(roleName)) redirect('/dashboard');
+
+  // 4. Fetch data (always school-scoped)
+  const { data } = await supabase
+    .from('table_name')
+    .select('*')
+    .eq('school_id', schoolId); // CRITICAL
+
+  return <PageUI data={data} />;
+}
+
+4. Server vs Client Components
+
+TypeScript
+
+// ✅ Server Component (default)
+export default async function Page() {
+  const data = await fetchData(); // Direct async/await
+  return <UI data={data} />;
+}
+
+// ✅ Client Component (when you need interactivity)
+'use client';
+export function InteractiveForm() {
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+  
+  const handleSubmit = () => {
+    startTransition(async () => {
+      const response = await fetch('/api/endpoint', { method: 'POST', ... });
+      router.refresh(); // Re-fetch server data
+    });
+  };
+}
+
+5. API Route Pattern
+
+TypeScript
+
+// app/api/students/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { successResponse, errorResponse } from '@/lib/api/response';
+
+export async function GET(req: NextRequest) {
+  const supabase = await createSupabaseServerClient();
+  
+  // Auth check
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return errorResponse('Unauthorized', 401);
+
+  const { data: user } = await supabase
+    .from('users')
+    .select('school_id')
+    .eq('user_id', session.user.id)
+    .single();
+
+  if (!user?.school_id) return errorResponse('Forbidden', 403);
+
+  // Query with school filtering
+  const { data, error } = await supabase
+    .from('students')
+    .select('*')
+    .eq('school_id', user.school_id);
+
+  if (error) return errorResponse(error.message, 500);
+
+  return successResponse(data, 'Students retrieved', 200);
+}
+
+🗄️ DATABASE SCHEMA (KEY TABLES)
+Core Tables
+
+    schools — Multi-tenant root (all tables reference school_id)
+    users — Links to auth.users, has role_id, school_id
+    roles — 13 system roles (super_admin, school_admin, principal, etc.)
+    students — Links to users, has current_class_id
+    classes — Belongs to grades, has class_teacher_id
+    staff — Links to users, has position enum
+
+CBC Hierarchy
+
+text
+
+learning_areas (e.g., Mathematics)
+  └── strands (e.g., Numbers)
+      └── sub_strands (e.g., Whole Numbers)
+          └── competencies (e.g., "Count numbers 1-100")
+
+Assessment Tables
+
+    assessments — Individual competency scores (1-4 scale)
+    assessment_aggregates — Auto-computed summaries per learning area
+    performance_levels — Maps numeric scores to labels (exceeding, meeting, etc.)
+    report_cards — Generated reports with analytics_json field
+
+Finance Tables
+
+    fee_structures — Fee definitions (tuition, lunch, etc.)
+    student_fees — Assigned fees per student (with balance generated column)
+    payments — Individual payment records
+
+Other Key Tables
+
+    attendance — Daily records with status enum
+    timetable_slots — Weekly schedule with conflict prevention
+    disciplinary_records — Incidents with severity enum
+
+Auto-Triggers (DO NOT MODIFY)
+
+    fn_update_assessment_aggregate() — Updates aggregates when assessments change
+    fn_update_student_fee_on_payment() — Updates balances when payments recorded
+
+🎨 UI COMPONENT LIBRARY (All Pre-built)
+
+TypeScript
+
+// Import from components/ui/
+import {
+  Button,      // variants: primary, secondary, ghost, danger
+  Card, CardHeader, CardTitle, CardContent, CardFooter,
+  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+  Input,       // with leftIcon, error props
+  Select,      // standard HTML select with styling
+  Badge,       // variants: success, warning, danger, primary, default
+  Avatar,      // with fallback initials
+  Modal,       // with ConfirmDialog
+  Tabs, TabsList, TabsTrigger, TabsContent,
+  Spinner,
+  Alert,
+  PageHeader,  // Standard page header with icon + actions
+} from '@/components/ui';
+
+// Usage Example
+<PageHeader
+  title="Students"
+  description="Manage student records"
+  icon={<Users className="h-6 w-6" />}
+>
+  <Button variant="primary" leftIcon={<Plus />}>
+    Add Student
+  </Button>
+</PageHeader>
+
+Utility Functions
+
+TypeScript
+
+import { cn, formatCurrency, formatDate, getInitials } from '@/lib/utils';
+
+cn('base-class', condition && 'conditional-class') // Tailwind merge
+formatCurrency(1500.50) // "KES 1,500.50"
+formatDate("2025-01-15") // "15 Jan 2025" (Kenyan locale)
+getInitials("John Kamau") // "JK"
+
+🔐 ROLE-BASED ACCESS CONTROL
+13 System Roles
+
+TypeScript
+
+type RoleName = 
+  | 'super_admin'        // System owner (no school_id)
+  | 'school_admin'       // School owner
+  | 'principal'          // Academic head
+  | 'deputy_principal'
+  | 'teacher'
+  | 'class_teacher'      // Homeroom teacher
+  | 'subject_teacher'
+  | 'finance_officer'
+  | 'bursar'
+  | 'parent'             // Portal access only
+  | 'student'            // Portal access only
+  | 'librarian'
+  | 'ict_admin';
+
+Permission Patterns
+
+TypeScript
+
+// Admin-level roles
+const isAdmin = ['super_admin', 'school_admin', 'principal', 'deputy_principal'].includes(roleName);
+
+// Finance roles
+const canManageFinance = ['super_admin', 'school_admin', 'principal', 'finance_officer', 'bursar'].includes(roleName);
+
+// Teaching roles
+const canTeach = ['teacher', 'class_teacher', 'subject_teacher'].includes(roleName);
+
+// Parent filtering
+if (roleName === 'parent') {
+  // Fetch linked children
+  const { data: guardianLinks } = await supabase
+    .from('student_guardians')
+    .select('student_id')
+    .eq('guardian_user_id', user.user_id);
+    
+  const childrenIds = guardianLinks.map(l => l.student_id);
+  query = query.in('student_id', childrenIds);
+}
+
+📋 CODING STANDARDS CHECKLIST
+Every Page Must:
+
+    ✅ Import Supabase client correctly (server vs browser)
+    ✅ Perform auth check at the top
+    ✅ Filter all queries by school_id (except super_admin)
+    ✅ Handle "No active academic year/term" gracefully
+    ✅ Use existing UI components (no new component creation)
+    ✅ Format dates with formatDate(), currency with formatCurrency()
+    ✅ Use useTransition() for client-side pending states
+    ✅ Call router.refresh() after mutations
+    ✅ Show loading states with loading={isPending} prop
+    ✅ Handle errors with toast notifications
+
+Every Service Must:
+
+    ✅ Use await createSupabaseServerClient()
+    ✅ Accept schoolId as first parameter
+    ✅ Throw errors with descriptive messages
+    ✅ Return typed domain models (not raw DB rows)
+    ✅ Use .maybeSingle() for optional data, .single() only when guaranteed
+
+Every API Route Must:
+
+    ✅ Verify session at the top
+    ✅ Check user's school_id
+    ✅ Validate request body with Zod
+    ✅ Use successResponse() and errorResponse() helpers
+    ✅ Return proper HTTP status codes
+
+🚨 COMMON PITFALLS (AVOID THESE)
+❌ DON'T
+
+TypeScript
+
+// Wrong Supabase import
+import { createClient } from '@supabase/supabase-js';
+
+// Missing school filter (data leak!)
+const { data } = await supabase.from('students').select('*');
+
+// Using .single() without checking existence
+const { data } = await supabase.from('terms').select('*').eq('is_active', true).single();
+// ☝️ Throws 406 error if no active term
+
+// Forgetting to await server client
+const supabase = createSupabaseServerClient(); // Missing await
+
+✅ DO
+
+TypeScript
+
+// Correct import
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+
+// Always filter by school
+const { data } = await supabase
+  .from('students')
+  .select('*')
+  .eq('school_id', schoolId);
+
+// Use maybeSingle for optional data
+const { data } = await supabase
+  .from('terms')
+  .select('*')
+  .eq('is_active', true)
+  .maybeSingle();
+
+// Always await server client
+const supabase = await createSupabaseServerClient();
+
+🎯 YOUR IMMEDIATE TASK
+
+File to Implement: app/(dashboard)/reports/page.tsx
+Requirements
+
+    Server component with standard auth check
+    Display list of generated report cards from report_cards table
+    Show stats: total reports, published, pending, average performance
+    Filter by: term, class, student (if admin), publication status
+    Table columns: Student, Class, Term, Overall Score, Performance Level, Status, Generated Date, Actions
+    Actions per row: View (detail page), Download PDF (if exists), Print (generate on-demand)
+    Parent role: auto-filter to only their children's reports
+    Link to /reports/generate for bulk generation (admin only)
+    Show performance distribution (4 boxes: exceeding/meeting/approaching/below)
+
+Success Criteria
+
+    Matches coding style of files 1-18 exactly
+    No TypeScript errors
+    Works for all roles (admin sees all, parent sees children only)
+    Gracefully handles no active term
+    Uses existing Card, Table, Badge, PageHeader components
+    Pagination with URL state
+
+Data Source
+
+TypeScript
+
+const { data } = await supabase
+  .from('report_cards')
+  .select(`
+    *,
+    students ( first_name, last_name, admission_number, photo_url ),
+    classes ( name, stream ),
+    terms ( name )
+  `)
+  .eq('school_id', schoolId)
+  .eq('term_id', selectedTermId);
+
+📦 REFERENCE FILES (For Pattern Matching)
+
+Best Examples to Study:
+
+    app/(dashboard)/students/page.tsx — Perfect filtering/pagination pattern
+    app/(dashboard)/finance/page.tsx — Dashboard metrics pattern
+    app/(dashboard)/attendance/page.tsx — Grid interface pattern
+    features/students/services/students.service.ts — Service pattern
+    features/students/validators/student.schema.ts — Validation pattern
+
+Copy These Patterns Exactly:
+
+    Auth check from any page file
+    Pagination from students/page.tsx
+    Stats cards from finance/page.tsx
+    Client filters component from discipline/page.tsx
+
+✅ FINAL CHECKLIST BEFORE SUBMITTING
+
+    File starts with correct Supabase import
+    Auth check is first thing in component
+    All queries filter by school_id
+    Uses maybeSingle() for academic year/term
+    Client components marked with 'use client'
+    All interactive UI uses useTransition()
+    Date formatting uses formatDate()
+    No new UI components created
+    Empty states handled gracefully
+    Role-based access implemented
+    No TypeScript any types (except for mapped DB rows)
+    Comments are minimal and only for complex logic
+
+START IMPLEMENTING app/(dashboard)/reports/page.tsx NOW. implement one file at a time kindly an dask for permission to continue to the next, hope you have all you need to not cause errors if not let me know

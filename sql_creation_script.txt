@@ -1,0 +1,2259 @@
+-- ============================================================
+-- CBC SCHOOL MANAGEMENT SYSTEM — COMPLETE DATABASE SCHEMA
+-- Target: Supabase (PostgreSQL)
+-- Version: 1.0.0
+-- ============================================================
+
+-- ============================================================
+-- SECTION 1A: EXTENSIONS
+-- ============================================================
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- ============================================================
+-- SECTION 1B: CUSTOM ENUM TYPES
+-- ============================================================
+
+-- User/staff status
+CREATE TYPE user_status AS ENUM ('active', 'inactive', 'suspended', 'archived');
+
+-- Student enrollment status
+CREATE TYPE enrollment_status AS ENUM ('active', 'transferred', 'graduated', 'withdrawn', 'suspended');
+
+-- Term definitions (CBC Kenya)
+CREATE TYPE school_term AS ENUM ('Term 1', 'Term 2', 'Term 3');
+
+-- Attendance status
+CREATE TYPE attendance_status AS ENUM ('present', 'absent', 'late', 'excused');
+
+-- Payment methods
+CREATE TYPE payment_method AS ENUM ('cash', 'bank_transfer', 'mpesa', 'cheque', 'other');
+
+-- Fee status
+CREATE TYPE fee_status AS ENUM ('pending', 'partial', 'paid', 'overdue', 'waived');
+
+-- Consent status
+CREATE TYPE consent_status AS ENUM ('granted', 'denied', 'pending', 'withdrawn');
+
+-- Message read status
+CREATE TYPE read_status AS ENUM ('unread', 'read');
+
+-- Notification types
+CREATE TYPE notification_type AS ENUM ('info', 'warning', 'alert', 'success', 'system');
+
+-- Audit action types
+CREATE TYPE audit_action AS ENUM ('INSERT', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'FAILED_LOGIN', 'ROLE_CHANGE', 'CONFIG_CHANGE', 'PROMOTION', 'PAYMENT');
+
+-- School type
+CREATE TYPE school_type AS ENUM ('primary', 'junior_secondary', 'academy', 'mixed');
+
+-- Gender
+CREATE TYPE gender_type AS ENUM ('male', 'female', 'other');
+
+-- Staff position
+CREATE TYPE staff_position AS ENUM (
+  'principal', 'deputy_principal', 'class_teacher', 'subject_teacher',
+  'finance_officer', 'bursar', 'librarian', 'ict_admin', 'admin_staff', 'support_staff'
+);
+
+-- Discipline incident severity
+CREATE TYPE incident_severity AS ENUM ('minor', 'moderate', 'major', 'critical');
+
+-- CBC performance levels (4-point scale)
+CREATE TYPE cbc_performance_level AS ENUM (
+  'below_expectation',   -- 1
+  'approaching',         -- 2
+  'meeting',             -- 3
+  'exceeding'            -- 4
+);
+
+
+-- ============================================================
+-- SECTION 1C: SCHOOLS TABLE (Foundation — all tables reference this)
+-- ============================================================
+CREATE TABLE schools (
+  school_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name VARCHAR(255) NOT NULL,
+  type school_type NOT NULL DEFAULT 'primary',
+  motto VARCHAR(255),
+  address TEXT,
+  county VARCHAR(100),
+  sub_county VARCHAR(100),
+  contact_email VARCHAR(255),
+  contact_phone VARCHAR(20),
+  logo_url TEXT,
+  registration_number VARCHAR(100) UNIQUE,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE schools IS 'Core school profiles. All other tables reference school_id for RLS isolation.';
+
+
+-- ============================================================
+-- SECTION 1D: ROLES TABLE
+-- ============================================================
+CREATE TABLE roles (
+  role_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name VARCHAR(50) NOT NULL UNIQUE,
+  description TEXT,
+  is_system_role BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE roles IS 'System roles for RBAC. Maps to 13 defined roles.';
+
+-- Seed the 13 system roles
+INSERT INTO roles (name, description, is_system_role) VALUES
+  ('super_admin', 'System owner with full access across all schools', true),
+  ('school_admin', 'School-level administrator with full school access', true),
+  ('principal', 'School principal with academic and administrative oversight', true),
+  ('deputy_principal', 'Deputy principal assisting the principal', true),
+  ('teacher', 'General teacher role', true),
+  ('class_teacher', 'Teacher assigned as class/homeroom teacher', true),
+  ('subject_teacher', 'Teacher assigned to specific subjects', true),
+  ('finance_officer', 'Handles fee structures, payments, and financial reports', true),
+  ('parent', 'Parent/guardian with access to linked child data', true),
+  ('student', 'Student with access to own records only', true),
+  ('bursar', 'Handles day-to-day financial transactions', true),
+  ('librarian', 'Manages library resources', true),
+  ('ict_admin', 'Manages ICT infrastructure and system settings', true);
+
+
+-- ============================================================
+-- SECTION 1E: USERS TABLE
+-- ============================================================
+CREATE TABLE users (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE RESTRICT,
+  school_id UUID REFERENCES schools(school_id) ON DELETE RESTRICT,
+  role_id UUID NOT NULL REFERENCES roles(role_id) ON DELETE RESTRICT,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  first_name VARCHAR(100) NOT NULL,
+  last_name VARCHAR(100) NOT NULL,
+  middle_name VARCHAR(100),
+  phone VARCHAR(20),
+  gender gender_type,
+  status user_status NOT NULL DEFAULT 'active',
+  email_verified BOOLEAN NOT NULL DEFAULT false,
+  failed_login_attempts INT NOT NULL DEFAULT 0,
+  locked_until TIMESTAMPTZ,
+  last_login_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by UUID REFERENCES auth.users(id),
+  updated_by UUID REFERENCES auth.users(id)
+);
+
+COMMENT ON TABLE users IS 'All system users. Links to Supabase auth.users. school_id is NULL for super_admin only.';
+COMMENT ON COLUMN users.school_id IS 'NULL only for super_admin role. All others must belong to a school.';
+COMMENT ON COLUMN users.failed_login_attempts IS 'Account locks after 5 failed attempts.';
+
+-- Ensure non-super-admin users must have a school_id
+-- (Enforced via application logic + trigger, since CHECK can't reference another table)
+
+
+-- ============================================================
+-- SECTION 1F: USER PROFILES (Extended info)
+-- ============================================================
+CREATE TABLE user_profiles (
+  profile_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL UNIQUE REFERENCES users(user_id) ON DELETE RESTRICT,
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  date_of_birth DATE,
+  address TEXT,
+  photo_url TEXT,
+  national_id VARCHAR(20),
+  emergency_contact_name VARCHAR(200),
+  emergency_contact_phone VARCHAR(20),
+  blood_group VARCHAR(5),
+  medical_conditions TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE user_profiles IS 'Extended profile data for all users. Sensitive fields protected by RLS.';
+
+-- ============================================================
+-- SECTION 2A: ACADEMIC YEARS
+-- ============================================================
+CREATE TABLE academic_years (
+  academic_year_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  year VARCHAR(9) NOT NULL, -- e.g., '2025'
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by UUID REFERENCES auth.users(id),
+
+  CHECK (end_date > start_date)
+);
+
+COMMENT ON TABLE academic_years IS 'Academic year definitions per school. Only one can be active per school.';
+
+-- Only one active academic year per school
+CREATE UNIQUE INDEX idx_unique_active_academic_year
+  ON academic_years (school_id) WHERE is_active = true;
+
+
+-- ============================================================
+-- SECTION 2B: TERMS
+-- ============================================================
+CREATE TABLE terms (
+  term_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  academic_year_id UUID NOT NULL REFERENCES academic_years(academic_year_id) ON DELETE RESTRICT,
+  name school_term NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  CHECK (end_date > start_date),
+  UNIQUE (school_id, academic_year_id, name)
+);
+
+COMMENT ON TABLE terms IS 'Term definitions per academic year. Only one active term per school at a time.';
+
+-- Only one active term per school
+CREATE UNIQUE INDEX idx_unique_active_term
+  ON terms (school_id) WHERE is_active = true;
+
+
+-- ============================================================
+-- SECTION 2C: GRADES / LEVELS (CBC Structure)
+-- ============================================================
+CREATE TABLE grades (
+  grade_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  name VARCHAR(50) NOT NULL,          -- e.g., 'Grade 1', 'Grade 2', ... 'Grade 9'
+  level_order INT NOT NULL,            -- 1, 2, 3... for sorting
+  description TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  UNIQUE (school_id, name),
+  UNIQUE (school_id, level_order)
+);
+
+COMMENT ON TABLE grades IS 'CBC grade levels. Grade 1-6 (Primary), Grade 7-9 (Junior Secondary).';
+
+
+-- ============================================================
+-- SECTION 2D: CLASSES (Streams per grade)
+-- ============================================================
+CREATE TABLE classes (
+  class_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  grade_id UUID NOT NULL REFERENCES grades(grade_id) ON DELETE RESTRICT,
+  name VARCHAR(50) NOT NULL,           -- e.g., 'Grade 1 East', 'Grade 3 Blue'
+  stream VARCHAR(50),                  -- e.g., 'East', 'West', 'Blue'
+  capacity INT,
+  class_teacher_id UUID REFERENCES users(user_id) ON DELETE SET NULL,
+  academic_year_id UUID NOT NULL REFERENCES academic_years(academic_year_id) ON DELETE RESTRICT,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  UNIQUE (school_id, grade_id, stream, academic_year_id),
+  CHECK (capacity IS NULL OR capacity > 0)
+);
+
+COMMENT ON TABLE classes IS 'Class/stream definitions per grade per academic year. Each class can have one class teacher.';
+
+
+-- ============================================================
+-- SECTION 2E: LEARNING AREAS (CBC Subjects)
+-- ============================================================
+CREATE TABLE learning_areas (
+  learning_area_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  name VARCHAR(150) NOT NULL,
+  description TEXT,
+  is_core BOOLEAN NOT NULL DEFAULT true,
+  applicable_grades UUID[] DEFAULT '{}',  -- Array of grade_ids where this applies
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  UNIQUE (school_id, name)
+);
+
+COMMENT ON TABLE learning_areas IS 'CBC learning areas (subjects). E.g., Mathematics, English, Kiswahili, Science & Technology, etc.';
+
+
+-- ============================================================
+-- SECTION 2F: STRANDS
+-- ============================================================
+CREATE TABLE strands (
+  strand_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  learning_area_id UUID NOT NULL REFERENCES learning_areas(learning_area_id) ON DELETE RESTRICT,
+  name VARCHAR(200) NOT NULL,
+  description TEXT,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  UNIQUE (learning_area_id, name)
+);
+
+COMMENT ON TABLE strands IS 'Strands within each learning area. First level of CBC topic hierarchy.';
+
+
+-- ============================================================
+-- SECTION 2G: SUB-STRANDS
+-- ============================================================
+CREATE TABLE sub_strands (
+  sub_strand_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  strand_id UUID NOT NULL REFERENCES strands(strand_id) ON DELETE RESTRICT,
+  name VARCHAR(200) NOT NULL,
+  description TEXT,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  UNIQUE (strand_id, name)
+);
+
+COMMENT ON TABLE sub_strands IS 'Sub-strands within each strand. Second level of CBC topic hierarchy.';
+
+
+-- ============================================================
+-- SECTION 2H: COMPETENCIES
+-- ============================================================
+CREATE TABLE competencies (
+  competency_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  sub_strand_id UUID NOT NULL REFERENCES sub_strands(sub_strand_id) ON DELETE RESTRICT,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  UNIQUE (sub_strand_id, name)
+);
+
+COMMENT ON TABLE competencies IS 'Specific competencies/skills under each sub-strand. Lowest level of CBC hierarchy. Assessment targets.';
+
+
+-- ============================================================
+-- SECTION 2I: PERFORMANCE LEVELS (CBC Rubric)
+-- ============================================================
+CREATE TABLE performance_levels (
+  level_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  name VARCHAR(50) NOT NULL,
+  label cbc_performance_level NOT NULL,
+  numeric_value INT NOT NULL,
+  description TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  UNIQUE (school_id, label),
+  CHECK (numeric_value >= 1 AND numeric_value <= 4)
+);
+
+COMMENT ON TABLE performance_levels IS 'CBC 4-point performance scale. 1=Below Expectation, 2=Approaching, 3=Meeting, 4=Exceeding.';
+
+-- ============================================================
+-- SECTION 3A: STUDENTS
+-- ============================================================
+CREATE TABLE students (
+  student_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  user_id UUID UNIQUE REFERENCES users(user_id) ON DELETE RESTRICT,
+  admission_number VARCHAR(50) NOT NULL,
+  current_class_id UUID REFERENCES classes(class_id) ON DELETE SET NULL,
+  date_of_birth DATE NOT NULL,
+  gender gender_type NOT NULL,
+  first_name VARCHAR(100) NOT NULL,
+  last_name VARCHAR(100) NOT NULL,
+  middle_name VARCHAR(100),
+  enrollment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  status enrollment_status NOT NULL DEFAULT 'active',
+  photo_url TEXT,
+  birth_certificate_no VARCHAR(50),
+  nemis_number VARCHAR(50),
+  has_special_needs BOOLEAN NOT NULL DEFAULT false,
+  special_needs_details TEXT,
+  medical_info TEXT,
+  previous_school VARCHAR(255),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by UUID REFERENCES auth.users(id),
+  updated_by UUID REFERENCES auth.users(id),
+
+  UNIQUE (school_id, admission_number)
+);
+
+COMMENT ON TABLE students IS 'Core student records. Links to user for login access. Special needs and medical info are RLS-protected.';
+COMMENT ON COLUMN students.nemis_number IS 'National Education Management Information System number (Kenya).';
+
+
+-- ============================================================
+-- SECTION 3B: STUDENT GUARDIANS (Parent-Student Link)
+-- ============================================================
+CREATE TABLE student_guardians (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  student_id UUID NOT NULL REFERENCES students(student_id) ON DELETE RESTRICT,
+  guardian_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+  relationship VARCHAR(50) NOT NULL,  -- e.g., 'father', 'mother', 'guardian'
+  is_primary_contact BOOLEAN NOT NULL DEFAULT false,
+  can_pickup BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  UNIQUE (student_id, guardian_user_id)
+);
+
+COMMENT ON TABLE student_guardians IS 'Links parents/guardians to students. Enables parent portal RLS filtering.';
+
+
+-- ============================================================
+-- SECTION 3C: STUDENT CLASS HISTORY (Enrollment per term/year)
+-- ============================================================
+CREATE TABLE student_classes (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  student_id UUID NOT NULL REFERENCES students(student_id) ON DELETE RESTRICT,
+  class_id UUID NOT NULL REFERENCES classes(class_id) ON DELETE RESTRICT,
+  academic_year_id UUID NOT NULL REFERENCES academic_years(academic_year_id) ON DELETE RESTRICT,
+  term_id UUID NOT NULL REFERENCES terms(term_id) ON DELETE RESTRICT,
+  status enrollment_status NOT NULL DEFAULT 'active',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  UNIQUE (student_id, academic_year_id, term_id)
+);
+
+COMMENT ON TABLE student_classes IS 'Student-to-class mapping per term. Enables tracking promotions and transfers.';
+
+
+-- ============================================================
+-- SECTION 3D: STAFF
+-- ============================================================
+CREATE TABLE staff (
+  staff_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  user_id UUID NOT NULL UNIQUE REFERENCES users(user_id) ON DELETE RESTRICT,
+  tsc_number VARCHAR(50),             -- Teachers Service Commission number
+  position staff_position NOT NULL,
+  employment_date DATE,
+  contract_type VARCHAR(50),          -- 'permanent', 'contract', 'intern'
+  qualification TEXT,
+  status user_status NOT NULL DEFAULT 'active',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by UUID REFERENCES auth.users(id),
+
+  UNIQUE (school_id, tsc_number)
+);
+
+COMMENT ON TABLE staff IS 'Staff records including TSC tracking. Links to users table.';
+COMMENT ON COLUMN staff.tsc_number IS 'Teachers Service Commission registration number (Kenya). Nullable for non-teaching staff.';
+
+
+-- ============================================================
+-- SECTION 3E: TEACHER SUBJECT ASSIGNMENTS
+-- ============================================================
+CREATE TABLE teacher_subjects (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  teacher_id UUID NOT NULL REFERENCES staff(staff_id) ON DELETE RESTRICT,
+  learning_area_id UUID NOT NULL REFERENCES learning_areas(learning_area_id) ON DELETE RESTRICT,
+  class_id UUID NOT NULL REFERENCES classes(class_id) ON DELETE RESTRICT,
+  academic_year_id UUID NOT NULL REFERENCES academic_years(academic_year_id) ON DELETE RESTRICT,
+  term_id UUID NOT NULL REFERENCES terms(term_id) ON DELETE RESTRICT,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  UNIQUE (teacher_id, learning_area_id, class_id, academic_year_id, term_id)
+);
+
+COMMENT ON TABLE teacher_subjects IS 'Maps teachers to learning areas and classes per term. Controls assessment permissions.';
+
+
+-- ============================================================
+-- SECTION 3F: STAFF LEAVE MANAGEMENT
+-- ============================================================
+CREATE TABLE staff_leaves (
+  leave_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  staff_id UUID NOT NULL REFERENCES staff(staff_id) ON DELETE RESTRICT,
+  leave_type VARCHAR(50) NOT NULL,    -- 'sick', 'annual', 'maternity', 'paternity', 'compassionate'
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  reason TEXT,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending', -- 'pending', 'approved', 'rejected', 'cancelled'
+  approved_by UUID REFERENCES users(user_id),
+  approved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  CHECK (end_date >= start_date)
+);
+
+COMMENT ON TABLE staff_leaves IS 'Staff leave requests and approvals.';
+
+
+-- ============================================================
+-- SECTION 4A: ASSESSMENTS (Core CBC Assessment Records)
+-- ============================================================
+CREATE TABLE assessments (
+  assessment_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  student_id UUID NOT NULL REFERENCES students(student_id) ON DELETE RESTRICT,
+  competency_id UUID NOT NULL REFERENCES competencies(competency_id) ON DELETE RESTRICT,
+  learning_area_id UUID NOT NULL REFERENCES learning_areas(learning_area_id) ON DELETE RESTRICT,
+  class_id UUID NOT NULL REFERENCES classes(class_id) ON DELETE RESTRICT,
+  academic_year_id UUID NOT NULL REFERENCES academic_years(academic_year_id) ON DELETE RESTRICT,
+  term_id UUID NOT NULL REFERENCES terms(term_id) ON DELETE RESTRICT,
+  score INT NOT NULL,
+  level_id UUID NOT NULL REFERENCES performance_levels(level_id) ON DELETE RESTRICT,
+  remarks TEXT,
+  assessment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  assessed_by UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by UUID REFERENCES auth.users(id),
+
+  -- Each student assessed once per competency per term
+  UNIQUE (student_id, competency_id, term_id, academic_year_id),
+  CHECK (score >= 1 AND score <= 4)
+);
+
+COMMENT ON TABLE assessments IS 'Individual CBC competency assessments. Score 1-4 maps to performance levels. Core data for report cards.';
+
+
+-- ============================================================
+-- SECTION 4B: ASSESSMENT AGGREGATES (Precomputed for performance)
+-- ============================================================
+CREATE TABLE assessment_aggregates (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  student_id UUID NOT NULL REFERENCES students(student_id) ON DELETE RESTRICT,
+  learning_area_id UUID NOT NULL REFERENCES learning_areas(learning_area_id) ON DELETE RESTRICT,
+  class_id UUID NOT NULL REFERENCES classes(class_id) ON DELETE RESTRICT,
+  academic_year_id UUID NOT NULL REFERENCES academic_years(academic_year_id) ON DELETE RESTRICT,
+  term_id UUID NOT NULL REFERENCES terms(term_id) ON DELETE RESTRICT,
+  total_competencies INT NOT NULL DEFAULT 0,
+  average_score DECIMAL(3,2) NOT NULL DEFAULT 0,
+  overall_level cbc_performance_level,
+  exceeding_count INT NOT NULL DEFAULT 0,
+  meeting_count INT NOT NULL DEFAULT 0,
+  approaching_count INT NOT NULL DEFAULT 0,
+  below_expectation_count INT NOT NULL DEFAULT 0,
+  computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  UNIQUE (student_id, learning_area_id, term_id, academic_year_id),
+  CHECK (average_score >= 0 AND average_score <= 4),
+  CHECK (total_competencies >= 0)
+);
+
+COMMENT ON TABLE assessment_aggregates IS 'Precomputed assessment summaries per student per learning area per term. Updated via trigger.';
+
+
+-- ============================================================
+-- SECTION 4C: REPORT CARDS
+-- ============================================================
+CREATE TABLE report_cards (
+  report_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  student_id UUID NOT NULL REFERENCES students(student_id) ON DELETE RESTRICT,
+  class_id UUID NOT NULL REFERENCES classes(class_id) ON DELETE RESTRICT,
+  academic_year_id UUID NOT NULL REFERENCES academic_years(academic_year_id) ON DELETE RESTRICT,
+  term_id UUID NOT NULL REFERENCES terms(term_id) ON DELETE RESTRICT,
+  report_type VARCHAR(20) NOT NULL DEFAULT 'term',  -- 'term' or 'yearly'
+  overall_average DECIMAL(3,2),
+  overall_level cbc_performance_level,
+  class_teacher_remarks TEXT,
+  principal_remarks TEXT,
+  analytics_json JSONB,              -- Detailed breakdown stored as JSON
+  pdf_url TEXT,
+  is_published BOOLEAN NOT NULL DEFAULT false,
+  published_at TIMESTAMPTZ,
+  generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  generated_by UUID REFERENCES users(user_id),
+
+  UNIQUE (student_id, term_id, academic_year_id, report_type),
+  CHECK (report_type IN ('term', 'yearly')),
+  CHECK (overall_average IS NULL OR (overall_average >= 0 AND overall_average <= 4))
+);
+
+COMMENT ON TABLE report_cards IS 'Generated report cards per student per term/year. Contains analytics JSON and optional PDF link.';
+
+
+-- ============================================================
+-- SECTION 4D: ATTENDANCE
+-- ============================================================
+CREATE TABLE attendance (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  student_id UUID NOT NULL REFERENCES students(student_id) ON DELETE RESTRICT,
+  class_id UUID NOT NULL REFERENCES classes(class_id) ON DELETE RESTRICT,
+  term_id UUID NOT NULL REFERENCES terms(term_id) ON DELETE RESTRICT,
+  date DATE NOT NULL,
+  status attendance_status NOT NULL DEFAULT 'present',
+  reason TEXT,                        -- For absences/late
+  recorded_by UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  UNIQUE (student_id, date)
+);
+
+COMMENT ON TABLE attendance IS 'Daily student attendance. One record per student per day.';
+
+
+-- ============================================================
+-- SECTION 4E: TIMETABLE
+-- ============================================================
+CREATE TABLE timetable_slots (
+  slot_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  class_id UUID NOT NULL REFERENCES classes(class_id) ON DELETE RESTRICT,
+  learning_area_id UUID NOT NULL REFERENCES learning_areas(learning_area_id) ON DELETE RESTRICT,
+  teacher_id UUID NOT NULL REFERENCES staff(staff_id) ON DELETE RESTRICT,
+  academic_year_id UUID NOT NULL REFERENCES academic_years(academic_year_id) ON DELETE RESTRICT,
+  term_id UUID NOT NULL REFERENCES terms(term_id) ON DELETE RESTRICT,
+  day_of_week INT NOT NULL,           -- 1=Monday ... 5=Friday
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,
+  room VARCHAR(50),
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  CHECK (day_of_week >= 1 AND day_of_week <= 5),
+  CHECK (end_time > start_time),
+  -- Prevent double-booking a teacher at same time
+  UNIQUE (teacher_id, day_of_week, start_time, term_id, academic_year_id),
+  -- Prevent double-booking a class at same time
+  UNIQUE (class_id, day_of_week, start_time, term_id, academic_year_id)
+);
+
+COMMENT ON TABLE timetable_slots IS 'Weekly timetable. Prevents teacher and class double-booking via unique constraints.';
+
+
+-- ============================================================
+-- SECTION 5A: FEE STRUCTURES
+-- ============================================================
+CREATE TABLE fee_structures (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  name VARCHAR(150) NOT NULL,          -- e.g., 'Tuition Fee', 'Activity Fee', 'Lunch Program'
+  description TEXT,
+  amount DECIMAL(12,2) NOT NULL,
+  academic_year_id UUID NOT NULL REFERENCES academic_years(academic_year_id) ON DELETE RESTRICT,
+  term_id UUID REFERENCES terms(term_id) ON DELETE RESTRICT,  -- NULL = applies to full year
+  grade_id UUID REFERENCES grades(grade_id) ON DELETE RESTRICT, -- NULL = applies to all grades
+  is_mandatory BOOLEAN NOT NULL DEFAULT true,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by UUID REFERENCES auth.users(id),
+
+  CHECK (amount >= 0),
+  UNIQUE (school_id, name, academic_year_id, term_id, grade_id)
+);
+
+COMMENT ON TABLE fee_structures IS 'Fee categories and amounts. Can be per-term or per-year, per-grade or school-wide.';
+
+
+-- ============================================================
+-- SECTION 5B: STUDENT FEES (Assigned)
+-- ============================================================
+CREATE TABLE student_fees (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  student_id UUID NOT NULL REFERENCES students(student_id) ON DELETE RESTRICT,
+  fee_structure_id UUID NOT NULL REFERENCES fee_structures(id) ON DELETE RESTRICT,
+  amount_due DECIMAL(12,2) NOT NULL,
+  amount_paid DECIMAL(12,2) NOT NULL DEFAULT 0,
+  balance DECIMAL(12,2) GENERATED ALWAYS AS (amount_due - amount_paid) STORED,
+  due_date DATE,
+  status fee_status NOT NULL DEFAULT 'pending',
+  academic_year_id UUID NOT NULL REFERENCES academic_years(academic_year_id) ON DELETE RESTRICT,
+  term_id UUID REFERENCES terms(term_id) ON DELETE RESTRICT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by UUID REFERENCES auth.users(id),
+
+  CHECK (amount_due >= 0),
+  CHECK (amount_paid >= 0),
+  UNIQUE (student_id, fee_structure_id, academic_year_id, term_id)
+);
+
+COMMENT ON TABLE student_fees IS 'Fee assignments per student. Balance is auto-calculated.';
+
+
+-- ============================================================
+-- SECTION 5C: PAYMENTS
+-- ============================================================
+CREATE TABLE payments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  student_fee_id UUID NOT NULL REFERENCES student_fees(id) ON DELETE RESTRICT,
+  amount_paid DECIMAL(12,2) NOT NULL,
+  payment_method payment_method NOT NULL,
+  transaction_id VARCHAR(100),         -- External reference (Mpesa code, receipt no.)
+  receipt_number VARCHAR(100),
+  payment_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  notes TEXT,
+  recorded_by UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  CHECK (amount_paid > 0),
+  UNIQUE (student_fee_id, transaction_id)
+);
+
+COMMENT ON TABLE payments IS 'Individual payment records. Links to student_fees. Transaction ID ensures no duplicate payments.';
+
+-- ============================================================
+-- SECTION 6A: DISCIPLINARY RECORDS
+-- ============================================================
+CREATE TABLE disciplinary_records (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  student_id UUID NOT NULL REFERENCES students(student_id) ON DELETE RESTRICT,
+  incident_date DATE NOT NULL,
+  incident_type VARCHAR(100) NOT NULL,
+  severity incident_severity NOT NULL DEFAULT 'minor',
+  description TEXT NOT NULL,
+  action_taken TEXT,
+  follow_up_date DATE,
+  follow_up_notes TEXT,
+  parent_notified BOOLEAN NOT NULL DEFAULT false,
+  recorded_by UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE disciplinary_records IS 'Student disciplinary incidents. RLS-restricted to authorized staff and linked parents.';
+
+
+-- ============================================================
+-- SECTION 6B: PARENT CONSENT TRACKING
+-- ============================================================
+CREATE TABLE parent_consents (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  student_id UUID NOT NULL REFERENCES students(student_id) ON DELETE RESTRICT,
+  guardian_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+  consent_type VARCHAR(100) NOT NULL,  -- 'data_processing', 'photo_usage', 'trip_permission', etc.
+  status consent_status NOT NULL DEFAULT 'pending',
+  date_given TIMESTAMPTZ,
+  date_withdrawn TIMESTAMPTZ,
+  ip_address INET,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  UNIQUE (student_id, guardian_user_id, consent_type)
+);
+
+COMMENT ON TABLE parent_consents IS 'GDPR / Kenya Data Protection Act 2019 compliance. Tracks all consent per student per type.';
+
+
+-- ============================================================
+-- SECTION 6C: MESSAGES
+-- ============================================================
+CREATE TABLE messages (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  sender_id UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+  receiver_id UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+  subject VARCHAR(255) NOT NULL,
+  body TEXT NOT NULL,
+  read_status read_status NOT NULL DEFAULT 'unread',
+  read_at TIMESTAMPTZ,
+  is_archived BOOLEAN NOT NULL DEFAULT false,
+  parent_message_id UUID REFERENCES messages(id),  -- For threading
+  sent_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE messages IS 'Internal messaging system. Supports threading via parent_message_id.';
+
+
+-- ============================================================
+-- SECTION 6D: NOTIFICATIONS
+-- ============================================================
+CREATE TABLE notifications (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+  title VARCHAR(255) NOT NULL,
+  body TEXT NOT NULL,
+  type notification_type NOT NULL DEFAULT 'info',
+  read_status read_status NOT NULL DEFAULT 'unread',
+  read_at TIMESTAMPTZ,
+  action_url TEXT,                     -- Deep link for click action
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE notifications IS 'System-generated notifications per user. Supports deep linking via action_url.';
+
+-- ============================================================
+-- SECTION 7A: AUDIT LOGS (IMMUTABLE)
+-- ============================================================
+CREATE TABLE audit_logs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID REFERENCES schools(school_id) ON DELETE RESTRICT,
+  table_name VARCHAR(100) NOT NULL,
+  record_id UUID,
+  action audit_action NOT NULL,
+  performed_by UUID REFERENCES auth.users(id),
+  performed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ip_address INET,
+  user_agent TEXT,
+  old_data JSONB,
+  new_data JSONB,
+  details JSONB                        -- Additional context
+);
+
+COMMENT ON TABLE audit_logs IS 'Immutable audit trail. Cannot be updated or deleted. Tracks all sensitive actions.';
+
+-- Prevent updates and deletes on audit_logs
+CREATE OR REPLACE FUNCTION prevent_audit_modification()
+RETURNS TRIGGER AS $$
+BEGIN
+  RAISE EXCEPTION 'Audit logs cannot be modified or deleted';
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_prevent_audit_update
+  BEFORE UPDATE ON audit_logs
+  FOR EACH ROW EXECUTE FUNCTION prevent_audit_modification();
+
+CREATE TRIGGER trg_prevent_audit_delete
+  BEFORE DELETE ON audit_logs
+  FOR EACH ROW EXECUTE FUNCTION prevent_audit_modification();
+
+  -- ============================================================
+-- SECTION 8: PERFORMANCE INDEXES
+-- ============================================================
+
+-- Users
+CREATE INDEX idx_users_school_id ON users(school_id);
+CREATE INDEX idx_users_role_id ON users(role_id);
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_status ON users(status);
+
+-- Students
+CREATE INDEX idx_students_school_id ON students(school_id);
+CREATE INDEX idx_students_current_class ON students(current_class_id);
+CREATE INDEX idx_students_status ON students(status);
+CREATE INDEX idx_students_admission_no ON students(school_id, admission_number);
+
+-- Student Classes
+CREATE INDEX idx_student_classes_student ON student_classes(student_id);
+CREATE INDEX idx_student_classes_class ON student_classes(class_id);
+CREATE INDEX idx_student_classes_term ON student_classes(term_id);
+CREATE INDEX idx_student_classes_year ON student_classes(academic_year_id);
+
+-- Student Guardians
+CREATE INDEX idx_student_guardians_student ON student_guardians(student_id);
+CREATE INDEX idx_student_guardians_guardian ON student_guardians(guardian_user_id);
+
+-- Staff
+CREATE INDEX idx_staff_school_id ON staff(school_id);
+CREATE INDEX idx_staff_user_id ON staff(user_id);
+
+-- Teacher Subjects
+CREATE INDEX idx_teacher_subjects_teacher ON teacher_subjects(teacher_id);
+CREATE INDEX idx_teacher_subjects_class ON teacher_subjects(class_id);
+CREATE INDEX idx_teacher_subjects_learning_area ON teacher_subjects(learning_area_id);
+CREATE INDEX idx_teacher_subjects_term ON teacher_subjects(term_id);
+
+-- Assessments (HEAVY TABLE)
+CREATE INDEX idx_assessments_school_id ON assessments(school_id);
+CREATE INDEX idx_assessments_student ON assessments(student_id);
+CREATE INDEX idx_assessments_competency ON assessments(competency_id);
+CREATE INDEX idx_assessments_learning_area ON assessments(learning_area_id);
+CREATE INDEX idx_assessments_class ON assessments(class_id);
+CREATE INDEX idx_assessments_term ON assessments(term_id);
+CREATE INDEX idx_assessments_year ON assessments(academic_year_id);
+CREATE INDEX idx_assessments_assessed_by ON assessments(assessed_by);
+CREATE INDEX idx_assessments_date ON assessments(assessment_date);
+CREATE INDEX idx_assessments_created ON assessments(created_at);
+
+-- Assessment Aggregates
+CREATE INDEX idx_aggregates_student ON assessment_aggregates(student_id);
+CREATE INDEX idx_aggregates_learning_area ON assessment_aggregates(learning_area_id);
+CREATE INDEX idx_aggregates_term ON assessment_aggregates(term_id);
+
+-- Attendance (HEAVY TABLE)
+CREATE INDEX idx_attendance_school_id ON attendance(school_id);
+CREATE INDEX idx_attendance_student ON attendance(student_id);
+CREATE INDEX idx_attendance_date ON attendance(date);
+CREATE INDEX idx_attendance_class ON attendance(class_id);
+CREATE INDEX idx_attendance_created ON attendance(created_at);
+
+-- Report Cards
+CREATE INDEX idx_report_cards_student ON report_cards(student_id);
+CREATE INDEX idx_report_cards_term ON report_cards(term_id);
+CREATE INDEX idx_report_cards_year ON report_cards(academic_year_id);
+
+-- Payments (HEAVY TABLE)
+CREATE INDEX idx_payments_school_id ON payments(school_id);
+CREATE INDEX idx_payments_student_fee ON payments(student_fee_id);
+CREATE INDEX idx_payments_date ON payments(payment_date);
+CREATE INDEX idx_payments_method ON payments(payment_method);
+CREATE INDEX idx_payments_transaction ON payments(transaction_id);
+CREATE INDEX idx_payments_created ON payments(created_at);
+
+-- Student Fees
+CREATE INDEX idx_student_fees_student ON student_fees(student_id);
+CREATE INDEX idx_student_fees_structure ON student_fees(fee_structure_id);
+CREATE INDEX idx_student_fees_status ON student_fees(status);
+
+-- Messages (HEAVY TABLE)
+CREATE INDEX idx_messages_school_id ON messages(school_id);
+CREATE INDEX idx_messages_sender ON messages(sender_id);
+CREATE INDEX idx_messages_receiver ON messages(receiver_id);
+CREATE INDEX idx_messages_read_status ON messages(read_status);
+CREATE INDEX idx_messages_sent_at ON messages(sent_at);
+
+-- Notifications
+CREATE INDEX idx_notifications_user ON notifications(user_id);
+CREATE INDEX idx_notifications_read ON notifications(read_status);
+CREATE INDEX idx_notifications_created ON notifications(created_at);
+
+-- Audit Logs
+CREATE INDEX idx_audit_school_id ON audit_logs(school_id);
+CREATE INDEX idx_audit_table ON audit_logs(table_name);
+CREATE INDEX idx_audit_action ON audit_logs(action);
+CREATE INDEX idx_audit_performed_by ON audit_logs(performed_by);
+CREATE INDEX idx_audit_performed_at ON audit_logs(performed_at);
+
+-- Timetable
+CREATE INDEX idx_timetable_class ON timetable_slots(class_id);
+CREATE INDEX idx_timetable_teacher ON timetable_slots(teacher_id);
+CREATE INDEX idx_timetable_day ON timetable_slots(day_of_week);
+
+-- Disciplinary
+CREATE INDEX idx_disciplinary_student ON disciplinary_records(student_id);
+CREATE INDEX idx_disciplinary_date ON disciplinary_records(incident_date);
+
+-- Parent Consents
+CREATE INDEX idx_consents_student ON parent_consents(student_id);
+CREATE INDEX idx_consents_guardian ON parent_consents(guardian_user_id);
+
+-- ============================================================
+-- SECTION 9A: UPDATED_AT AUTO-TRIGGER
+-- ============================================================
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Apply to all tables with updated_at
+CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER trg_user_profiles_updated_at BEFORE UPDATE ON user_profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER trg_schools_updated_at BEFORE UPDATE ON schools FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER trg_students_updated_at BEFORE UPDATE ON students FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER trg_staff_updated_at BEFORE UPDATE ON staff FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER trg_assessments_updated_at BEFORE UPDATE ON assessments FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER trg_attendance_updated_at BEFORE UPDATE ON attendance FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER trg_student_fees_updated_at BEFORE UPDATE ON student_fees FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER trg_fee_structures_updated_at BEFORE UPDATE ON fee_structures FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER trg_learning_areas_updated_at BEFORE UPDATE ON learning_areas FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER trg_academic_years_updated_at BEFORE UPDATE ON academic_years FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER trg_terms_updated_at BEFORE UPDATE ON terms FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER trg_disciplinary_updated_at BEFORE UPDATE ON disciplinary_records FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER trg_parent_consents_updated_at BEFORE UPDATE ON parent_consents FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER trg_classes_updated_at BEFORE UPDATE ON classes FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+
+-- ============================================================
+-- SECTION 9B: AUDIT LOG TRIGGER FUNCTION
+-- ============================================================
+CREATE OR REPLACE FUNCTION fn_audit_log()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_action audit_action;
+  v_old JSONB;
+  v_new JSONB;
+  v_school UUID;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    v_action := 'INSERT';
+    v_old := NULL;
+    v_new := to_jsonb(NEW);
+    v_school := NEW.school_id;
+  ELSIF TG_OP = 'UPDATE' THEN
+    v_action := 'UPDATE';
+    v_old := to_jsonb(OLD);
+    v_new := to_jsonb(NEW);
+    v_school := NEW.school_id;
+  ELSIF TG_OP = 'DELETE' THEN
+    v_action := 'DELETE';
+    v_old := to_jsonb(OLD);
+    v_new := NULL;
+    v_school := OLD.school_id;
+  END IF;
+
+  INSERT INTO audit_logs (school_id, table_name, record_id, action, performed_by, old_data, new_data)
+  VALUES (
+    v_school,
+    TG_TABLE_NAME,
+    COALESCE(NEW.id, NEW.student_id, NEW.staff_id, NEW.user_id, OLD.id, OLD.student_id, OLD.staff_id, OLD.user_id),
+    v_action,
+    COALESCE(current_setting('app.current_user_id', true)::UUID, NULL),
+    v_old,
+    v_new
+  );
+
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- Apply audit triggers to sensitive tables
+CREATE TRIGGER trg_audit_assessments AFTER INSERT OR UPDATE OR DELETE ON assessments FOR EACH ROW EXECUTE FUNCTION fn_audit_log();
+CREATE TRIGGER trg_audit_payments AFTER INSERT OR UPDATE OR DELETE ON payments FOR EACH ROW EXECUTE FUNCTION fn_audit_log();
+CREATE TRIGGER trg_audit_student_fees AFTER INSERT OR UPDATE OR DELETE ON student_fees FOR EACH ROW EXECUTE FUNCTION fn_audit_log();
+CREATE TRIGGER trg_audit_users AFTER INSERT OR UPDATE OR DELETE ON users FOR EACH ROW EXECUTE FUNCTION fn_audit_log();
+CREATE TRIGGER trg_audit_students AFTER INSERT OR UPDATE OR DELETE ON students FOR EACH ROW EXECUTE FUNCTION fn_audit_log();
+CREATE TRIGGER trg_audit_staff AFTER INSERT OR UPDATE OR DELETE ON staff FOR EACH ROW EXECUTE FUNCTION fn_audit_log();
+CREATE TRIGGER trg_audit_disciplinary AFTER INSERT OR UPDATE OR DELETE ON disciplinary_records FOR EACH ROW EXECUTE FUNCTION fn_audit_log();
+CREATE TRIGGER trg_audit_report_cards AFTER INSERT OR UPDATE OR DELETE ON report_cards FOR EACH ROW EXECUTE FUNCTION fn_audit_log();
+CREATE TRIGGER trg_audit_parent_consents AFTER INSERT OR UPDATE OR DELETE ON parent_consents FOR EACH ROW EXECUTE FUNCTION fn_audit_log();
+
+
+-- ============================================================
+-- SECTION 9C: ENFORCE SINGLE ACTIVE ACADEMIC YEAR
+-- ============================================================
+CREATE OR REPLACE FUNCTION fn_enforce_single_active_year()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.is_active = true THEN
+    UPDATE academic_years
+    SET is_active = false, updated_at = NOW()
+    WHERE school_id = NEW.school_id
+      AND academic_year_id != NEW.academic_year_id
+      AND is_active = true;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_enforce_single_active_year
+  BEFORE INSERT OR UPDATE OF is_active ON academic_years
+  FOR EACH ROW
+  WHEN (NEW.is_active = true)
+  EXECUTE FUNCTION fn_enforce_single_active_year();
+
+
+-- ============================================================
+-- SECTION 9D: ENFORCE SINGLE ACTIVE TERM
+-- ============================================================
+CREATE OR REPLACE FUNCTION fn_enforce_single_active_term()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.is_active = true THEN
+    UPDATE terms
+    SET is_active = false, updated_at = NOW()
+    WHERE school_id = NEW.school_id
+      AND term_id != NEW.term_id
+      AND is_active = true;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_enforce_single_active_term
+  BEFORE INSERT OR UPDATE OF is_active ON terms
+  FOR EACH ROW
+  WHEN (NEW.is_active = true)
+  EXECUTE FUNCTION fn_enforce_single_active_term();
+
+
+-- ============================================================
+-- SECTION 9E: AUTO-UPDATE PAYMENT TOTALS ON STUDENT FEES
+-- ============================================================
+CREATE OR REPLACE FUNCTION fn_update_student_fee_on_payment()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_total_paid DECIMAL(12,2);
+  v_amount_due DECIMAL(12,2);
+BEGIN
+  -- Calculate total payments for this student_fee
+  SELECT COALESCE(SUM(amount_paid), 0) INTO v_total_paid
+  FROM payments
+  WHERE student_fee_id = NEW.student_fee_id;
+
+  -- Get amount due
+  SELECT amount_due INTO v_amount_due
+  FROM student_fees
+  WHERE id = NEW.student_fee_id;
+
+  -- Update student fee
+  UPDATE student_fees
+  SET
+    amount_paid = v_total_paid,
+    status = CASE
+      WHEN v_total_paid >= v_amount_due THEN 'paid'
+      WHEN v_total_paid > 0 THEN 'partial'
+      ELSE 'pending'
+    END,
+    updated_at = NOW()
+  WHERE id = NEW.student_fee_id;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_update_fee_on_payment
+  AFTER INSERT ON payments
+  FOR EACH ROW EXECUTE FUNCTION fn_update_student_fee_on_payment();
+
+
+-- ============================================================
+-- SECTION 9F: AUTO-COMPUTE ASSESSMENT AGGREGATES
+-- ============================================================
+CREATE OR REPLACE FUNCTION fn_update_assessment_aggregate()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_student UUID;
+  v_learning_area UUID;
+  v_class UUID;
+  v_term UUID;
+  v_year UUID;
+  v_school UUID;
+  v_total INT;
+  v_avg DECIMAL(3,2);
+  v_exceeding INT;
+  v_meeting INT;
+  v_approaching INT;
+  v_below INT;
+  v_level cbc_performance_level;
+BEGIN
+  -- Get the relevant IDs
+  IF TG_OP = 'DELETE' THEN
+    v_student := OLD.student_id;
+    v_learning_area := OLD.learning_area_id;
+    v_class := OLD.class_id;
+    v_term := OLD.term_id;
+    v_year := OLD.academic_year_id;
+    v_school := OLD.school_id;
+  ELSE
+    v_student := NEW.student_id;
+    v_learning_area := NEW.learning_area_id;
+    v_class := NEW.class_id;
+    v_term := NEW.term_id;
+    v_year := NEW.academic_year_id;
+    v_school := NEW.school_id;
+  END IF;
+
+  -- Calculate aggregates
+  SELECT
+    COUNT(*),
+    COALESCE(AVG(score), 0),
+    COUNT(*) FILTER (WHERE score = 4),
+    COUNT(*) FILTER (WHERE score = 3),
+    COUNT(*) FILTER (WHERE score = 2),
+    COUNT(*) FILTER (WHERE score = 1)
+  INTO v_total, v_avg, v_exceeding, v_meeting, v_approaching, v_below
+  FROM assessments
+  WHERE student_id = v_student
+    AND learning_area_id = v_learning_area
+    AND term_id = v_term
+    AND academic_year_id = v_year;
+
+  -- Determine overall level
+  v_level := CASE
+    WHEN v_avg >= 3.5 THEN 'exceeding'
+    WHEN v_avg >= 2.5 THEN 'meeting'
+    WHEN v_avg >= 1.5 THEN 'approaching'
+    ELSE 'below_expectation'
+  END;
+
+  -- Upsert aggregate
+  INSERT INTO assessment_aggregates (
+    school_id, student_id, learning_area_id, class_id,
+    academic_year_id, term_id,
+    total_competencies, average_score, overall_level,
+    exceeding_count, meeting_count, approaching_count, below_expectation_count,
+    computed_at
+  ) VALUES (
+    v_school, v_student, v_learning_area, v_class,
+    v_year, v_term,
+    v_total, v_avg, v_level,
+    v_exceeding, v_meeting, v_approaching, v_below,
+    NOW()
+  )
+  ON CONFLICT (student_id, learning_area_id, term_id, academic_year_id)
+  DO UPDATE SET
+    total_competencies = EXCLUDED.total_competencies,
+    average_score = EXCLUDED.average_score,
+    overall_level = EXCLUDED.overall_level,
+    exceeding_count = EXCLUDED.exceeding_count,
+    meeting_count = EXCLUDED.meeting_count,
+    approaching_count = EXCLUDED.approaching_count,
+    below_expectation_count = EXCLUDED.below_expectation_count,
+    computed_at = NOW();
+
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_assessment_aggregate
+  AFTER INSERT OR UPDATE OR DELETE ON assessments
+  FOR EACH ROW EXECUTE FUNCTION fn_update_assessment_aggregate();
+
+
+-- ============================================================
+-- SECTION 9G: PREVENT DELETION OF REFERENCED USERS
+-- ============================================================
+CREATE OR REPLACE FUNCTION fn_prevent_user_delete()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Check if user is referenced as a teacher, student, or staff
+  IF EXISTS (SELECT 1 FROM staff WHERE user_id = OLD.user_id) THEN
+    RAISE EXCEPTION 'Cannot delete user: linked to staff record. Deactivate instead.';
+  END IF;
+  IF EXISTS (SELECT 1 FROM students WHERE user_id = OLD.user_id) THEN
+    RAISE EXCEPTION 'Cannot delete user: linked to student record. Deactivate instead.';
+  END IF;
+  IF EXISTS (SELECT 1 FROM student_guardians WHERE guardian_user_id = OLD.user_id) THEN
+    RAISE EXCEPTION 'Cannot delete user: linked as guardian. Deactivate instead.';
+  END IF;
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_prevent_user_delete
+  BEFORE DELETE ON users
+  FOR EACH ROW EXECUTE FUNCTION fn_prevent_user_delete();
+
+  -- ============================================================
+-- SECTION 10: ROW-LEVEL SECURITY
+-- ============================================================
+
+-- Enable RLS on all tables
+ALTER TABLE schools ENABLE ROW LEVEL SECURITY;
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE academic_years ENABLE ROW LEVEL SECURITY;
+ALTER TABLE terms ENABLE ROW LEVEL SECURITY;
+ALTER TABLE grades ENABLE ROW LEVEL SECURITY;
+ALTER TABLE classes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE learning_areas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE strands ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sub_strands ENABLE ROW LEVEL SECURITY;
+ALTER TABLE competencies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE performance_levels ENABLE ROW LEVEL SECURITY;
+ALTER TABLE students ENABLE ROW LEVEL SECURITY;
+ALTER TABLE student_guardians ENABLE ROW LEVEL SECURITY;
+ALTER TABLE student_classes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staff ENABLE ROW LEVEL SECURITY;
+ALTER TABLE staff_leaves ENABLE ROW LEVEL SECURITY;
+ALTER TABLE teacher_subjects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE assessments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE assessment_aggregates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE report_cards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE attendance ENABLE ROW LEVEL SECURITY;
+ALTER TABLE timetable_slots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fee_structures ENABLE ROW LEVEL SECURITY;
+ALTER TABLE student_fees ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE disciplinary_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE parent_consents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
+
+
+-- ============================================================
+-- HELPER FUNCTION: Get current user's school_id
+-- ============================================================
+CREATE OR REPLACE FUNCTION get_user_school_id()
+RETURNS UUID AS $$
+  SELECT school_id FROM users WHERE user_id = auth.uid();
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- ============================================================
+-- HELPER FUNCTION: Get current user's role name
+-- ============================================================
+CREATE OR REPLACE FUNCTION get_user_role()
+RETURNS TEXT AS $$
+  SELECT r.name FROM users u
+  JOIN roles r ON u.role_id = r.role_id
+  WHERE u.user_id = auth.uid();
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- ============================================================
+-- HELPER FUNCTION: Check if user is super_admin
+-- ============================================================
+CREATE OR REPLACE FUNCTION is_super_admin()
+RETURNS BOOLEAN AS $$
+  SELECT get_user_role() = 'super_admin';
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- ============================================================
+-- HELPER FUNCTION: Check if user is school admin level
+-- ============================================================
+CREATE OR REPLACE FUNCTION is_school_admin_level()
+RETURNS BOOLEAN AS $$
+  SELECT get_user_role() IN ('super_admin', 'school_admin', 'principal', 'deputy_principal', 'ict_admin');
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- ============================================================
+-- HELPER FUNCTION: Check if user is finance role
+-- ============================================================
+CREATE OR REPLACE FUNCTION is_finance_role()
+RETURNS BOOLEAN AS $$
+  SELECT get_user_role() IN ('super_admin', 'school_admin', 'principal', 'finance_officer', 'bursar');
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- ============================================================
+-- HELPER FUNCTION: Get student IDs linked to current parent
+-- ============================================================
+CREATE OR REPLACE FUNCTION get_parent_student_ids()
+RETURNS UUID[] AS $$
+  SELECT ARRAY_AGG(student_id)
+  FROM student_guardians
+  WHERE guardian_user_id = auth.uid();
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- ============================================================
+-- HELPER FUNCTION: Get student_id for current student user
+-- ============================================================
+CREATE OR REPLACE FUNCTION get_student_id()
+RETURNS UUID AS $$
+  SELECT student_id FROM students WHERE user_id = auth.uid();
+$$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+
+-- ============================================================
+-- 10A: ROLES - Read-only for all authenticated
+-- ============================================================
+CREATE POLICY roles_select ON roles
+  FOR SELECT TO authenticated
+  USING (true);
+
+
+-- ============================================================
+-- 10B: SCHOOLS
+-- ============================================================
+CREATE POLICY schools_select ON schools
+  FOR SELECT TO authenticated
+  USING (
+    is_super_admin()
+    OR school_id = get_user_school_id()
+  );
+
+CREATE POLICY schools_insert ON schools
+  FOR INSERT TO authenticated
+  WITH CHECK (is_super_admin());
+
+CREATE POLICY schools_update ON schools
+  FOR UPDATE TO authenticated
+  USING (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()))
+  WITH CHECK (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()));
+
+
+-- ============================================================
+-- 10C: USERS
+-- ============================================================
+CREATE POLICY users_select ON users
+  FOR SELECT TO authenticated
+  USING (
+    is_super_admin()
+    OR school_id = get_user_school_id()
+    OR user_id = auth.uid()
+  );
+
+CREATE POLICY users_insert ON users
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+  );
+
+CREATE POLICY users_update ON users
+  FOR UPDATE TO authenticated
+  USING (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR user_id = auth.uid()
+  )
+  WITH CHECK (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR user_id = auth.uid()
+  );
+
+
+-- ============================================================
+-- 10D: USER PROFILES
+-- ============================================================
+CREATE POLICY user_profiles_select ON user_profiles
+  FOR SELECT TO authenticated
+  USING (
+    is_super_admin()
+    OR school_id = get_user_school_id()
+    OR user_id = auth.uid()
+  );
+
+CREATE POLICY user_profiles_upsert ON user_profiles
+  FOR ALL TO authenticated
+  USING (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR user_id = auth.uid()
+  )
+  WITH CHECK (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR user_id = auth.uid()
+  );
+
+
+-- ============================================================
+-- 10E: ACADEMIC YEARS & TERMS (School-scoped, admin-managed)
+-- ============================================================
+CREATE POLICY academic_years_select ON academic_years
+  FOR SELECT TO authenticated
+  USING (is_super_admin() OR school_id = get_user_school_id());
+
+CREATE POLICY academic_years_manage ON academic_years
+  FOR ALL TO authenticated
+  USING (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()))
+  WITH CHECK (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()));
+
+CREATE POLICY terms_select ON terms
+  FOR SELECT TO authenticated
+  USING (is_super_admin() OR school_id = get_user_school_id());
+
+CREATE POLICY terms_manage ON terms
+  FOR ALL TO authenticated
+  USING (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()))
+  WITH CHECK (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()));
+
+
+-- ============================================================
+-- 10F: GRADES, CLASSES, CBC STRUCTURE (School-scoped)
+-- ============================================================
+CREATE POLICY grades_select ON grades
+  FOR SELECT TO authenticated
+  USING (is_super_admin() OR school_id = get_user_school_id());
+
+CREATE POLICY grades_manage ON grades
+  FOR ALL TO authenticated
+  USING (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()))
+  WITH CHECK (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()));
+
+CREATE POLICY classes_select ON classes
+  FOR SELECT TO authenticated
+  USING (is_super_admin() OR school_id = get_user_school_id());
+
+CREATE POLICY classes_manage ON classes
+  FOR ALL TO authenticated
+  USING (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()))
+  WITH CHECK (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()));
+
+-- Learning Areas, Strands, Sub-strands, Competencies, Performance Levels
+-- Same pattern: school-scoped select, admin-managed writes
+
+CREATE POLICY learning_areas_select ON learning_areas FOR SELECT TO authenticated
+  USING (is_super_admin() OR school_id = get_user_school_id());
+CREATE POLICY learning_areas_manage ON learning_areas FOR ALL TO authenticated
+  USING (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()))
+  WITH CHECK (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()));
+
+CREATE POLICY strands_select ON strands FOR SELECT TO authenticated
+  USING (is_super_admin() OR school_id = get_user_school_id());
+CREATE POLICY strands_manage ON strands FOR ALL TO authenticated
+  USING (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()))
+  WITH CHECK (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()));
+
+CREATE POLICY sub_strands_select ON sub_strands FOR SELECT TO authenticated
+  USING (is_super_admin() OR school_id = get_user_school_id());
+CREATE POLICY sub_strands_manage ON sub_strands FOR ALL TO authenticated
+  USING (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()))
+  WITH CHECK (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()));
+
+CREATE POLICY competencies_select ON competencies FOR SELECT TO authenticated
+  USING (is_super_admin() OR school_id = get_user_school_id());
+CREATE POLICY competencies_manage ON competencies FOR ALL TO authenticated
+  USING (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()))
+  WITH CHECK (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()));
+
+CREATE POLICY performance_levels_select ON performance_levels FOR SELECT TO authenticated
+  USING (is_super_admin() OR school_id = get_user_school_id());
+CREATE POLICY performance_levels_manage ON performance_levels FOR ALL TO authenticated
+  USING (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()))
+  WITH CHECK (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()));
+
+
+-- ============================================================
+-- 10G: STUDENTS
+-- ============================================================
+CREATE POLICY students_select ON students
+  FOR SELECT TO authenticated
+  USING (
+    is_super_admin()
+    OR school_id = get_user_school_id()  -- Admin/teachers see all school students
+  );
+
+-- Parents: more restrictive view handled at app level or via separate policy
+CREATE POLICY students_parent_select ON students
+  FOR SELECT TO authenticated
+  USING (
+    get_user_role() = 'parent'
+    AND student_id = ANY(get_parent_student_ids())
+  );
+
+-- Students: own record only
+CREATE POLICY students_self_select ON students
+  FOR SELECT TO authenticated
+  USING (
+    get_user_role() = 'student'
+    AND user_id = auth.uid()
+  );
+
+CREATE POLICY students_insert ON students
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+  );
+
+CREATE POLICY students_update ON students
+  FOR UPDATE TO authenticated
+  USING (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+  )
+  WITH CHECK (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+  );
+
+
+-- ============================================================
+-- 10H: STUDENT GUARDIANS
+-- ============================================================
+CREATE POLICY student_guardians_select ON student_guardians
+  FOR SELECT TO authenticated
+  USING (
+    is_super_admin()
+    OR school_id = get_user_school_id()
+    OR guardian_user_id = auth.uid()
+  );
+
+CREATE POLICY student_guardians_manage ON student_guardians
+  FOR ALL TO authenticated
+  USING (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()))
+  WITH CHECK (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()));
+
+
+-- ============================================================
+-- 10I: STAFF & TEACHER SUBJECTS
+-- ============================================================
+CREATE POLICY staff_select ON staff
+  FOR SELECT TO authenticated
+  USING (is_super_admin() OR school_id = get_user_school_id() OR user_id = auth.uid());
+
+CREATE POLICY staff_manage ON staff
+  FOR ALL TO authenticated
+  USING (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()))
+  WITH CHECK (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()));
+
+CREATE POLICY teacher_subjects_select ON teacher_subjects
+  FOR SELECT TO authenticated
+  USING (is_super_admin() OR school_id = get_user_school_id());
+
+CREATE POLICY teacher_subjects_manage ON teacher_subjects
+  FOR ALL TO authenticated
+  USING (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()))
+  WITH CHECK (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()));
+
+CREATE POLICY staff_leaves_select ON staff_leaves
+  FOR SELECT TO authenticated
+  USING (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR staff_id IN (SELECT staff_id FROM staff WHERE user_id = auth.uid())
+  );
+
+CREATE POLICY staff_leaves_manage ON staff_leaves
+  FOR ALL TO authenticated
+  USING (is_super_admin() OR school_id = get_user_school_id())
+  WITH CHECK (is_super_admin() OR school_id = get_user_school_id());
+
+
+-- ============================================================
+-- 10J: ASSESSMENTS
+-- ============================================================
+-- Teachers: see assessments for their assigned classes/subjects
+-- Parents: see only their children's assessments
+-- Students: see only own assessments
+CREATE POLICY assessments_select ON assessments
+  FOR SELECT TO authenticated
+  USING (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    -- Teachers see assessments for their school
+    OR (get_user_role() IN ('teacher', 'class_teacher', 'subject_teacher') AND school_id = get_user_school_id())
+    -- Parents see their children's
+    OR (get_user_role() = 'parent' AND student_id = ANY(get_parent_student_ids()))
+    -- Students see own
+    OR (get_user_role() = 'student' AND student_id = get_student_id())
+  );
+
+-- Only teachers and admins can create/update assessments
+CREATE POLICY assessments_insert ON assessments
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR (
+      get_user_role() IN ('teacher', 'class_teacher', 'subject_teacher')
+      AND school_id = get_user_school_id()
+      AND assessed_by = auth.uid()
+    )
+  );
+
+CREATE POLICY assessments_update ON assessments
+  FOR UPDATE TO authenticated
+  USING (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR (
+      get_user_role() IN ('teacher', 'class_teacher', 'subject_teacher')
+      AND school_id = get_user_school_id()
+      AND assessed_by = auth.uid()
+    )
+  )
+  WITH CHECK (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR (
+      get_user_role() IN ('teacher', 'class_teacher', 'subject_teacher')
+      AND school_id = get_user_school_id()
+      AND assessed_by = auth.uid()
+    )
+  );
+
+
+-- ============================================================
+-- 10K: ASSESSMENT AGGREGATES & REPORT CARDS
+-- ============================================================
+CREATE POLICY aggregates_select ON assessment_aggregates
+  FOR SELECT TO authenticated
+  USING (
+    is_super_admin()
+    OR school_id = get_user_school_id()
+    OR (get_user_role() = 'parent' AND student_id = ANY(get_parent_student_ids()))
+    OR (get_user_role() = 'student' AND student_id = get_student_id())
+  );
+
+CREATE POLICY report_cards_select ON report_cards
+  FOR SELECT TO authenticated
+  USING (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR (get_user_role() IN ('teacher', 'class_teacher', 'subject_teacher') AND school_id = get_user_school_id())
+    OR (get_user_role() = 'parent' AND student_id = ANY(get_parent_student_ids()))
+    OR (get_user_role() = 'student' AND student_id = get_student_id())
+  );
+
+CREATE POLICY report_cards_manage ON report_cards
+  FOR ALL TO authenticated
+  USING (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()))
+  WITH CHECK (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()));
+
+
+-- ============================================================
+-- 10L: ATTENDANCE
+-- ============================================================
+CREATE POLICY attendance_select ON attendance
+  FOR SELECT TO authenticated
+  USING (
+    is_super_admin()
+    OR school_id = get_user_school_id()
+    OR (get_user_role() = 'parent' AND student_id = ANY(get_parent_student_ids()))
+    OR (get_user_role() = 'student' AND student_id = get_student_id())
+  );
+
+CREATE POLICY attendance_manage ON attendance
+  FOR ALL TO authenticated
+  USING (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR (get_user_role() IN ('teacher', 'class_teacher') AND school_id = get_user_school_id())
+  )
+  WITH CHECK (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR (get_user_role() IN ('teacher', 'class_teacher') AND school_id = get_user_school_id())
+  );
+
+
+-- ============================================================
+-- 10M: TIMETABLE
+-- ============================================================
+CREATE POLICY timetable_select ON timetable_slots
+  FOR SELECT TO authenticated
+  USING (is_super_admin() OR school_id = get_user_school_id());
+
+CREATE POLICY timetable_manage ON timetable_slots
+  FOR ALL TO authenticated
+  USING (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()))
+  WITH CHECK (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()));
+
+
+-- ============================================================
+-- 10N: FINANCE (Fee Structures, Student Fees, Payments)
+-- ============================================================
+CREATE POLICY fee_structures_select ON fee_structures
+  FOR SELECT TO authenticated
+  USING (
+    is_super_admin()
+    OR school_id = get_user_school_id()
+  );
+
+CREATE POLICY fee_structures_manage ON fee_structures
+  FOR ALL TO authenticated
+  USING (is_super_admin() OR (is_finance_role() AND school_id = get_user_school_id()))
+  WITH CHECK (is_super_admin() OR (is_finance_role() AND school_id = get_user_school_id()));
+
+CREATE POLICY student_fees_select ON student_fees
+  FOR SELECT TO authenticated
+  USING (
+    is_super_admin()
+    OR (is_finance_role() AND school_id = get_user_school_id())
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR (get_user_role() = 'parent' AND student_id = ANY(get_parent_student_ids()))
+    OR (get_user_role() = 'student' AND student_id = get_student_id())
+  );
+
+CREATE POLICY student_fees_manage ON student_fees
+  FOR ALL TO authenticated
+  USING (is_super_admin() OR (is_finance_role() AND school_id = get_user_school_id()))
+  WITH CHECK (is_super_admin() OR (is_finance_role() AND school_id = get_user_school_id()));
+
+CREATE POLICY payments_select ON payments
+  FOR SELECT TO authenticated
+  USING (
+    is_super_admin()
+    OR (is_finance_role() AND school_id = get_user_school_id())
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR (get_user_role() = 'parent' AND student_fee_id IN (
+      SELECT id FROM student_fees WHERE student_id = ANY(get_parent_student_ids())
+    ))
+  );
+
+CREATE POLICY payments_insert ON payments
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    is_super_admin()
+    OR (is_finance_role() AND school_id = get_user_school_id())
+  );
+
+
+-- ============================================================
+-- 10O: DISCIPLINARY RECORDS (Restricted)
+-- ============================================================
+CREATE POLICY disciplinary_select ON disciplinary_records
+  FOR SELECT TO authenticated
+  USING (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR (get_user_role() IN ('teacher', 'class_teacher') AND school_id = get_user_school_id())
+    OR (get_user_role() = 'parent' AND student_id = ANY(get_parent_student_ids()))
+  );
+
+CREATE POLICY disciplinary_manage ON disciplinary_records
+  FOR ALL TO authenticated
+  USING (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR (get_user_role() IN ('teacher', 'class_teacher') AND school_id = get_user_school_id())
+  )
+  WITH CHECK (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR (get_user_role() IN ('teacher', 'class_teacher') AND school_id = get_user_school_id())
+  );
+
+
+-- ============================================================
+-- 10P: PARENT CONSENTS
+-- ============================================================
+CREATE POLICY consents_select ON parent_consents
+  FOR SELECT TO authenticated
+  USING (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR guardian_user_id = auth.uid()
+  );
+
+CREATE POLICY consents_manage ON parent_consents
+  FOR ALL TO authenticated
+  USING (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR guardian_user_id = auth.uid()
+  )
+  WITH CHECK (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR guardian_user_id = auth.uid()
+  );
+
+
+-- ============================================================
+-- 10Q: MESSAGES
+-- ============================================================
+CREATE POLICY messages_select ON messages
+  FOR SELECT TO authenticated
+  USING (
+    sender_id = auth.uid()
+    OR receiver_id = auth.uid()
+    OR is_super_admin()
+  );
+
+CREATE POLICY messages_insert ON messages
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    sender_id = auth.uid()
+    AND school_id = get_user_school_id()
+  );
+
+CREATE POLICY messages_update ON messages
+  FOR UPDATE TO authenticated
+  USING (receiver_id = auth.uid())  -- Only receiver can mark as read
+  WITH CHECK (receiver_id = auth.uid());
+
+
+-- ============================================================
+-- 10R: NOTIFICATIONS
+-- ============================================================
+CREATE POLICY notifications_select ON notifications
+  FOR SELECT TO authenticated
+  USING (user_id = auth.uid() OR is_super_admin());
+
+CREATE POLICY notifications_insert ON notifications
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    is_super_admin()
+    OR is_school_admin_level()
+    OR school_id = get_user_school_id()
+  );
+
+CREATE POLICY notifications_update ON notifications
+  FOR UPDATE TO authenticated
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+
+-- ============================================================
+-- 10S: AUDIT LOGS (Read-only for admins)
+-- ============================================================
+CREATE POLICY audit_logs_select ON audit_logs
+  FOR SELECT TO authenticated
+  USING (
+    is_super_admin()
+    OR (get_user_role() IN ('school_admin', 'principal', 'ict_admin') AND school_id = get_user_school_id())
+  );
+
+-- No insert/update/delete policies — audit logs are written by triggers only (SECURITY DEFINER)
+
+
+-- ============================================================
+-- 10T: STUDENT CLASSES
+-- ============================================================
+CREATE POLICY student_classes_select ON student_classes
+  FOR SELECT TO authenticated
+  USING (
+    is_super_admin()
+    OR school_id = get_user_school_id()
+    OR (get_user_role() = 'parent' AND student_id = ANY(get_parent_student_ids()))
+    OR (get_user_role() = 'student' AND student_id = get_student_id())
+  );
+
+CREATE POLICY student_classes_manage ON student_classes
+  FOR ALL TO authenticated
+  USING (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()))
+  WITH CHECK (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()));
+
+  -- ============================================================
+-- SECTION 11A: GENERATE STUDENT ADMISSION NUMBER
+-- ============================================================
+CREATE OR REPLACE FUNCTION generate_admission_number(p_school_id UUID)
+RETURNS TEXT AS $$
+DECLARE
+  v_year TEXT;
+  v_count INT;
+  v_prefix TEXT;
+BEGIN
+  v_year := EXTRACT(YEAR FROM CURRENT_DATE)::TEXT;
+
+  SELECT COUNT(*) + 1 INTO v_count
+  FROM students
+  WHERE school_id = p_school_id
+    AND EXTRACT(YEAR FROM enrollment_date) = EXTRACT(YEAR FROM CURRENT_DATE);
+
+  v_prefix := 'ADM';
+  RETURN v_prefix || '-' || v_year || '-' || LPAD(v_count::TEXT, 4, '0');
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION generate_admission_number IS 'Generates sequential admission numbers like ADM-2025-0001';
+
+
+-- ============================================================
+-- SECTION 11B: CALCULATE TERM AVERAGE FOR A STUDENT
+-- ============================================================
+CREATE OR REPLACE FUNCTION calculate_term_average(
+  p_student_id UUID,
+  p_term_id UUID,
+  p_academic_year_id UUID
+)
+RETURNS TABLE (
+  learning_area_id UUID,
+  learning_area_name VARCHAR,
+  average_score DECIMAL,
+  overall_level cbc_performance_level,
+  total_competencies INT
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    la.learning_area_id,
+    la.name,
+    ROUND(AVG(a.score)::DECIMAL, 2),
+    CASE
+      WHEN AVG(a.score) >= 3.5 THEN 'exceeding'::cbc_performance_level
+      WHEN AVG(a.score) >= 2.5 THEN 'meeting'::cbc_performance_level
+      WHEN AVG(a.score) >= 1.5 THEN 'approaching'::cbc_performance_level
+      ELSE 'below_expectation'::cbc_performance_level
+    END,
+    COUNT(a.assessment_id)::INT
+  FROM assessments a
+  JOIN learning_areas la ON a.learning_area_id = la.learning_area_id
+  WHERE a.student_id = p_student_id
+    AND a.term_id = p_term_id
+    AND a.academic_year_id = p_academic_year_id
+  GROUP BY la.learning_area_id, la.name;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- ============================================================
+-- SECTION 11C: GET STUDENT ATTENDANCE SUMMARY
+-- ============================================================
+CREATE OR REPLACE FUNCTION get_attendance_summary(
+  p_student_id UUID,
+  p_term_id UUID
+)
+RETURNS TABLE (
+  total_days INT,
+  present_days INT,
+  absent_days INT,
+  late_days INT,
+  attendance_percentage DECIMAL
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    COUNT(*)::INT AS total_days,
+    COUNT(*) FILTER (WHERE status = 'present')::INT,
+    COUNT(*) FILTER (WHERE status = 'absent')::INT,
+    COUNT(*) FILTER (WHERE status = 'late')::INT,
+    ROUND(
+      (COUNT(*) FILTER (WHERE status IN ('present', 'late'))::DECIMAL / NULLIF(COUNT(*), 0)) * 100,
+      2
+    )
+  FROM attendance
+  WHERE student_id = p_student_id
+    AND term_id = p_term_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- ============================================================
+-- SECTION 11D: GET FEE BALANCE FOR A STUDENT
+-- ============================================================
+CREATE OR REPLACE FUNCTION get_student_fee_balance(
+  p_student_id UUID,
+  p_academic_year_id UUID
+)
+RETURNS TABLE (
+  total_due DECIMAL,
+  total_paid DECIMAL,
+  total_balance DECIMAL
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    COALESCE(SUM(amount_due), 0)::DECIMAL,
+    COALESCE(SUM(amount_paid), 0)::DECIMAL,
+    COALESCE(SUM(amount_due - amount_paid), 0)::DECIMAL
+  FROM student_fees
+  WHERE student_id = p_student_id
+    AND academic_year_id = p_academic_year_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+
+unfinished
+=======================================================================
+-- supabase/migrations/add_remaining_tables.sql
+-- Additional tables required by the four new modules
+
+-- ══════════════════════════════════════════
+-- MESSAGE RECIPIENTS (many-to-many)
+-- ══════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS message_recipients (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  recipient_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  status VARCHAR(20) NOT NULL DEFAULT 'sent' CHECK (status IN ('sent', 'delivered', 'read')),
+  read_at TIMESTAMPTZ,
+  deleted_by_recipient BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(message_id, recipient_id)
+);
+
+CREATE INDEX idx_msg_recipients_recipient ON message_recipients(recipient_id);
+CREATE INDEX idx_msg_recipients_message ON message_recipients(message_id);
+CREATE INDEX idx_msg_recipients_status ON message_recipients(recipient_id, status) WHERE deleted_by_recipient = false;
+
+-- ══════════════════════════════════════════
+-- ANNOUNCEMENTS
+-- ══════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS announcements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+  title VARCHAR(200) NOT NULL,
+  body TEXT NOT NULL,
+  priority VARCHAR(20) NOT NULL DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
+  target_roles TEXT[] NOT NULL DEFAULT '{}',
+  target_class_ids UUID[] DEFAULT '{}',
+  is_pinned BOOLEAN NOT NULL DEFAULT false,
+  publish_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ,
+  created_by UUID NOT NULL REFERENCES users(user_id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_announcements_school ON announcements(school_id);
+CREATE INDEX idx_announcements_publish ON announcements(school_id, publish_at);
+
+-- ══════════════════════════════════════════
+-- GENERATED REPORTS (tracking)
+-- ══════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS generated_reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+  report_type VARCHAR(50) NOT NULL,
+  format VARCHAR(10) NOT NULL DEFAULT 'pdf',
+  status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'generating', 'completed', 'failed')),
+  file_url TEXT,
+  file_name VARCHAR(255) NOT NULL,
+  parameters JSONB DEFAULT '{}',
+  analytics_json JSONB DEFAULT '{}',
+  error_message TEXT,
+  generated_by UUID NOT NULL REFERENCES users(user_id),
+  generated_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_gen_reports_school ON generated_reports(school_id);
+CREATE INDEX idx_gen_reports_type ON generated_reports(school_id, report_type);
+
+-- ══════════════════════════════════════════
+-- ACADEMIC YEARS
+-- ══════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS academic_years (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+  year VARCHAR(4) NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(school_id, year),
+  CHECK(end_date > start_date)
+);
+
+-- Only one active year per school
+CREATE UNIQUE INDEX idx_active_year ON academic_years(school_id) WHERE is_active = true;
+
+-- ══════════════════════════════════════════
+-- TERMS
+-- ══════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS terms (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+  academic_year_id UUID NOT NULL REFERENCES academic_years(id) ON DELETE CASCADE,
+  name VARCHAR(20) NOT NULL CHECK (name IN ('Term 1', 'Term 2', 'Term 3')),
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(school_id, academic_year_id, name),
+  CHECK(end_date > start_date)
+);
+
+-- Only one active term per school
+CREATE UNIQUE INDEX idx_active_term ON terms(school_id) WHERE is_active = true;
+
+-- ══════════════════════════════════════════
+-- CLASS LEVELS
+-- ══════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS class_levels (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+  name VARCHAR(50) NOT NULL,
+  level_order INT NOT NULL,
+  description VARCHAR(200),
+  UNIQUE(school_id, name)
+);
+
+-- ══════════════════════════════════════════
+-- SCHOOL SETTINGS (key-value store)
+-- ══════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS school_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+  setting_key VARCHAR(100) NOT NULL,
+  setting_value TEXT NOT NULL,
+  setting_type VARCHAR(20) NOT NULL DEFAULT 'string',
+  category VARCHAR(50) NOT NULL DEFAULT 'general',
+  description VARCHAR(500),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_by UUID REFERENCES users(user_id),
+  UNIQUE(school_id, setting_key)
+);
+
+CREATE INDEX idx_settings_school ON school_settings(school_id);
+CREATE INDEX idx_settings_category ON school_settings(school_id, category);
+
+-- ══════════════════════════════════════════
+-- STUDENT PARENTS (parent-child mapping)
+-- ══════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS student_parents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id UUID NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
+  parent_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  relationship VARCHAR(50) NOT NULL DEFAULT 'parent',
+  is_primary BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(student_id, parent_id)
+);
+
+CREATE INDEX idx_student_parents_student ON student_parents(student_id);
+CREATE INDEX idx_student_parents_parent ON student_parents(parent_id);
+
+-- ══════════════════════════════════════════
+-- ADD MISSING COLUMNS TO EXISTING TABLES
+-- ══════════════════════════════════════════
+
+-- attendance: add class_id if missing
+DO $$ BEGIN
+  ALTER TABLE attendance ADD COLUMN IF NOT EXISTS class_id UUID REFERENCES classes(id);
+  ALTER TABLE attendance ADD COLUMN IF NOT EXISTS arrival_time TIME;
+  ALTER TABLE attendance ADD COLUMN IF NOT EXISTS reason VARCHAR(500);
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+-- messages: add fields
+DO $$ BEGIN
+  ALTER TABLE messages ADD COLUMN IF NOT EXISTS priority VARCHAR(20) DEFAULT 'normal';
+  ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_broadcast BOOLEAN DEFAULT false;
+  ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_urls TEXT[] DEFAULT '{}';
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+-- notifications: add fields
+DO $$ BEGIN
+  ALTER TABLE notifications ADD COLUMN IF NOT EXISTS category VARCHAR(50) DEFAULT 'system';
+  ALTER TABLE notifications ADD COLUMN IF NOT EXISTS action_url VARCHAR(500);
+  ALTER TABLE notifications ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
+  ALTER TABLE notifications ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+-- disciplinary_records: add fields
+DO $$ BEGIN
+  ALTER TABLE disciplinary_records ADD COLUMN IF NOT EXISTS school_id UUID REFERENCES schools(school_id);
+  ALTER TABLE disciplinary_records ADD COLUMN IF NOT EXISTS severity VARCHAR(20) DEFAULT 'minor';
+  ALTER TABLE disciplinary_records ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'reported';
+  ALTER TABLE disciplinary_records ADD COLUMN IF NOT EXISTS location VARCHAR(200);
+  ALTER TABLE disciplinary_records ADD COLUMN IF NOT EXISTS witnesses VARCHAR(500);
+  ALTER TABLE disciplinary_records ADD COLUMN IF NOT EXISTS action_details VARCHAR(1000);
+  ALTER TABLE disciplinary_records ADD COLUMN IF NOT EXISTS follow_up_date DATE;
+  ALTER TABLE disciplinary_records ADD COLUMN IF NOT EXISTS follow_up_notes TEXT;
+  ALTER TABLE disciplinary_records ADD COLUMN IF NOT EXISTS parent_notified BOOLEAN DEFAULT false;
+  ALTER TABLE disciplinary_records ADD COLUMN IF NOT EXISTS parent_notified_date DATE;
+  ALTER TABLE disciplinary_records ADD COLUMN IF NOT EXISTS resolved_by UUID REFERENCES users(user_id);
+  ALTER TABLE disciplinary_records ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
+  ALTER TABLE disciplinary_records ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+-- classes: add fields
+DO $$ BEGIN
+  ALTER TABLE classes ADD COLUMN IF NOT EXISTS class_level_id UUID REFERENCES class_levels(id);
+  ALTER TABLE classes ADD COLUMN IF NOT EXISTS class_teacher_id UUID REFERENCES users(user_id);
+  ALTER TABLE classes ADD COLUMN IF NOT EXISTS capacity INT DEFAULT 45;
+  ALTER TABLE classes ADD COLUMN IF NOT EXISTS academic_year_id UUID REFERENCES academic_years(id);
+  ALTER TABLE classes ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+-- schools: add fields
+DO $$ BEGIN
+  ALTER TABLE schools ADD COLUMN IF NOT EXISTS county VARCHAR(100);
+  ALTER TABLE schools ADD COLUMN IF NOT EXISTS sub_county VARCHAR(100);
+  ALTER TABLE schools ADD COLUMN IF NOT EXISTS alternative_phone VARCHAR(20);
+  ALTER TABLE schools ADD COLUMN IF NOT EXISTS website VARCHAR(200);
+  ALTER TABLE schools ADD COLUMN IF NOT EXISTS logo_url TEXT;
+  ALTER TABLE schools ADD COLUMN IF NOT EXISTS motto VARCHAR(200);
+  ALTER TABLE schools ADD COLUMN IF NOT EXISTS vision VARCHAR(500);
+  ALTER TABLE schools ADD COLUMN IF NOT EXISTS mission VARCHAR(500);
+  ALTER TABLE schools ADD COLUMN IF NOT EXISTS registration_number VARCHAR(50);
+  ALTER TABLE schools ADD COLUMN IF NOT EXISTS established_year INT;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+-- ══════════════════════════════════════════
+-- RLS POLICIES FOR NEW TABLES
+-- ══════════════════════════════════════════
+
+ALTER TABLE message_recipients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE generated_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE academic_years ENABLE ROW LEVEL SECURITY;
+ALTER TABLE terms ENABLE ROW LEVEL SECURITY;
+ALTER TABLE class_levels ENABLE ROW LEVEL SECURITY;
+ALTER TABLE school_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE student_parents ENABLE ROW LEVEL SECURITY;
+
+-- Message recipients: users see own messages
+CREATE POLICY msg_recipients_select ON message_recipients
+  FOR SELECT USING (recipient_id = auth.uid());
+
+CREATE POLICY msg_recipients_insert ON message_recipients
+  FOR INSERT WITH CHECK (true); -- Controlled by service layer
+
+CREATE POLICY msg_recipients_update ON message_recipients
+  FOR UPDATE USING (recipient_id = auth.uid());
+
+-- Announcements: school-scoped
+CREATE POLICY announcements_select ON announcements
+  FOR SELECT USING (school_id IN (SELECT school_id FROM users WHERE user_id = auth.uid()));
+
+CREATE POLICY announcements_insert ON announcements
+  FOR INSERT WITH CHECK 
