@@ -7,17 +7,24 @@ import { validateBody } from "@/lib/api/validation";
 import { apiSuccess, apiError } from "@/lib/api/response";
 import { createTermSchema } from "@/features/settings";
 import {
+  getActiveAcademicYear,
   getTerms,
   createTerm,
 } from "@/features/settings/services/academicYear.service";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const GET = withAuth(async (req: NextRequest, user) => {
   try {
     const { searchParams } = new URL(req.url);
-    const academicYearId = searchParams.get("academic_year_id");
+    let academicYearId = searchParams.get("academic_year_id");
 
     if (!academicYearId) {
-      return apiError("academic_year_id parameter is required", 422);
+      const activeYear = await getActiveAcademicYear(user.school_id);
+      academicYearId = activeYear.success ? activeYear.data?.id ?? null : null;
+    }
+
+    if (!academicYearId) {
+      return apiSuccess([]);
     }
 
     const result = await getTerms(academicYearId, user.school_id);

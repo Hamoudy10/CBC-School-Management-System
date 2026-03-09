@@ -355,6 +355,21 @@ body {
   }
 }
 
+@keyframes routeProgress {
+  0% {
+    transform: translateX(-120%);
+    width: 28%;
+  }
+  55% {
+    transform: translateX(130%);
+    width: 44%;
+  }
+  100% {
+    transform: translateX(300%);
+    width: 28%;
+  }
+}
+
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -374,6 +389,10 @@ body {
 
 .animate-scale-in {
   animation: scaleIn var(--transition-normal);
+}
+
+.animate-route-progress {
+  animation: routeProgress 1.4s ease-in-out infinite;
 }
 
 .animate-spin {

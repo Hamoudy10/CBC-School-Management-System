@@ -1,7 +1,7 @@
 // app/(dashboard)/finance/page.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useDeferredValue } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   DollarSign,
@@ -782,10 +782,15 @@ export default function FinancePage() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoadingBalances, setIsLoadingBalances] = useState(false);
+  const [isLoadingStructures, setIsLoadingStructures] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasLoadedBalances, setHasLoadedBalances] = useState(false);
+  const [hasLoadedStructures, setHasLoadedStructures] = useState(false);
 
   const [activeTab, setActiveTab] = useState('overview');
   const [balanceSearchTerm, setBalanceSearchTerm] = useState('');
+  const deferredBalanceSearchTerm = useDeferredValue(balanceSearchTerm);
 
   // ─── Permissions ───────────────────────────────────────────
   const canViewFinance = checkPermission('finance', 'view');
@@ -793,44 +798,27 @@ export default function FinancePage() {
   const canRecordPayments = checkPermission('finance', 'create');
 
   // ─── Fetch Data ────────────────────────────────────────────
-  const fetchData = useCallback(async () => {
+  const fetchOverviewData = useCallback(async () => {
     try {
       setError(null);
 
-      // Fetch stats
-      const statsResponse = await fetch('/api/finance/stats', {
-        credentials: 'include',
-      });
+      const [statsResponse, paymentsResponse] = await Promise.all([
+        fetch('/api/finance/stats', {
+          credentials: 'include',
+        }),
+        fetch('/api/finance/recent-payments?limit=10', {
+          credentials: 'include',
+        }),
+      ]);
+
       if (statsResponse.ok) {
         const json = await statsResponse.json();
         setStats(json.data);
       }
 
-      // Fetch recent payments
-      const paymentsResponse = await fetch('/api/payments?limit=10', {
-        credentials: 'include',
-      });
       if (paymentsResponse.ok) {
         const json = await paymentsResponse.json();
         setRecentPayments(json.data || []);
-      }
-
-      // Fetch students with balance
-      const balanceResponse = await fetch('/api/finance/balances?hasBalance=true&limit=50', {
-        credentials: 'include',
-      });
-      if (balanceResponse.ok) {
-        const json = await balanceResponse.json();
-        setStudentsWithBalance(json.data || []);
-      }
-
-      // Fetch fee structures
-      const structuresResponse = await fetch('/api/fees?limit=20', {
-        credentials: 'include',
-      });
-      if (structuresResponse.ok) {
-        const json = await structuresResponse.json();
-        setFeeStructures(json.data || []);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load data';
@@ -839,22 +827,90 @@ export default function FinancePage() {
     }
   }, []);
 
+  const fetchBalances = useCallback(async () => {
+    setIsLoadingBalances(true);
+    try {
+      const response = await fetch('/api/finance/balances?hasBalance=true&limit=50', {
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to load balances');
+      }
+
+      const json = await response.json();
+      setStudentsWithBalance(json.data || []);
+      setHasLoadedBalances(true);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load balances';
+      setError(message);
+    } finally {
+      setIsLoadingBalances(false);
+    }
+  }, []);
+
+  const fetchFeeStructures = useCallback(async () => {
+    setIsLoadingStructures(true);
+    try {
+      const response = await fetch('/api/fees?limit=20', {
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to load fee structures');
+      }
+
+      const json = await response.json();
+      setFeeStructures(json.data || []);
+      setHasLoadedStructures(true);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Failed to load fee structures';
+      setError(message);
+    } finally {
+      setIsLoadingStructures(false);
+    }
+  }, []);
+
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
-      await fetchData();
+      await fetchOverviewData();
       setIsLoading(false);
     };
 
     if (canViewFinance) {
       loadData();
     }
-  }, [fetchData, canViewFinance]);
+  }, [fetchOverviewData, canViewFinance]);
+
+  useEffect(() => {
+    if (activeTab === 'balances' && !hasLoadedBalances) {
+      fetchBalances();
+    }
+
+    if (activeTab === 'structures' && canManageFees && !hasLoadedStructures) {
+      fetchFeeStructures();
+    }
+  }, [
+    activeTab,
+    canManageFees,
+    fetchBalances,
+    fetchFeeStructures,
+    hasLoadedBalances,
+    hasLoadedStructures,
+  ]);
 
   // ─── Handlers ──────────────────────────────────────────────
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await fetchData();
+    await fetchOverviewData();
+    if (hasLoadedBalances) {
+      await fetchBalances();
+    }
+    if (hasLoadedStructures) {
+      await fetchFeeStructures();
+    }
     setIsRefreshing(false);
     success('Refreshed', 'Finance data has been updated.');
   };
@@ -886,11 +942,15 @@ export default function FinancePage() {
   };
 
   // Filter students by search
-  const filteredStudents = balanceSearchTerm
+  const filteredStudents = deferredBalanceSearchTerm
     ? studentsWithBalance.filter(
         (s) =>
-          s.studentName.toLowerCase().includes(balanceSearchTerm.toLowerCase()) ||
-          s.admissionNumber.toLowerCase().includes(balanceSearchTerm.toLowerCase())
+          s.studentName
+            .toLowerCase()
+            .includes(deferredBalanceSearchTerm.toLowerCase()) ||
+          s.admissionNumber
+            .toLowerCase()
+            .includes(deferredBalanceSearchTerm.toLowerCase())
       )
     : studentsWithBalance;
 
@@ -1030,9 +1090,9 @@ export default function FinancePage() {
           <TabTrigger value="payments">Payments</TabTrigger>
           <TabTrigger value="balances">
             Balances
-            {studentsWithBalance.length > 0 && (
+            {(stats?.studentsWithBalance || studentsWithBalance.length) > 0 && (
               <Badge variant="error" className="ml-2">
-                {studentsWithBalance.length}
+                {stats?.studentsWithBalance || studentsWithBalance.length}
               </Badge>
             )}
           </TabTrigger>
@@ -1153,7 +1213,7 @@ export default function FinancePage() {
         <TabContent value="balances" className="mt-6">
           <StudentsWithBalanceTable
             students={filteredStudents}
-            isLoading={false}
+            isLoading={isLoadingBalances && !hasLoadedBalances}
             searchTerm={balanceSearchTerm}
             onSearchChange={setBalanceSearchTerm}
             onViewStudent={(id) => router.push(`/students/${id}`)}
@@ -1163,10 +1223,21 @@ export default function FinancePage() {
         {/* ── Fee Structures Tab ──────────────────────────── */}
         {canManageFees && (
           <TabContent value="structures" className="mt-6">
-            <FeeStructuresTable
-              structures={feeStructures}
-              onManage={() => router.push('/finance/fee-structures')}
-            />
+            {isLoadingStructures && !hasLoadedStructures ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-6">
+                <div className="animate-pulse space-y-4">
+                  <div className="h-10 w-64 rounded-xl bg-slate-100" />
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <div key={index} className="h-14 rounded-2xl bg-slate-100" />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <FeeStructuresTable
+                structures={feeStructures}
+                onManage={() => router.push('/finance/fee-structures')}
+              />
+            )}
           </TabContent>
         )}
       </Tabs>

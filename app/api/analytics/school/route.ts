@@ -9,6 +9,10 @@ import { withPermission } from "@/lib/api/withAuth";
 import { validateQuery } from "@/lib/api/validation";
 import { successResponse, validationErrorResponse } from "@/lib/api/response";
 import { getSchoolPerformanceDashboard } from "@/features/assessments";
+import {
+  createEmptyDashboardMetrics,
+  type DashboardMetrics,
+} from "@/types/dashboard";
 
 // ============================================================
 // Query Schema
@@ -17,6 +21,32 @@ const querySchema = z.object({
   termId: z.string().uuid().optional(),
   academicYearId: z.string().uuid().optional(),
 });
+
+function mapSchoolAnalyticsToDashboardMetrics(analytics?: {
+  totalStudents?: number;
+  totalAssessments?: number;
+  schoolAverage?: number;
+}): DashboardMetrics {
+  const metrics = createEmptyDashboardMetrics();
+
+  if (!analytics) {
+    return metrics;
+  }
+
+  return {
+    ...metrics,
+    students: {
+      ...metrics.students,
+      total: analytics.totalStudents ?? 0,
+      active: analytics.totalStudents ?? 0,
+    },
+    assessments: {
+      ...metrics.assessments,
+      totalCompleted: analytics.totalAssessments ?? 0,
+      averageScore: analytics.schoolAverage ?? 0,
+    },
+  };
+}
 
 // ============================================================
 // GET Handler
@@ -35,19 +65,7 @@ export const GET = withPermission(
     let { termId, academicYearId } = validation.data ?? {};
 
     if (!user.schoolId) {
-      return successResponse({
-        totalStudents: 0,
-        totalAssessments: 0,
-        schoolAverage: 0,
-        levelDistribution: {
-          exceeding: 0,
-          meeting: 0,
-          approaching: 0,
-          belowExpectation: 0,
-        },
-        topLearningAreas: [],
-        lowPerformingAreas: [],
-      });
+      return successResponse(createEmptyDashboardMetrics());
     }
 
     if (!termId || !academicYearId) {
@@ -78,19 +96,7 @@ export const GET = withPermission(
     }
 
     if (!termId || !academicYearId) {
-      return successResponse({
-        totalStudents: 0,
-        totalAssessments: 0,
-        schoolAverage: 0,
-        levelDistribution: {
-          exceeding: 0,
-          meeting: 0,
-          approaching: 0,
-          belowExpectation: 0,
-        },
-        topLearningAreas: [],
-        lowPerformingAreas: [],
-      });
+      return successResponse(createEmptyDashboardMetrics());
     }
 
     const dashboard = await getSchoolPerformanceDashboard(
@@ -99,6 +105,6 @@ export const GET = withPermission(
       user,
     );
 
-    return successResponse(dashboard);
+    return successResponse(mapSchoolAnalyticsToDashboardMetrics(dashboard));
   },
 );

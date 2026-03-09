@@ -28,51 +28,14 @@ import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { cn, formatCurrency } from '@/lib/utils';
+import {
+  createEmptyDashboardMetrics,
+  type DashboardActivityItem,
+  type DashboardMetrics,
+} from '@/types/dashboard';
 
 // ─── Types ───────────────────────────────────────────────────
-interface DashboardMetrics {
-  students: {
-    total: number;
-    active: number;
-    newThisTerm: number;
-  };
-  staff: {
-    total: number;
-    teachers: number;
-    onLeave: number;
-  };
-  finance: {
-    totalExpected: number;
-    totalCollected: number;
-    collectionRate: number;
-    pendingPayments: number;
-  };
-  attendance: {
-    todayPresent: number;
-    todayAbsent: number;
-    todayLate: number;
-    todayRate: number;
-  };
-  assessments: {
-    totalCompleted: number;
-    pendingEntry: number;
-    averageScore: number;
-  };
-  discipline: {
-    openCases: number;
-    thisMonth: number;
-  };
-  recentActivity: ActivityItem[];
-}
-
-interface ActivityItem {
-  id: string;
-  type: 'payment' | 'attendance' | 'assessment' | 'enrollment' | 'discipline';
-  title: string;
-  description: string;
-  timestamp: string;
-  icon: 'payment' | 'attendance' | 'assessment' | 'enrollment' | 'discipline';
-}
+type ActivityItem = DashboardActivityItem;
 
 // ─── Stat Card Component ─────────────────────────────────────
 interface StatCardProps {
@@ -525,36 +488,88 @@ async function fetchDashboardMetrics(): Promise<DashboardMetrics> {
 
   if (!res.ok) {
     // Return empty defaults on error
-    return getEmptyMetrics();
+    return createEmptyDashboardMetrics();
   }
 
   const json = await res.json();
-  return json.data ?? getEmptyMetrics();
+  return normalizeDashboardMetrics(json.data);
 }
 
 function getEmptyMetrics(): DashboardMetrics {
+  return createEmptyDashboardMetrics();
+}
+
+function normalizeDashboardMetrics(data: unknown): DashboardMetrics {
+  const empty = getEmptyMetrics();
+
+  if (!data || typeof data !== 'object') {
+    return empty;
+  }
+
+  const candidate = data as Partial<DashboardMetrics> & {
+    totalStudents?: number;
+    totalAssessments?: number;
+    schoolAverage?: number;
+  };
+
+  const hasNestedMetrics =
+    typeof candidate.students === 'object' &&
+    candidate.students !== null &&
+    typeof candidate.staff === 'object' &&
+    candidate.staff !== null;
+
+  if (hasNestedMetrics) {
+    return {
+      students: {
+        ...empty.students,
+        ...candidate.students,
+      },
+      staff: {
+        ...empty.staff,
+        ...candidate.staff,
+      },
+      finance: {
+        ...empty.finance,
+        ...candidate.finance,
+      },
+      attendance: {
+        ...empty.attendance,
+        ...candidate.attendance,
+      },
+      assessments: {
+        ...empty.assessments,
+        ...candidate.assessments,
+      },
+      discipline: {
+        ...empty.discipline,
+        ...candidate.discipline,
+      },
+      recentActivity: Array.isArray(candidate.recentActivity)
+        ? candidate.recentActivity
+        : [],
+    };
+  }
+
   return {
-    students: { total: 0, active: 0, newThisTerm: 0 },
-    staff: { total: 0, teachers: 0, onLeave: 0 },
-    finance: {
-      totalExpected: 0,
-      totalCollected: 0,
-      collectionRate: 0,
-      pendingPayments: 0,
-    },
-    attendance: {
-      todayPresent: 0,
-      todayAbsent: 0,
-      todayLate: 0,
-      todayRate: 0,
+    ...empty,
+    students: {
+      ...empty.students,
+      total:
+        typeof candidate.totalStudents === 'number'
+          ? candidate.totalStudents
+          : empty.students.total,
     },
     assessments: {
-      totalCompleted: 0,
-      pendingEntry: 0,
-      averageScore: 0,
+      ...empty.assessments,
+      totalCompleted:
+        typeof candidate.totalAssessments === 'number'
+          ? candidate.totalAssessments
+          : empty.assessments.totalCompleted,
+      averageScore:
+        typeof candidate.schoolAverage === 'number'
+          ? candidate.schoolAverage
+          : empty.assessments.averageScore,
     },
-    discipline: { openCases: 0, thisMonth: 0 },
-    recentActivity: [],
   };
 }
 

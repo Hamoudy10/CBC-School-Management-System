@@ -1,7 +1,7 @@
 // app/(dashboard)/students/page.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Plus,
@@ -13,15 +13,12 @@ import {
   GraduationCap,
   AlertTriangle,
   RefreshCw,
-  FileSpreadsheet,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
-import { Spinner } from '@/components/ui/Spinner';
 import { Alert } from '@/components/ui/Alert';
-import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils';
 import { StudentFilters } from './components/StudentFilters';
@@ -34,6 +31,8 @@ import {
   StudentStats,
   EnrollmentStatus,
 } from '@/features/students';
+
+const ExportModal = lazy(() => import('./components/ExportModal'));
 
 // ─── Types ───────────────────────────────────────────────────
 interface ClassOption {
@@ -120,76 +119,6 @@ function StatCard({ title, value, icon, color, subtitle, onClick }: StatCardProp
 }
 
 // ─── Export Modal Component ──────────────────────────────────
-interface ExportModalProps {
-  open: boolean;
-  onClose: () => void;
-  onExport: (format: 'csv' | 'excel') => void;
-  isExporting: boolean;
-  totalStudents: number;
-}
-
-function ExportModal({
-  open,
-  onClose,
-  onExport,
-  isExporting,
-  totalStudents,
-}: ExportModalProps) {
-  return (
-    <Modal open={open} onClose={onClose}>
-      <ModalHeader>
-        <ModalTitle>Export Students</ModalTitle>
-      </ModalHeader>
-      <ModalBody>
-        <div className="space-y-4">
-          <p className="text-sm text-gray-600">
-            Export {totalStudents.toLocaleString()} students to a file. Choose your
-            preferred format:
-          </p>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <button
-            onClick={() => onExport('csv')}
-            disabled={isExporting}
-            className="flex flex-col items-center gap-2 rounded-lg border-2 border-gray-200 p-4 transition-all hover:border-blue-500 hover:bg-blue-50 disabled:opacity-50"
-          >
-            <FileSpreadsheet className="h-8 w-8 text-green-600" />
-            <span className="font-medium text-gray-900">CSV Format</span>
-            <span className="text-xs text-gray-500">
-              Compatible with all spreadsheets
-            </span>
-          </button>
-
-          <button
-            onClick={() => onExport('excel')}
-            disabled={isExporting}
-            className="flex flex-col items-center gap-2 rounded-lg border-2 border-gray-200 p-4 transition-all hover:border-blue-500 hover:bg-blue-50 disabled:opacity-50"
-          >
-            <FileSpreadsheet className="h-8 w-8 text-blue-600" />
-            <span className="font-medium text-gray-900">Excel Format</span>
-            <span className="text-xs text-gray-500">
-              .xlsx with formatting
-            </span>
-          </button>
-        </div>
-
-        {isExporting && (
-          <div className="flex items-center justify-center gap-2 py-2">
-            <Spinner size="sm" />
-            <span className="text-sm text-gray-600">Preparing export...</span>
-          </div>
-        )}
-        </div>
-      </ModalBody>
-      <ModalFooter>
-        <Button variant="ghost" onClick={onClose} disabled={isExporting}>
-          Cancel
-        </Button>
-      </ModalFooter>
-    </Modal>
-  );
-}
-
 // ─── Main Page Component ─────────────────────────────────────
 export default function StudentsPage() {
   const router = useRouter();
@@ -320,21 +249,23 @@ export default function StudentsPage() {
 
   // ─── Initial Load ──────────────────────────────────────────
   useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      await Promise.all([fetchStudents(), fetchStats(), fetchClassesAndGrades()]);
-      setIsLoading(false);
+    const loadReferenceData = async () => {
+      await Promise.all([fetchStats(), fetchClassesAndGrades()]);
     };
 
-    loadData();
-  }, [fetchStudents, fetchStats, fetchClassesAndGrades]);
+    loadReferenceData();
+  }, [fetchStats, fetchClassesAndGrades]);
 
   // ─── Refetch on filter/sort/page change ────────────────────
   useEffect(() => {
-    if (!isLoading) {
-      fetchStudents();
-    }
-  }, [filters, sortBy, sortOrder, page]); // eslint-disable-line react-hooks/exhaustive-deps
+    const loadStudents = async () => {
+      setIsLoading(true);
+      await fetchStudents();
+      setIsLoading(false);
+    };
+
+    loadStudents();
+  }, [fetchStudents]);
 
   // ─── Handlers ──────────────────────────────────────────────
   const handleRefresh = async () => {
@@ -659,13 +590,17 @@ export default function StudentsPage() {
       />
 
       {/* ── Export Modal ────────────────────────────────────── */}
-      <ExportModal
-        open={showExportModal}
-        onClose={() => setShowExportModal(false)}
-        onExport={handleExport}
-        isExporting={isExporting}
-        totalStudents={students.total}
-      />
+      {showExportModal ? (
+        <Suspense fallback={null}>
+          <ExportModal
+            open={showExportModal}
+            onClose={() => setShowExportModal(false)}
+            onExport={handleExport}
+            isExporting={isExporting}
+            totalStudents={students.total}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

@@ -1,7 +1,15 @@
 // app/(dashboard)/assessments/page.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, {
+  Suspense,
+  lazy,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useDeferredValue,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ClipboardList,
@@ -38,9 +46,10 @@ import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { Alert } from '@/components/ui/Alert';
 import { Tabs, TabsList, TabTrigger, TabContent } from '@/components/ui/Tabs';
-import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils';
+
+const RemarksModal = lazy(() => import('./components/RemarksModal'));
 
 // ─── Types ───────────────────────────────────────────────────
 type PerformanceLevel = 1 | 2 | 3 | 4;
@@ -431,16 +440,17 @@ function ScoreEntryGrid({
   const [showRemarkModal, setShowRemarkModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<StudentAssessment | null>(null);
   const [remarkText, setRemarkText] = useState('');
+  const deferredSearchTerm = useDeferredValue(searchTerm);
 
   const filteredStudents = useMemo(() => {
-    if (!searchTerm) return students;
-    const term = searchTerm.toLowerCase();
+    if (!deferredSearchTerm) return students;
+    const term = deferredSearchTerm.toLowerCase();
     return students.filter(
       (s) =>
         s.fullName.toLowerCase().includes(term) ||
         s.admissionNumber.toLowerCase().includes(term)
     );
-  }, [students, searchTerm]);
+  }, [students, deferredSearchTerm]);
 
   const handleRemarkClick = (student: StudentAssessment) => {
     setSelectedStudent(student);
@@ -656,38 +666,18 @@ function ScoreEntryGrid({
         )}
       </div>
 
-      {/* Remarks Modal */}
-      <Modal
-        open={showRemarkModal}
-        onClose={() => setShowRemarkModal(false)}
-        size="sm"
-      >
-        <ModalHeader>
-          <ModalTitle>Remarks for {selectedStudent?.fullName}</ModalTitle>
-        </ModalHeader>
-        <ModalBody>
-          <div className="space-y-4">
-            <textarea
-              placeholder="Enter remarks about the student's performance..."
-              rows={4}
-              value={remarkText}
-              onChange={(e) => setRemarkText(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-        </ModalBody>
-        <ModalFooter>
-          <Button
-            variant="ghost"
-            onClick={() => setShowRemarkModal(false)}
-          >
-            Cancel
-          </Button>
-          <Button variant="primary" onClick={handleRemarkSave}>
-            Save Remarks
-          </Button>
-        </ModalFooter>
-      </Modal>
+      {showRemarkModal ? (
+        <Suspense fallback={null}>
+          <RemarksModal
+            open={showRemarkModal}
+            studentName={selectedStudent?.fullName}
+            value={remarkText}
+            onChange={setRemarkText}
+            onClose={() => setShowRemarkModal(false)}
+            onSave={handleRemarkSave}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

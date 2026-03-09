@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 interface NavItem {
   label: string;
@@ -35,11 +35,47 @@ const navItems: NavItem[] = [
 
 export function Sidebar({ collapsed = false }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
 
   useEffect(() => {
     setPendingHref(null);
   }, [pathname]);
+
+  useEffect(() => {
+    const prefetchTargets = navItems
+      .filter((item) => item.href !== pathname)
+      .slice(0, 6);
+
+    const prefetch = () => {
+      for (const item of prefetchTargets) {
+        router.prefetch(item.href);
+      }
+    };
+
+    let idleCallbackId: number | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      idleCallbackId = window.requestIdleCallback(prefetch, { timeout: 1500 });
+    } else {
+      timeoutId = globalThis.setTimeout(prefetch, 500);
+    }
+
+    return () => {
+      if (timeoutId !== null) {
+        globalThis.clearTimeout(timeoutId);
+      }
+
+      if (
+        idleCallbackId !== null &&
+        typeof window !== "undefined" &&
+        "cancelIdleCallback" in window
+      ) {
+        window.cancelIdleCallback(idleCallbackId);
+      }
+    };
+  }, [pathname, router]);
 
   const isActive = (href: string) => {
     if (href === "/dashboard") {
@@ -76,18 +112,20 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                 <Link
                   href={item.href}
                   prefetch
+                  onMouseEnter={() => router.prefetch(item.href)}
+                  onFocus={() => router.prefetch(item.href)}
                   onClick={() => {
                     if (!active) {
                       setPendingHref(item.href);
                     }
                   }}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  className={`group flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
                     active
-                      ? "bg-blue-50 text-blue-700"
+                      ? "bg-gradient-to-r from-teal-50 to-cyan-50 text-teal-800 shadow-sm ring-1 ring-teal-100"
                       : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
                   }`}
                 >
-                  <span className="flex h-5 w-5 items-center justify-center text-base">
+                  <span className="flex h-5 w-5 items-center justify-center text-base transition-transform duration-200 group-hover:scale-110">
                     {pendingHref === item.href ? (
                       <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
                     ) : (
@@ -111,9 +149,16 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
 
       {/* Footer */}
       <div className="border-t border-gray-200 p-4">
-        <p className="text-xs text-gray-400">
-          {pendingHref ? "Opening module..." : "School Management System"}
-        </p>
+        <div className="rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 px-3 py-3 text-xs text-slate-200">
+          <p className="font-medium text-white">
+            {pendingHref ? "Preparing module..." : "Fast navigation enabled"}
+          </p>
+          <p className="mt-1 text-slate-400">
+            {pendingHref
+              ? "Keeping the shell visible while the next page loads."
+              : "Frequently used modules are prefetched in the background."}
+          </p>
+        </div>
       </div>
     </aside>
   );
