@@ -4,7 +4,6 @@
 // POST /api/assessments/bulk - Bulk create/update assessments
 // ============================================================
 
-import { NextRequest } from "next/server";
 import { withPermission } from "@/lib/api/withAuth";
 import { validateBody } from "@/lib/api/validation";
 import {

@@ -6,8 +6,7 @@
 // DELETE /api/assessments/:id - Delete assessment
 // ============================================================
 
-import { NextRequest } from "next/server";
-import { withPermission, withAuth } from "@/lib/api/withAuth";
+import { withPermission } from "@/lib/api/withAuth";
 import { validateBody, validateUuid } from "@/lib/api/validation";
 import {
   successResponse,

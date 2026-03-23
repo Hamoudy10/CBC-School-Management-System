@@ -142,6 +142,13 @@ export const POST = withPermission("finance", "create", async (request) => {
     );
   }
 
+  const paymentPayload = {
+    ...parsed.data,
+    transactionId: parsed.data.transactionId ?? undefined,
+    receiptNumber: parsed.data.receiptNumber ?? undefined,
+    notes: parsed.data.notes ?? undefined,
+  };
+
   const supabase = await createSupabaseServerClient();
   const {
     data: { user: authUser },
@@ -167,7 +174,7 @@ export const POST = withPermission("finance", "create", async (request) => {
     role: (appUser.roles as any)?.name ?? "finance_officer",
   } as any;
 
-  const result = await createPayment(parsed.data, currentUser);
+  const result = await createPayment(paymentPayload, currentUser);
 
   if (!result.success) {
     return errorResponse(result.message, 400);

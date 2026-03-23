@@ -5,6 +5,7 @@
 
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { AuthProvider } from "@/components/providers/AuthProvider";
 import { ToastProvider } from "@/components/ui/Toast";
 import { SWRProvider } from "@/components/providers/SWRProvider";
 import "@/styles/globals.css";
@@ -55,7 +56,9 @@ export default function RootLayout({
     <html lang="en" className={inter.variable}>
       <body className="min-h-screen bg-secondary-50 font-sans antialiased">
         <SWRProvider>
-          <ToastProvider>{children}</ToastProvider>
+          <AuthProvider>
+            <ToastProvider>{children}</ToastProvider>
+          </AuthProvider>
         </SWRProvider>
       </body>
     </html>

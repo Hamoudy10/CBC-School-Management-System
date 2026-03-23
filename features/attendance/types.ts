@@ -1,34 +1,40 @@
-// features/attendance/types.ts
-// Type definitions for Attendance module
-
 export type AttendanceStatus = "present" | "absent" | "late" | "excused";
 
 export interface AttendanceRecord {
   id: string;
   student_id: string;
   class_id: string;
+  term_id: string;
   date: string;
-  status: AttendanceStatus;
-  remarks: string | null;
-  term: string;
-  academic_year: string;
+  status: AttendanceStatus | null;
+  reason: string | null;
+  arrival_time?: string | null;
   recorded_by: string;
   school_id: string;
   created_at: string;
   updated_at: string;
-  // Joined fields
   student?: {
     student_id: string;
-    admission_no: string;
-    user: {
-      first_name: string;
-      last_name: string;
-    };
-  };
-  recorder?: {
     first_name: string;
     last_name: string;
-  };
+    admission_number: string;
+    photo_url?: string | null;
+  } | null;
+  class?: {
+    class_id: string;
+    name: string;
+    stream?: string | null;
+  } | null;
+  recorder?: {
+    user_id: string;
+    first_name: string;
+    last_name: string;
+  } | null;
+  term?: {
+    term_id: string;
+    name: string;
+    academic_year_id: string;
+  } | null;
 }
 
 export interface AttendanceFilters {
@@ -38,19 +44,21 @@ export interface AttendanceFilters {
   date_from?: string;
   date_to?: string;
   status?: AttendanceStatus;
+  term_id?: string;
   term?: string;
+  academic_year_id?: string;
   academic_year?: string;
 }
 
 export interface BulkAttendanceEntry {
   class_id: string;
   date: string;
-  term: string;
-  academic_year: string;
+  term_id?: string | null;
   entries: Array<{
     student_id: string;
     status: AttendanceStatus;
-    remarks?: string;
+    reason?: string | null;
+    arrival_time?: string | null;
   }>;
 }
 
@@ -117,4 +125,28 @@ export interface DailyAttendanceReport {
   late: number;
   excused: number;
   attendance_rate: number;
+}
+
+export interface SchoolClassAttendanceSummary {
+  classId: string;
+  className: string;
+  gradeName: string;
+  totalStudents: number;
+  present: number;
+  absent: number;
+  late: number;
+  excused: number;
+  rate: number;
+  recorded: boolean;
+}
+
+export interface DailySchoolAttendance {
+  date: string;
+  totalStudents: number;
+  present: number;
+  absent: number;
+  late: number;
+  excused: number;
+  attendanceRate: number;
+  classes: SchoolClassAttendanceSummary[];
 }

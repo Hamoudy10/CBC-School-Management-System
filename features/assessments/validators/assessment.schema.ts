@@ -106,8 +106,8 @@ export const createAssessmentSchema = z.object({
   competencyId: uuidField,
   learningAreaId: uuidField,
   classId: uuidField,
-  academicYearId: uuidField,
-  termId: uuidField,
+  academicYearId: uuidField.optional(),
+  termId: uuidField.optional(),
   score: scoreField,
   remarks: remarksField,
   assessmentDate: dateField.optional(),
@@ -134,8 +134,8 @@ export const bulkAssessmentSchema = z.object({
   classId: uuidField,
   competencyId: uuidField,
   learningAreaId: uuidField,
-  academicYearId: uuidField,
-  termId: uuidField,
+  academicYearId: uuidField.optional(),
+  termId: uuidField.optional(),
   assessments: z
     .array(
       z.object({

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { withPermission } from "@/lib/api/withAuth";
 import { apiError, apiSuccess } from "@/lib/api/response";
-import { getDailySchoolAttendance } from "@/features/attendance/services/attendance.service";
+import { getAllClassesAttendanceSummary } from "@/features/attendance/services/attendance.service";
 
 export const GET = withPermission(
   { module: "attendance", action: "view" },
@@ -13,11 +13,11 @@ export const GET = withPermission(
       return apiError("Date must be in YYYY-MM-DD format", 422);
     }
 
-    const result = await getDailySchoolAttendance(user.school_id, date);
+    const result = await getAllClassesAttendanceSummary(user.school_id, date);
     if (!result.success) {
-      return apiError(result.message ?? "Failed to fetch school attendance", 500);
+      return apiError(result.message ?? "Failed to fetch class summaries", 500);
     }
 
-    return apiSuccess(result.data);
+    return apiSuccess(result.data ?? []);
   },
 );

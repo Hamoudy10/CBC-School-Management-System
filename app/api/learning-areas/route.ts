@@ -4,7 +4,6 @@
 // POST /api/learning-areas - Create learning area
 // ============================================================
 
-import { NextRequest } from "next/server";
 import { withPermission } from "@/lib/api/withAuth";
 import { validateBody, validateQuery } from "@/lib/api/validation";
 import {
@@ -16,6 +15,7 @@ import {
 import {
   listLearningAreas,
   createLearningArea,
+  getAllCBCHierarchies,
   learningAreaFiltersSchema,
   createLearningAreaSchema,
 } from "@/features/academics";
@@ -28,6 +28,37 @@ export const GET = withPermission(
   "view",
   async (request, { user }) => {
     const { searchParams } = new URL(request.url);
+    const includeHierarchy = searchParams.get("includeHierarchy") === "true";
+
+    if (includeHierarchy) {
+      const hierarchies = await getAllCBCHierarchies(user);
+
+      return successResponse(
+        hierarchies.map((item) => ({
+          learning_area_id: item.learningArea.learningAreaId,
+          learningAreaId: item.learningArea.learningAreaId,
+          name: item.learningArea.name,
+          is_core: item.learningArea.isCore,
+          isCore: item.learningArea.isCore,
+          strands: item.strands.map((strandEntry) => ({
+            strand_id: strandEntry.strand.strandId,
+            strandId: strandEntry.strand.strandId,
+            name: strandEntry.strand.name,
+            sub_strands: strandEntry.subStrands.map((subStrandEntry) => ({
+              sub_strand_id: subStrandEntry.subStrand.subStrandId,
+              subStrandId: subStrandEntry.subStrand.subStrandId,
+              name: subStrandEntry.subStrand.name,
+              competencies: subStrandEntry.competencies.map((competency) => ({
+                competency_id: competency.competencyId,
+                competencyId: competency.competencyId,
+                name: competency.name,
+                description: competency.description,
+              })),
+            })),
+          })),
+        })),
+      );
+    }
 
     const validation = validateQuery(searchParams, learningAreaFiltersSchema);
     if (!validation.success) {

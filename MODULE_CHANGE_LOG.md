@@ -40,9 +40,9 @@ For each module, follow this order:
 | Finance | Reviewed | Major fixes implemented | Core workflows now connected |
 | Students | Reviewed | Major fixes implemented | Detail/edit/export/subroutes fixed |
 | Staff | Reviewed | Major fixes implemented | Permission mismatch and broken routes fixed |
-| Academics | Not reviewed in this pass | Pending | |
-| Assessments | Not reviewed in this pass | Pending | |
-| Attendance | Not reviewed in this pass | Pending | |
+| Academics | Reviewed | Major fixes implemented | Curriculum CRUD and management UI added |
+| Assessments | Reviewed | Major fixes implemented | Entry workflow and service layer restored |
+| Attendance | Reviewed | Major fixes implemented | CRUD and summary routes restored |
 | Exams | Previously implemented | Needs review pass | Exam bank exists |
 | Reports | Partially fixed earlier | Needs structured review | |
 | Communication | Not reviewed in this pass | Pending | |
@@ -242,13 +242,201 @@ Staff was reviewed third because it already had active TypeScript errors and is 
 
 ---
 
+## 4. Attendance Module
+
+### Review Summary
+Attendance was reviewed fourth because the dashboard was already wired to several missing API routes, and the existing service layer was using outdated schema assumptions.
+
+### Initial Findings
+- Dashboard calls were missing live route handlers for:
+  - `/api/attendance`
+  - `/api/attendance/[id]`
+  - `/api/attendance/bulk`
+  - `/api/attendance/class/[classId]`
+  - `/api/attendance/export`
+  - `/api/attendance/summary/all-classes`
+- `features/attendance/services/attendance.service.ts` used the browser Supabase client on the server and referenced outdated fields such as:
+  - `remarks`
+  - `term`
+  - `academic_year`
+  - `admission_no`
+- Existing summary routes in `app/api/attendance/*` depended on that outdated service.
+- `app/api/attendance/import/route.ts` inserted invalid fields for the current schema:
+  - `attendance_id`
+  - `recorded_at`
+  - missing `term_id`
+- The attendance dashboard had an unnecessary post-save delay before refreshing class summaries.
+
+### Implemented Changes
+
+#### Backend
+- Rewrote attendance service around the actual schema and server-side Supabase client:
+  - `features/attendance/services/attendance.service.ts`
+- Updated attendance shared types:
+  - `features/attendance/types.ts`
+- Updated attendance validation schemas and added update schema:
+  - `features/attendance/validators/attendance.schema.ts`
+- Added live route handlers:
+  - `app/api/attendance/route.ts`
+  - `app/api/attendance/[id]/route.ts`
+  - `app/api/attendance/bulk/route.ts`
+  - `app/api/attendance/class/[classId]/route.ts`
+  - `app/api/attendance/export/route.ts`
+  - `app/api/attendance/summary/all-classes/route.ts`
+- Updated existing live summary routes to use the corrected service:
+  - `app/api/attendance/school/route.ts`
+  - `app/api/attendance/summary/class/[classId]/route.ts`
+  - `app/api/attendance/summary/student/[studentId]/route.ts`
+- Fixed attendance import to use the real schema and resolved term context:
+  - `app/api/attendance/import/route.ts`
+
+#### Frontend
+- Removed the artificial save-refresh delay from:
+  - `app/(dashboard)/attendance/page.tsx`
+
+### Validation
+- Targeted attendance lint passed.
+- `tsc --noEmit` was run after the attendance changes.
+- Attendance-related TypeScript errors were cleared.
+- Remaining TypeScript errors are still outside attendance.
+
+### Remaining Gaps
+- The import route still carries custom auth/response helpers instead of reusing the shared API wrapper pattern.
+- Dead legacy route files still exist under `features/attendance/*`; they are no longer the live API surface.
+- Weekly trend still loads via multiple `/api/attendance/school` requests rather than a dedicated batched endpoint.
+
+### Next Recommended Attendance Work
+1. Consolidate attendance import onto shared auth/response helpers.
+2. Remove or archive the dead `features/attendance/*/route.ts` files to avoid future confusion.
+3. Add a batched weekly-trend endpoint to reduce dashboard request count.
+
+---
+
+## 5. Academics Module
+
+### Review Summary
+Academics was reviewed after attendance because the service layer already existed but most of the CRUD surface was not exposed through live routes or usable UI.
+
+### Initial Findings
+- The academics page was only an overview/dashboard:
+  - `app/(dashboard)/academics/page.tsx`
+  - `app/(dashboard)/academics/components/AcademicsOverview.tsx`
+- Live API coverage was limited to:
+  - `app/api/learning-areas/route.ts`
+  - `app/api/learning-areas/[id]/hierarchy/route.ts`
+- Service-layer CRUD already existed for:
+  - learning areas
+  - strands
+  - sub-strands
+  - competencies
+  - teacher-subject assignments
+- There was no management UI for building the CBC hierarchy chronologically.
+- Teacher-subject assignment logic existed in services but had no live management UI/API surface.
+
+### Implemented Changes
+
+#### Backend
+- Added learning area item route:
+  - `app/api/learning-areas/[id]/route.ts`
+- Added strands routes:
+  - `app/api/strands/route.ts`
+  - `app/api/strands/[id]/route.ts`
+- Added sub-strands routes:
+  - `app/api/sub-strands/route.ts`
+  - `app/api/sub-strands/[id]/route.ts`
+- Added competencies routes:
+  - `app/api/competencies/route.ts`
+  - `app/api/competencies/[id]/route.ts`
+- Added teacher-subject assignment routes:
+  - `app/api/teacher-subjects/route.ts`
+  - `app/api/teacher-subjects/[id]/route.ts`
+
+#### Frontend
+- Expanded the academics page to include real curriculum management:
+  - `app/(dashboard)/academics/page.tsx`
+- Added a client-side academics manager with tabs for:
+  - learning areas
+  - curriculum hierarchy
+  - teacher assignments
+  - file: `app/(dashboard)/academics/components/AcademicsManager.tsx`
+
+### Validation
+- Targeted academics lint passed.
+- `tsc --noEmit` passed after the academics changes.
+
+### Remaining Gaps
+- Learning-area edit UI is present, but lower hierarchy levels currently expose create/delete through UI more directly than full edit workflows.
+- Student-subject mapping is still not surfaced here.
+- Teacher assignment UI currently supports create and deactivate; edit/reactivation is still absent.
+
+### Next Recommended Academics Work
+1. Add edit UI for strands, sub-strands, and competencies.
+2. Add student-subject mapping routes and screens if that workflow is still required in product scope.
+3. Add hierarchy drag-and-drop reordering backed by `sort_order`.
+
+---
+
+## 6. Assessments Module
+
+### Review Summary
+Assessments was reviewed next because the dashboard page existed, but the live entry workflow was broken by missing route coverage and stubbed service implementations.
+
+### Initial Findings
+- `GET /api/assessments` was not implemented, even though the dashboard depended on it to load class assessment rosters.
+- `features/assessments/services/assessments.service.ts` was still a stub file, which broke:
+  - assessment detail
+  - assessment update/delete
+  - bulk assessment save
+- The assessment page posted a payload shape that did not match the bulk API validator/service contract.
+- The assessment page requested `/api/learning-areas?includeHierarchy=true`, but the live route only returned flat learning-area data.
+- Academic year and term context were not being resolved consistently for assessment entry.
+
+### Implemented Changes
+
+#### Backend
+- Replaced the stub assessment service with real implementations in:
+  - `features/assessments/services/assessments.service.ts`
+  - added list/detail/create/update/delete support
+  - added bulk save support
+  - added active term/year resolution when omitted
+  - added teacher-subject assignment enforcement for teacher-scoped writes
+- Rebuilt `app/api/assessments/route.ts`
+  - added working `GET` list/roster support
+  - added working single-record `POST`
+- Kept `app/api/assessments/[id]/route.ts` live by wiring it to the implemented service layer
+- Restored `app/api/assessments/bulk/route.ts` by backing it with the real bulk service
+- Updated `features/assessments/validators/assessment.schema.ts`
+  - made academic year and term optional so server-side active-context resolution can be used safely
+- Updated `app/api/learning-areas/route.ts`
+  - added `includeHierarchy=true` support returning nested learning area → strand → sub-strand → competency data for assessment entry
+
+#### Frontend
+- Updated `app/(dashboard)/assessments/page.tsx`
+  - sends active academic year and term when loading/saving
+  - posts the canonical bulk payload expected by the API
+  - keeps roster loading aligned with the restored `GET /api/assessments` contract
+
+### Validation
+- Targeted ESLint passed for the modified assessment and hierarchy files.
+- `npm run type-check` passed.
+
+### Remaining Gaps
+- Assessment templates are still documented in the module, but template services/routes remain effectively unimplemented.
+- The class overview tab on the assessments page is still placeholder-only.
+- Bulk save currently writes per-student updates sequentially; this is correct but can be optimized later if volume grows.
+- Assessment locking or term-close controls are still absent.
+
+### Next Recommended Assessment Work
+1. Add assessment template CRUD and connect it to teacher entry flows.
+2. Implement the class overview tab using existing analytics endpoints.
+3. Add term-close locking rules so assessment edits can be intentionally restricted.
+
+---
+
 ## Cross-Module Technical Notes
 
 ### Current Known Unrelated TypeScript Errors
-These were not part of the finance/students pass and remain open:
-- `app/(dashboard)/library/components/LibraryClient.tsx`
-- `app/(dashboard)/settings/components/SettingsClient.tsx`
-- `app/api/payments/route.ts`
+There are currently no open TypeScript errors after the latest pass.
 
 ### Update Rule
 Whenever a module is reviewed:

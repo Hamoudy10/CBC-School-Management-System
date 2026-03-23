@@ -1,10 +1,10 @@
 // app/api/attendance/import/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { resolveAttendanceContext } from '@/features/attendance/services/attendance.service';
 import * as XLSX from 'xlsx';
 import { parse } from 'csv-parse/sync';
 import { z } from 'zod';
-import { v4 as uuidv4 } from 'uuid';
 
 // ─── Response Helpers ─────────────────────────────────────────────────────────
 function successResponse(data: unknown, message: string, status: number = 200) {
@@ -269,7 +269,8 @@ async function processAttendanceImport(
   schoolId: string,
   classId: string,
   date: string,
-  userId: string
+  userId: string,
+  termId: string,
 ): Promise<ImportResult> {
   const result: ImportResult = {
     totalRecords: validRecords.length,
@@ -308,16 +309,15 @@ async function processAttendanceImport(
       }
 
       attendanceRecords.push({
-        attendance_id: uuidv4(),
         school_id: schoolId,
         student_id: studentId,
         class_id: classId,
+        term_id: termId,
         date,
         status: record.status,
         arrival_time: record.arrival_time,
         reason: record.reason,
         recorded_by: userId,
-        recorded_at: new Date().toISOString(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
@@ -447,6 +447,11 @@ export async function POST(req: NextRequest) {
     return errorResponse('Selected class not found or does not belong to this school', 400);
   }
 
+  const context = await resolveAttendanceContext(supabase, schoolId, date);
+  if (!context.termId) {
+    return errorResponse('No active term found for the selected date', 400);
+  }
+
   // 5. Validate file type
   const validTypes = [
     'text/csv',
@@ -509,7 +514,8 @@ export async function POST(req: NextRequest) {
       schoolId,
       classId,
       date,
-      userId
+      userId,
+      context.termId,
     );
 
     // Add validation errors to import result

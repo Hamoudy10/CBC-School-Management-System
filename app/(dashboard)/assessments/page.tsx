@@ -721,6 +721,8 @@ export default function AssessmentsPage() {
   const canViewAssessments = checkPermission('assessments', 'view');
   const {
     classes: referenceClasses,
+    activeYear,
+    activeTerm,
     isLoading: isReferenceLoading,
   } = useReferenceData({ enabled: Boolean(user) });
   const classes = useMemo<ClassOption[]>(
@@ -805,8 +807,21 @@ export default function AssessmentsPage() {
 
     setIsLoadingStudents(true);
     try {
+      const params = new URLSearchParams({
+        classId: selectedClassId,
+        competencyId: selectedCompetencyId,
+      });
+
+      if (activeYear?.id) {
+        params.set('academicYearId', activeYear.id);
+      }
+
+      if (activeTerm?.id) {
+        params.set('termId', activeTerm.id);
+      }
+
       const response = await fetch(
-        `/api/assessments?classId=${selectedClassId}&competencyId=${selectedCompetencyId}`,
+        `/api/assessments?${params.toString()}`,
         { credentials: 'include' }
       );
 
@@ -849,7 +864,7 @@ export default function AssessmentsPage() {
     } finally {
       setIsLoadingStudents(false);
     }
-  }, [selectedClassId, selectedCompetencyId, success, error]);
+  }, [activeTerm?.id, activeYear?.id, selectedClassId, selectedCompetencyId, success, error]);
 
   // ─── Effects ───────────────────────────────────────────────
   useEffect(() => {
@@ -912,6 +927,13 @@ export default function AssessmentsPage() {
 
   const handleSave = async () => {
     if (!selectedClassId || !selectedCompetencyId || students.length === 0) {return;}
+    if (!activeYear?.id || !activeTerm?.id) {
+      error(
+        'Academic Context Missing',
+        'Set an active academic year and term before saving assessments.'
+      );
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -919,9 +941,6 @@ export default function AssessmentsPage() {
         .filter((s) => s.score !== null)
         .map((s) => ({
           studentId: s.studentId,
-          competencyId: selectedCompetencyId,
-          learningAreaId: selectedLearningAreaId,
-          classId: selectedClassId,
           score: s.score,
           remarks: s.remarks,
         }));
@@ -930,7 +949,14 @@ export default function AssessmentsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ assessments }),
+        body: JSON.stringify({
+          classId: selectedClassId,
+          competencyId: selectedCompetencyId,
+          learningAreaId: selectedLearningAreaId,
+          academicYearId: activeYear.id,
+          termId: activeTerm.id,
+          assessments,
+        }),
       });
 
       if (!response.ok) {

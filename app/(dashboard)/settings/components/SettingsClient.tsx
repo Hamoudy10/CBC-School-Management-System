@@ -9,7 +9,7 @@ import { Select } from "@/components/ui/Select";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/Toast";
-import { STAFF_POSITION_LABELS } from "@/features/staff";
+import { STAFF_POSITION_LABELS, type StaffPosition } from "@/features/staff";
 import { useAuth } from "@/hooks/useAuth";
 
 type SettingsTab = "school" | "academic-years" | "terms" | "classes" | "system";
@@ -21,6 +21,14 @@ const settingsTabs: { key: SettingsTab; label: string }[] = [
   { key: "classes", label: "Classes" },
   { key: "system", label: "System Config" },
 ];
+
+function getStaffPositionLabel(position: unknown) {
+  if (typeof position !== "string") {
+    return "";
+  }
+
+  return STAFF_POSITION_LABELS[position as StaffPosition] || position;
+}
 
 export function SettingsClient() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("school");
@@ -1406,7 +1414,7 @@ function ClassesSection() {
               {teachers.map((teacher: any) => (
                 <option key={teacher.userId} value={teacher.userId}>
                   {teacher.firstName} {teacher.lastName} ·{" "}
-                  {STAFF_POSITION_LABELS[teacher.position] || teacher.position}
+                  {getStaffPositionLabel(teacher.position)}
                 </option>
               ))}
             </Select>
@@ -1533,7 +1541,7 @@ function ClassesSection() {
                             {teachers.map((teacher: any) => (
                               <option key={teacher.userId} value={teacher.userId}>
                                 {teacher.firstName} {teacher.lastName} ·{" "}
-                                {STAFF_POSITION_LABELS[teacher.position] || teacher.position}
+                                {getStaffPositionLabel(teacher.position)}
                               </option>
                             ))}
                           </Select>

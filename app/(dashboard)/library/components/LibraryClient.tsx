@@ -8,6 +8,11 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/hooks/useAuth';
 
 type TabType = 'overview' | 'catalog' | 'borrowing' | 'returns';
+type VisibleTab = {
+  key: TabType;
+  label: string;
+  allowed: boolean;
+};
 
 export function LibraryClient() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
@@ -21,12 +26,12 @@ export function LibraryClient() {
 
   const visibleTabs = useMemo(
     () =>
-      [
+      ([
         { key: 'overview', label: 'Overview', allowed: canView },
         { key: 'catalog', label: 'Book Catalog', allowed: canView },
         { key: 'borrowing', label: 'Borrowing', allowed: canManage },
         { key: 'returns', label: 'Returns', allowed: canManage },
-      ].filter((tab) => tab.allowed),
+      ] as VisibleTab[]).filter((tab) => tab.allowed),
     [canView, canManage],
   );
 

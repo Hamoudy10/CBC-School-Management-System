@@ -847,7 +847,6 @@ export default function AttendancePage() {
       // Refresh stats
       if (canViewAttendance) {
         await fetchTodayStats();
-        await new Promise((resolve) => setTimeout(resolve, 300));
         await fetchClassSummaries();
       }
     } catch (err) {
