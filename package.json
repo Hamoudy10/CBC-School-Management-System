@@ -16,6 +16,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "seed:test-users": "node scripts/seed-test-users.mjs",
     "db:generate-types": "supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > types/database.types.ts",
     "prepare": "husky install"
   },

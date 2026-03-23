@@ -36,6 +36,7 @@ import { StaffLeavesList } from './components/StaffLeavesList';
 import { StaffAssignmentsList } from './components/StaffAssignmentsList';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/auth/session';
+import { hasPermission } from '@/lib/auth/permissions';
 import {
   STAFF_POSITION_LABELS,
   STAFF_STATUS_LABELS,
@@ -225,9 +226,28 @@ export default async function StaffDetailPage({
     notFound();
   }
 
+  const currentUser = await getCurrentUser();
+  const canViewStaff = currentUser
+    ? hasPermission(currentUser.role, 'teachers', 'view')
+    : false;
+  const canManageStaff = currentUser
+    ? hasPermission(currentUser.role, 'teachers', 'create') ||
+      hasPermission(currentUser.role, 'teachers', 'update') ||
+      hasPermission(currentUser.role, 'teachers', 'delete')
+    : false;
+
   const stats = await getStaffStats(staff.staffId, staff.schoolId);
   const fullName = `${staff.firstName} ${staff.lastName}`;
-  const activeTab = searchParams.tab || 'overview';
+  const requestedTab = searchParams.tab || 'overview';
+  const availableTabs = [
+    { key: 'overview', allowed: canViewStaff },
+    { key: 'leaves', allowed: canManageStaff },
+    { key: 'assignments', allowed: canManageStaff },
+  ].filter((tab) => tab.allowed);
+  const activeTab =
+    availableTabs.find((tab) => tab.key === requestedTab)?.key
+    ?? availableTabs[0]?.key
+    ?? 'overview';
 
   return (
     <div className="space-y-6">
@@ -360,27 +380,34 @@ export default async function StaffDetailPage({
       {/* Tabs Section */}
       <Tabs defaultValue={activeTab}>
         <TabsList>
-          <TabsTrigger value="overview" href={`/staff/${staff.staffId}?tab=overview`}>
-            Overview
-          </TabsTrigger>
-          <TabsTrigger value="leaves" href={`/staff/${staff.staffId}?tab=leaves`}>
-            Leaves
-            {stats.pendingLeaves > 0 && (
-              <Badge color="red" size="sm" className="ml-2">
-                {stats.pendingLeaves}
+          {availableTabs.some((tab) => tab.key === 'overview') && (
+            <TabsTrigger value="overview" href={`/staff/${staff.staffId}?tab=overview`}>
+              Overview
+            </TabsTrigger>
+          )}
+          {availableTabs.some((tab) => tab.key === 'leaves') && (
+            <TabsTrigger value="leaves" href={`/staff/${staff.staffId}?tab=leaves`}>
+              Leaves
+              {stats.pendingLeaves > 0 && (
+                <Badge color="red" size="sm" className="ml-2">
+                  {stats.pendingLeaves}
+                </Badge>
+              )}
+            </TabsTrigger>
+          )}
+          {availableTabs.some((tab) => tab.key === 'assignments') && (
+            <TabsTrigger value="assignments" href={`/staff/${staff.staffId}?tab=assignments`}>
+              Assignments
+              <Badge color="blue" size="sm" className="ml-2">
+                {stats.activeAssignments}
               </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="assignments" href={`/staff/${staff.staffId}?tab=assignments`}>
-            Assignments
-            <Badge color="blue" size="sm" className="ml-2">
-              {stats.activeAssignments}
-            </Badge>
-          </TabsTrigger>
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* Overview Tab */}
-        <TabsContent value="overview" active={activeTab === 'overview'}>
+        {availableTabs.some((tab) => tab.key === 'overview') && (
+          <TabsContent value="overview" active={activeTab === 'overview'}>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Contact Information */}
             <Card className="p-6">
@@ -573,10 +600,12 @@ export default async function StaffDetailPage({
               </dl>
             </Card>
           </div>
-        </TabsContent>
+          </TabsContent>
+        )}
 
         {/* Leaves Tab */}
-        <TabsContent value="leaves" active={activeTab === 'leaves'}>
+        {availableTabs.some((tab) => tab.key === 'leaves') && (
+          <TabsContent value="leaves" active={activeTab === 'leaves'}>
           <Card className="p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -593,10 +622,12 @@ export default async function StaffDetailPage({
               <StaffLeavesList staffId={staff.staffId} />
             </Suspense>
           </Card>
-        </TabsContent>
+          </TabsContent>
+        )}
 
         {/* Assignments Tab */}
-        <TabsContent value="assignments" active={activeTab === 'assignments'}>
+        {availableTabs.some((tab) => tab.key === 'assignments') && (
+          <TabsContent value="assignments" active={activeTab === 'assignments'}>
           <Card className="p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -613,7 +644,8 @@ export default async function StaffDetailPage({
               <StaffAssignmentsList staffId={staff.staffId} />
             </Suspense>
           </Card>
-        </TabsContent>
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

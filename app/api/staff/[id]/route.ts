@@ -28,7 +28,7 @@ import {
 // GET Handler - Get Single Staff Member
 // ============================================================
 export const GET = withPermission(
-  'staff',
+  'teachers',
   'view',
   async (request: NextRequest, { user, params }) => {
     try {
@@ -68,7 +68,7 @@ export const GET = withPermission(
 // PUT Handler - Update Staff Member
 // ============================================================
 export const PUT = withPermission(
-  'staff',
+  'teachers',
   'update',
   async (request: NextRequest, { user, params }) => {
     try {
@@ -120,7 +120,7 @@ export const PUT = withPermission(
 // PATCH Handler - Partial Update (alias for PUT)
 // ============================================================
 export const PATCH = withPermission(
-  'staff',
+  'teachers',
   'update',
   async (request: NextRequest, { user, params }) => {
     try {
@@ -166,7 +166,7 @@ export const PATCH = withPermission(
 // DELETE Handler - Deactivate Staff Member (Soft Delete)
 // ============================================================
 export const DELETE = withPermission(
-  'staff',
+  'teachers',
   'delete',
   async (request: NextRequest, { user, params }) => {
     try {
@@ -202,3 +202,4 @@ export const DELETE = withPermission(
     }
   }
 );
+

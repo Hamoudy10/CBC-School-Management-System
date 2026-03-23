@@ -39,7 +39,7 @@ export async function requireRole(allowedRoles: RoleName[]): Promise<AuthUser> {
   const user = await requireAuth();
 
   if (!allowedRoles.includes(user.role)) {
-    redirect("/dashboard?error=access_denied");
+    redirect("/dashboard");
   }
 
   return user;
@@ -54,7 +54,7 @@ export async function requireModuleAccess(
   const user = await requireAuth();
 
   if (!hasModuleAccess(user.role, module)) {
-    redirect("/dashboard?error=access_denied");
+    redirect("/dashboard");
   }
 
   return user;
@@ -70,7 +70,7 @@ export async function requirePermission(
   const user = await requireAuth();
 
   if (!hasPermission(user.role, module, action)) {
-    redirect("/dashboard?error=access_denied");
+    redirect("/dashboard");
   }
 
   return user;

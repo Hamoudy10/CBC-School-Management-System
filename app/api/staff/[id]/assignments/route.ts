@@ -25,7 +25,7 @@ import {
 // GET Handler - List Subject Assignments
 // ============================================================
 export const GET = withPermission(
-  'staff',
+  'teachers',
   'view',
   async (request: NextRequest, { user, params }) => {
     try {
@@ -60,7 +60,7 @@ export const GET = withPermission(
 // POST Handler - Create Subject Assignment(s)
 // ============================================================
 export const POST = withPermission(
-  'staff',
+  'teachers',
   'update',
   async (request: NextRequest, { user, params }) => {
     try {
@@ -185,3 +185,4 @@ export const POST = withPermission(
     }
   }
 );
+

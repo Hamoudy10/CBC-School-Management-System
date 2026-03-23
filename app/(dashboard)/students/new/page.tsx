@@ -1,7 +1,7 @@
 // app/(dashboard)/students/new/page.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -37,6 +37,7 @@ import { Tabs, TabsList, TabTrigger, TabContent } from '@/components/ui/Tabs';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils';
 import { hasPermission } from '@/lib/auth/permissions';
+import { useReferenceData } from '@/hooks/useReferenceData';
 import {
   GENDER_OPTIONS,
   RELATIONSHIP_OPTIONS,
@@ -420,12 +421,32 @@ export default function NewStudentPage() {
   const { success, error, warning, info } = useToast();
 
   // ─── State ─────────────────────────────────────────────────
-  const [classes, setClasses] = useState<ClassOption[]>([]);
-  const [grades, setGrades] = useState<GradeOption[]>([]);
   const [selectedGradeId, setSelectedGradeId] = useState<string>('');
-  const [isLoadingClasses, setIsLoadingClasses] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('basic');
+  const {
+    classes: referenceClasses,
+    levels: referenceLevels,
+    isLoading: isLoadingClasses,
+  } = useReferenceData({ enabled: Boolean(user) });
+  const classes = useMemo<ClassOption[]>(
+    () =>
+      referenceClasses.map((c) => ({
+        classId: c.classId,
+        name: c.name,
+        gradeName: c.gradeName || '',
+        gradeId: c.gradeId || '',
+      })),
+    [referenceClasses],
+  );
+  const grades = useMemo<GradeOption[]>(
+    () =>
+      referenceLevels.map((g) => ({
+        gradeId: g.gradeId,
+        name: g.name,
+      })),
+    [referenceLevels],
+  );
 
   // ─── Form Setup ────────────────────────────────────────────
   const {
@@ -476,52 +497,6 @@ export default function NewStudentPage() {
   }, [user, canCreate, router]);
 
   // ─── Fetch Classes & Grades ────────────────────────────────
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoadingClasses(true);
-      try {
-        // Fetch grades
-        const gradesResponse = await fetch('/api/settings/classes/levels', {
-          credentials: 'include',
-        });
-
-        if (gradesResponse.ok) {
-          const json = await gradesResponse.json();
-          setGrades(
-            (json.data || []).map((g: any) => ({
-              gradeId: g.grade_id || g.gradeId || g.id,
-              name: g.name,
-            }))
-          );
-        }
-
-        // Fetch classes
-        const classesResponse = await fetch('/api/settings/classes', {
-          credentials: 'include',
-        });
-
-        if (classesResponse.ok) {
-          const json = await classesResponse.json();
-          setClasses(
-            (json.data || []).map((c: any) => ({
-              classId: c.class_id || c.classId,
-              name: c.name,
-              gradeName: c.grade?.name || c.gradeName || '',
-              gradeId: c.grade?.grade_id || c.grade_id || c.gradeId || '',
-            }))
-          );
-        }
-      } catch (err) {
-        console.error('Failed to fetch classes:', err);
-        error('Error', 'Failed to load class options.');
-      } finally {
-        setIsLoadingClasses(false);
-      }
-    };
-
-    fetchData();
-  }, []);
-
   // Filter classes by selected grade
   const filteredClasses = selectedGradeId
     ? classes.filter((c) => c.gradeId === selectedGradeId)

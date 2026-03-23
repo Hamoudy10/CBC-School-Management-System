@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getCurrentAcademicContext, normalizeStudent } from '@/app/api/students/_utils';
 import { z } from 'zod';
 
 // ─── Response Helpers ─────────────────────────────────────────────────────────
@@ -34,9 +35,10 @@ const createStudentSchema = z.object({
     .nullable(),
   admission_number: z
     .string()
-    .min(1, 'Admission number is required')
     .max(50, 'Admission number must be 50 characters or fewer')
-    .trim(),
+    .trim()
+    .optional()
+    .nullable(),
   date_of_birth: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date of birth must be in YYYY-MM-DD format'),
@@ -44,22 +46,23 @@ const createStudentSchema = z.object({
     errorMap: () => ({ message: 'Gender must be male, female, or other' }),
   }),
   current_class_id: z.string().uuid('Invalid class ID').optional().nullable(),
-  admission_date: z
+  enrollment_date: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Admission date must be in YYYY-MM-DD format')
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Enrollment date must be in YYYY-MM-DD format')
     .optional()
     .nullable(),
   status: z
-    .enum(['active', 'inactive', 'graduated', 'transferred', 'suspended', 'expelled'], {
+    .enum(['active', 'graduated', 'transferred', 'withdrawn', 'suspended'], {
       errorMap: () => ({ message: 'Invalid student status' }),
     })
     .default('active'),
   photo_url: z.string().url('Invalid photo URL').optional().nullable(),
   medical_info: z.string().max(1000).optional().nullable(),
-  special_needs: z.string().max(1000).optional().nullable(),
+  has_special_needs: z.boolean().optional().nullable(),
+  special_needs_details: z.string().max(1000).optional().nullable(),
   nationality: z.string().max(100).trim().optional().nullable(),
   religion: z.string().max(100).trim().optional().nullable(),
-  birth_certificate_number: z.string().max(50).trim().optional().nullable(),
+  birth_certificate_no: z.string().max(50).trim().optional().nullable(),
   nemis_number: z.string().max(50).trim().optional().nullable(),
   previous_school: z.string().max(200).trim().optional().nullable(),
   transport_mode: z.string().max(100).trim().optional().nullable(),
@@ -93,7 +96,100 @@ const createStudentSchema = z.object({
     })
     .optional()
     .nullable(),
+  guardians: z
+    .array(
+      z.object({
+        first_name: z.string().min(1).max(100).trim(),
+        last_name: z.string().min(1).max(100).trim(),
+        phone_number: z.string().min(10).max(15).trim().optional().nullable(),
+        email: z.string().email().optional().nullable(),
+        relationship: z.enum([
+          'father',
+          'mother',
+          'guardian',
+          'uncle',
+          'aunt',
+          'grandparent',
+          'sibling',
+          'other',
+        ]),
+        is_primary: z.boolean().default(false),
+        can_pickup: z.boolean().default(true),
+      }),
+    )
+    .optional()
+    .default([]),
 });
+
+function normalizeCreateStudentBody(body: Record<string, unknown>) {
+  const guardiansInput = Array.isArray(body.guardians) ? body.guardians : [];
+  const normalizedGuardians = guardiansInput
+    .filter(Boolean)
+    .map((guardian: Record<string, unknown>, index) => ({
+      first_name: guardian.first_name ?? guardian.firstName ?? '',
+      last_name: guardian.last_name ?? guardian.lastName ?? '',
+      phone_number: guardian.phone_number ?? guardian.phone ?? null,
+      email: guardian.email ?? null,
+      relationship: guardian.relationship ?? 'guardian',
+      is_primary:
+        guardian.is_primary ??
+        guardian.isPrimary ??
+        guardian.isPrimaryContact ??
+        index === 0,
+      can_pickup: guardian.can_pickup ?? guardian.canPickup ?? true,
+    }));
+
+  const fallbackGuardian = body.guardian
+    ? [
+        {
+          first_name: body.guardian.first_name ?? body.guardian.firstName ?? '',
+          last_name: body.guardian.last_name ?? body.guardian.lastName ?? '',
+          phone_number: body.guardian.phone_number ?? body.guardian.phone ?? null,
+          email: body.guardian.email ?? null,
+          relationship: body.guardian.relationship ?? 'guardian',
+          is_primary: body.guardian.is_primary ?? true,
+          can_pickup: body.guardian.can_pickup ?? true,
+        },
+      ]
+    : [];
+
+  const specialNeedsDetails =
+    body.special_needs_details ??
+    body.specialNeedsDetails ??
+    body.special_needs ??
+    null;
+
+  return {
+    first_name: body.first_name ?? body.firstName ?? '',
+    last_name: body.last_name ?? body.lastName ?? '',
+    middle_name: body.middle_name ?? body.middleName ?? null,
+    admission_number: body.admission_number ?? body.admissionNumber ?? null,
+    date_of_birth: body.date_of_birth ?? body.dateOfBirth ?? '',
+    gender: body.gender,
+    current_class_id: body.current_class_id ?? body.currentClassId ?? body.classId ?? null,
+    enrollment_date:
+      body.enrollment_date ?? body.enrollmentDate ?? body.admission_date ?? body.admissionDate ?? null,
+    status: body.status ?? 'active',
+    photo_url: body.photo_url ?? body.photoUrl ?? null,
+    medical_info: body.medical_info ?? body.medicalInfo ?? null,
+    has_special_needs:
+      body.has_special_needs ?? body.hasSpecialNeeds ?? Boolean(specialNeedsDetails),
+    special_needs_details: specialNeedsDetails,
+    nationality: body.nationality ?? null,
+    religion: body.religion ?? null,
+    birth_certificate_no:
+      body.birth_certificate_no ??
+      body.birthCertificateNo ??
+      body.birth_certificate_number ??
+      body.birthCertificateNumber ??
+      null,
+    nemis_number: body.nemis_number ?? body.nemisNumber ?? null,
+    previous_school: body.previous_school ?? body.previousSchool ?? null,
+    transport_mode: body.transport_mode ?? body.transportMode ?? null,
+    blood_group: body.blood_group ?? body.bloodGroup ?? null,
+    guardians: normalizedGuardians.length > 0 ? normalizedGuardians : fallbackGuardian,
+  };
+}
 
 // ─── Auth & School Helper ─────────────────────────────────────────────────────
 
@@ -249,7 +345,16 @@ export async function GET(req: NextRequest) {
 
     if (childrenIds.length === 0) {
       return successResponse(
-        { students: [], total: 0, page, page_size: pageSize, total_pages: 0 },
+        {
+          data: [],
+          students: [],
+          total: 0,
+          page,
+          limit: pageSize,
+          totalPages: 0,
+          page_size: pageSize,
+          total_pages: 0,
+        },
         'No linked students found'
       );
     }
@@ -296,7 +401,16 @@ export async function GET(req: NextRequest) {
 
     if (gradeClassIds.length === 0) {
       return successResponse(
-        { students: [], total: 0, page, page_size: pageSize, total_pages: 0 },
+        {
+          data: [],
+          students: [],
+          total: 0,
+          page,
+          limit: pageSize,
+          totalPages: 0,
+          page_size: pageSize,
+          total_pages: 0,
+        },
         'No students found in this grade'
       );
     }
@@ -441,14 +555,15 @@ export async function POST(req: NextRequest) {
   };
 
   // 2. Parse and validate request body
-  let body: unknown;
+  let body: Record<string, unknown>;
   try {
     body = await req.json();
   } catch {
     return errorResponse('Invalid JSON body', 400);
   }
 
-  const parsed = createStudentSchema.safeParse(body);
+  const normalizedBody = normalizeCreateStudentBody(body);
+  const parsed = createStudentSchema.safeParse(normalizedBody);
   if (!parsed.success) {
     const fieldErrors = parsed.error.errors.map((e) => ({
       field: e.path.join('.'),
@@ -465,14 +580,26 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { guardian, ...studentData } = parsed.data;
+  const { guardians, admission_number, ...studentData } = parsed.data;
+  let generatedAdmissionNumber = admission_number;
+
+  if (!generatedAdmissionNumber) {
+    const year = new Date().getFullYear();
+    const { count } = await supabase
+      .from('students')
+      .select('student_id', { count: 'exact', head: true })
+      .eq('school_id', schoolId)
+      .gte('enrollment_date', `${year}-01-01`);
+
+    generatedAdmissionNumber = `ADM-${year}-${String((count ?? 0) + 1).padStart(4, '0')}`;
+  }
 
   // 3. Check for duplicate admission number within the school
   const { data: existingStudent } = await supabase
     .from('students')
     .select('student_id')
     .eq('school_id', schoolId)
-    .eq('admission_number', studentData.admission_number)
+    .eq('admission_number', generatedAdmissionNumber)
     .maybeSingle();
 
   if (existingStudent) {
@@ -531,10 +658,13 @@ export async function POST(req: NextRequest) {
     .from('students')
     .insert({
       ...studentData,
+      admission_number: generatedAdmissionNumber,
       school_id: schoolId,
-      admission_date: studentData.admission_date ?? new Date().toISOString().split('T')[0],
+      enrollment_date:
+        studentData.enrollment_date ?? new Date().toISOString().split('T')[0],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      created_by: user.user_id,
     })
     .select(
       `
@@ -548,7 +678,7 @@ export async function POST(req: NextRequest) {
       status,
       photo_url,
       nemis_number,
-      admission_date,
+      enrollment_date,
       current_class_id,
       created_at,
       classes (
@@ -573,78 +703,83 @@ export async function POST(req: NextRequest) {
   }
 
   // 9. If guardian data provided, create guardian link
-  if (guardian && newStudent) {
-    // Check if guardian already exists by phone number
-    const { data: existingGuardian } = await supabase
-      .from('guardians')
-      .select('guardian_id')
-      .eq('school_id', schoolId)
-      .eq('phone_number', guardian.phone_number)
-      .maybeSingle();
+  for (const guardian of guardians ?? []) {
+    let guardianId: string | null = null;
 
-    let guardianId: string;
+    if (guardian.phone_number) {
+      const { data: existingGuardian } = await supabase
+        .from('guardians')
+        .select('guardian_id')
+        .eq('school_id', schoolId)
+        .eq('phone_number', guardian.phone_number)
+        .maybeSingle();
 
-    if (existingGuardian) {
-      guardianId = existingGuardian.guardian_id;
-    } else {
-      // Create new guardian
-      const { data: newGuardian, error: guardianError } = await supabase
+      guardianId = existingGuardian?.guardian_id ?? null;
+    }
+
+    if (!guardianId) {
+      const { data: createdGuardian, error: guardianError } = await supabase
         .from('guardians')
         .insert({
+          school_id: schoolId,
           first_name: guardian.first_name,
           last_name: guardian.last_name,
-          phone_number: guardian.phone_number,
+          phone_number: guardian.phone_number ?? `missing-${Date.now()}`,
           email: guardian.email ?? null,
-          national_id: guardian.national_id ?? null,
-          occupation: guardian.occupation ?? null,
-          address: guardian.address ?? null,
-          school_id: schoolId,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          created_by: user.user_id,
+          updated_by: user.user_id,
         })
         .select('guardian_id')
         .single();
 
       if (guardianError) {
-        // Student was created but guardian failed — log but don't fail the whole request
         console.error('Failed to create guardian:', guardianError.message);
-        return successResponse(
-          {
-            student: newStudent,
-            guardian_error: `Student created but guardian creation failed: ${guardianError.message}`,
-          },
-          'Student created (guardian creation failed)',
-          201
-        );
+        continue;
       }
 
-      guardianId = newGuardian.guardian_id;
+      guardianId = createdGuardian.guardian_id;
     }
 
-    // Link guardian to student
-    const { error: linkError } = await supabase.from('student_guardians').insert({
+    const { error: linkError } = await supabase.from('student_guardians').upsert({
+      school_id: schoolId,
       student_id: newStudent.student_id,
       guardian_id: guardianId,
       relationship: guardian.relationship,
+      is_primary_contact: guardian.is_primary,
       is_primary: guardian.is_primary,
-      created_at: new Date().toISOString(),
+      can_pickup: guardian.can_pickup,
     });
 
     if (linkError) {
       console.error('Failed to link guardian to student:', linkError.message);
-      return successResponse(
+    }
+  }
+
+  if (newStudent.current_class_id) {
+    const activeContext = await getCurrentAcademicContext(supabase, schoolId);
+    if (activeContext.academicYear?.academic_year_id && activeContext.term?.term_id) {
+      await supabase.from('student_classes').upsert(
         {
-          student: newStudent,
-          guardian_error: `Student created but guardian linking failed: ${linkError.message}`,
+          school_id: schoolId,
+          student_id: newStudent.student_id,
+          class_id: newStudent.current_class_id,
+          academic_year_id: activeContext.academicYear.academic_year_id,
+          term_id: activeContext.term.term_id,
+          status: 'active',
         },
-        'Student created (guardian linking failed)',
-        201
+        { onConflict: 'student_id,academic_year_id,term_id' },
       );
     }
   }
 
+  const normalizedStudent = normalizeStudent(newStudent, [], 0, null);
+
   return successResponse(
-    { student: newStudent },
+    {
+      student: normalizedStudent,
+      studentId: normalizedStudent.studentId,
+      admissionNumber: normalizedStudent.admissionNumber,
+    },
     'Student created successfully',
     201
   );

@@ -25,7 +25,7 @@ import {
 // GET Handler - List Leaves for Staff Member
 // ============================================================
 export const GET = withPermission(
-  'staff',
+  'teachers',
   'view',
   async (request: NextRequest, { user, params }) => {
     try {
@@ -74,7 +74,7 @@ export const GET = withPermission(
 // POST Handler - Create Leave Request
 // ============================================================
 export const POST = withPermission(
-  'staff',
+  'teachers',
   'view', // Staff can view themselves and create their own leaves
   async (request: NextRequest, { user, params }) => {
     try {
@@ -120,3 +120,4 @@ export const POST = withPermission(
     }
   }
 );
+

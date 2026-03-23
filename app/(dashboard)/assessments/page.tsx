@@ -48,6 +48,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Tabs, TabsList, TabTrigger, TabContent } from '@/components/ui/Tabs';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils';
+import { useReferenceData } from '@/hooks/useReferenceData';
 
 const RemarksModal = lazy(() => import('./components/RemarksModal'));
 
@@ -689,7 +690,6 @@ export default function AssessmentsPage() {
   const { success, error } = useToast();
 
   // ─── State ─────────────────────────────────────────────────
-  const [classes, setClasses] = useState<ClassOption[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>('');
   
   const [hierarchy, setHierarchy] = useState<CBCHierarchy>({
@@ -715,31 +715,37 @@ export default function AssessmentsPage() {
   const [activeTab, setActiveTab] = useState('entry');
 
   // ─── Permissions ───────────────────────────────────────────
-  const canAssess = checkPermission('assessments', 'create') || checkPermission('assessments', 'update');
+  const canAssess =
+    checkPermission('assessments', 'create') ||
+    checkPermission('assessments', 'update');
+  const canViewAssessments = checkPermission('assessments', 'view');
+  const {
+    classes: referenceClasses,
+    isLoading: isReferenceLoading,
+  } = useReferenceData({ enabled: Boolean(user) });
+  const classes = useMemo<ClassOption[]>(
+    () =>
+      referenceClasses.map((c) => ({
+        classId: c.classId,
+        name: c.name,
+        gradeName: c.gradeName || '',
+        studentCount: c.studentCount || 0,
+      })),
+    [referenceClasses],
+  );
+
+  const availableTabs = useMemo(() => {
+    const tabs: string[] = [];
+    if (canAssess) {
+      tabs.push('entry');
+    }
+    if (canViewAssessments) {
+      tabs.push('overview');
+    }
+    return tabs;
+  }, [canAssess, canViewAssessments]);
 
   // ─── Fetch Initial Data ────────────────────────────────────
-  const fetchClasses = useCallback(async () => {
-    try {
-      const response = await fetch('/api/settings/classes?hasStudents=true', {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const json = await response.json();
-        setClasses(
-          (json.data || []).map((c: any) => ({
-            classId: c.class_id || c.classId,
-            name: c.name,
-            gradeName: c.grade?.name || c.gradeName || '',
-            studentCount: c.studentCount || c.student_count || 0,
-          }))
-        );
-      }
-    } catch (err) {
-      console.error('Failed to fetch classes:', err);
-    }
-  }, []);
-
   const fetchHierarchy = useCallback(async () => {
     try {
       const response = await fetch('/api/learning-areas?includeHierarchy=true', {
@@ -848,13 +854,17 @@ export default function AssessmentsPage() {
   // ─── Effects ───────────────────────────────────────────────
   useEffect(() => {
     const loadData = async () => {
+      if (!user) {
+        return;
+      }
+
       setIsLoading(true);
-      await Promise.all([fetchClasses(), fetchHierarchy()]);
+      await fetchHierarchy();
       setIsLoading(false);
     };
 
     loadData();
-  }, [fetchClasses, fetchHierarchy]);
+  }, [fetchHierarchy, user]);
 
   useEffect(() => {
     if (selectedClassId && selectedCompetencyId) {
@@ -877,6 +887,12 @@ export default function AssessmentsPage() {
   useEffect(() => {
     setSelectedCompetencyId('');
   }, [selectedSubStrandId]);
+
+  useEffect(() => {
+    if (!availableTabs.includes(activeTab)) {
+      setActiveTab(availableTabs[0] ?? 'entry');
+    }
+  }, [availableTabs, activeTab]);
 
   // ─── Handlers ──────────────────────────────────────────────
   const handleScoreChange = (
@@ -955,7 +971,7 @@ export default function AssessmentsPage() {
     );
   }
 
-  if (isLoading) {
+  if (isLoading || isReferenceLoading) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
         <div className="flex flex-col items-center gap-3">
@@ -1048,16 +1064,21 @@ export default function AssessmentsPage() {
       {/* ── Tabs ────────────────────────────────────────────── */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabTrigger value="entry" disabled={!isReadyToAssess}>
-            Score Entry
-          </TabTrigger>
-          <TabTrigger value="overview" disabled={!selectedClassId}>
-            Class Overview
-          </TabTrigger>
+          {availableTabs.includes('entry') && (
+            <TabTrigger value="entry" disabled={!isReadyToAssess}>
+              Score Entry
+            </TabTrigger>
+          )}
+          {availableTabs.includes('overview') && (
+            <TabTrigger value="overview" disabled={!selectedClassId}>
+              Class Overview
+            </TabTrigger>
+          )}
         </TabsList>
 
         {/* ── Score Entry Tab ─────────────────────────────── */}
-        <TabContent value="entry" className="mt-6">
+        {availableTabs.includes('entry') && (
+          <TabContent value="entry" className="mt-6">
           {isReadyToAssess ? (
             isLoadingStudents ? (
               <div className="flex items-center justify-center py-12">
@@ -1193,10 +1214,12 @@ export default function AssessmentsPage() {
               </CardContent>
             </Card>
           )}
-        </TabContent>
+          </TabContent>
+        )}
 
         {/* ── Overview Tab ────────────────────────────────── */}
-        <TabContent value="overview" className="mt-6">
+        {availableTabs.includes('overview') && (
+          <TabContent value="overview" className="mt-6">
           {selectedClassId ? (
             <Card>
               <CardHeader>
@@ -1222,7 +1245,8 @@ export default function AssessmentsPage() {
               </CardContent>
             </Card>
           )}
-        </TabContent>
+          </TabContent>
+        )}
       </Tabs>
 
       {/* ── Unsaved Changes Warning ─────────────────────────── */}

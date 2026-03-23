@@ -293,11 +293,13 @@ async function getUserProfile(authUserId: string): Promise<AuthUser | null> {
 
   return {
     id: data.user_id,
+    user_id: data.user_id,
     email: data.email,
     firstName: data.first_name,
     lastName: data.last_name,
     role: (data.roles as any)?.name as RoleName,
     schoolId: data.school_id,
+    school_id: data.school_id,
     status: data.status as AuthUser["status"],
     emailVerified: data.email_verified,
     lockedUntil: data.locked_until,
@@ -315,7 +317,9 @@ async function recordFailedLogin(email: string): Promise<void> {
       .eq("email", email)
       .single();
 
-    if (!data) return;
+    if (!data) {
+      return;
+    }
 
     const newAttempts = (data.failed_login_attempts || 0) + 1;
 

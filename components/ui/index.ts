@@ -72,3 +72,6 @@ export { Spinner, PageLoader, SectionLoader } from "./Spinner";
 
 // Avatar
 export { Avatar, AvatarGroup } from "./Avatar";
+
+// Page Header
+export { PageHeader } from "./PageHeader";

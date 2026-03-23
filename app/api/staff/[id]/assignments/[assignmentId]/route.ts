@@ -24,7 +24,7 @@ import {
 // GET Handler - Get Single Assignment
 // ============================================================
 export const GET = withPermission(
-  'staff',
+  'teachers',
   'view',
   async (request: NextRequest, { user, params }) => {
     try {
@@ -66,7 +66,7 @@ export const GET = withPermission(
 // DELETE Handler - Remove Assignment (Soft Delete)
 // ============================================================
 export const DELETE = withPermission(
-  'staff',
+  'teachers',
   'update',
   async (request: NextRequest, { user, params }) => {
     try {
@@ -110,3 +110,4 @@ export const DELETE = withPermission(
     }
   }
 );
+

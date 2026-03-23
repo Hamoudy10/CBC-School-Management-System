@@ -447,11 +447,17 @@ export function StudentTable({
     status: EnrollmentStatus;
   } | null>(null);
 
+  const rows = Array.isArray(students?.data)
+    ? students.data
+    : Array.isArray((students as { students?: StudentWithDetails[] } | null)?.students)
+      ? (students as { students?: StudentWithDetails[] }).students ?? []
+      : [];
+
   // Handle selection
   const handleSelectAll = () => {
     if (!onSelectionChange) {return;}
 
-    const allIds = students.data.map((s: StudentWithDetails) => s.studentId);
+    const allIds = rows.map((s: StudentWithDetails) => s.studentId);
     const allSelected = allIds.every((id: string) => selectedIds.includes(id));
 
     if (allSelected) {
@@ -472,11 +478,11 @@ export function StudentTable({
   };
 
   const isAllSelected =
-    students.data.length > 0 &&
-    students.data.every((s: StudentWithDetails) => selectedIds.includes(s.studentId));
+    rows.length > 0 &&
+    rows.every((s: StudentWithDetails) => selectedIds.includes(s.studentId));
 
   const isSomeSelected =
-    students.data.some((s: StudentWithDetails) => selectedIds.includes(s.studentId)) && !isAllSelected;
+    rows.some((s: StudentWithDetails) => selectedIds.includes(s.studentId)) && !isAllSelected;
 
   // Handlers
   const handleView = (student: StudentWithDetails) => {
@@ -515,7 +521,7 @@ export function StudentTable({
   }
 
   // Empty state
-  if (students.data.length === 0) {
+  if (rows.length === 0) {
     return <EmptyState />;
   }
 

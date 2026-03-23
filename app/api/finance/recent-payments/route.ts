@@ -26,6 +26,7 @@ export const GET = withAuth(async (req: NextRequest, user) => {
     return apiSuccess(
       (payments.data || []).map((payment: any) => ({
         id: payment.id,
+        studentId: payment.studentId || null,
         studentName: payment.studentName || "Unknown Student",
         admissionNumber: payment.studentAdmissionNo || "",
         className: "",

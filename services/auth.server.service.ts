@@ -9,6 +9,7 @@ import {
   createSupabaseServerClient,
   createSupabaseAdminClient,
 } from "@/lib/supabase/server";
+import { cache } from "react";
 import type { SignupPayload, AuthUser, AuthResponse } from "@/types/auth";
 import type { RoleName } from "@/types/roles";
 import { canManageRole, ROLE_HIERARCHY } from "@/lib/auth/permissions";
@@ -18,7 +19,7 @@ type UserRole = { name: RoleName } | null;
 // ============================================================
 // GET AUTHENTICATED USER (Server-side)
 // ============================================================
-export async function getServerUser(): Promise<AuthUser | null> {
+export const getServerUser = cache(async (): Promise<AuthUser | null> => {
   const supabase = await createSupabaseServerClient();
   const usersTable = () => supabase.from("users") as any;
 
@@ -27,7 +28,9 @@ export async function getServerUser(): Promise<AuthUser | null> {
     error,
   } = await supabase.auth.getUser();
 
-  if (error || !user) return null;
+  if (error || !user) {
+    return null;
+  }
 
   const { data: profile } = await usersTable()
     .select(
@@ -47,19 +50,23 @@ export async function getServerUser(): Promise<AuthUser | null> {
     .eq("user_id", user.id)
     .single();
 
-  if (!profile) return null;
+  if (!profile) {
+    return null;
+  }
 
   return {
     id: profile.user_id,
+    user_id: profile.user_id,
     email: profile.email,
     firstName: profile.first_name,
     lastName: profile.last_name,
     role: (profile.roles as UserRole)?.name ?? "student",
     schoolId: profile.school_id,
+    school_id: profile.school_id,
     status: profile.status as AuthUser["status"],
     emailVerified: profile.email_verified,
   };
-}
+});
 
 // ============================================================
 // CREATE USER (Admin action — server-side only)
@@ -283,6 +290,8 @@ async function getRoleNameById(roleId: string): Promise<RoleName | null> {
     .eq("role_id", roleId)
     .single();
 
-  if (error || !data) return null;
+  if (error || !data) {
+    return null;
+  }
   return data.name as RoleName;
 }

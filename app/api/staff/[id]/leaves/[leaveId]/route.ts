@@ -24,7 +24,7 @@ import {
 // GET Handler - Get Single Leave Request
 // ============================================================
 export const GET = withPermission(
-  'staff',
+  'teachers',
   'view',
   async (request: NextRequest, { user, params }) => {
     try {
@@ -73,7 +73,7 @@ export const GET = withPermission(
 // PATCH Handler - Update Leave Status
 // ============================================================
 export const PATCH = withPermission(
-  'staff',
+  'teachers',
   'update',
   async (request: NextRequest, { user, params }) => {
     try {
@@ -134,7 +134,7 @@ export const PATCH = withPermission(
 // PUT Handler - Alias for PATCH (full update of status)
 // ============================================================
 export const PUT = withPermission(
-  'staff',
+  'teachers',
   'update',
   async (request: NextRequest, { user, params }) => {
     try {
@@ -189,3 +189,4 @@ export const PUT = withPermission(
     }
   }
 );
+

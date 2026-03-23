@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { useToast } from '@/components/ui/Toast';
 import { cn, formatDate } from '@/lib/utils';
+import { useReferenceData } from '@/hooks/useReferenceData';
 
 // ─── Types ───────────────────────────────────────────────────
 interface ValidationError {
@@ -57,42 +58,20 @@ export default function AttendanceBulkImportPage() {
     new Date().toISOString().split('T')[0]
   );
   const [selectedClassId, setSelectedClassId] = useState<string>('');
-  const [classes, setClasses] = useState<Array<{ classId: string; name: string }>>([]);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingClasses, setIsLoadingClasses] = useState(false);
+  const {
+    classes: referenceClasses,
+    isLoading: isLoadingClasses,
+  } = useReferenceData({ enabled: Boolean(user) });
+  const classes = referenceClasses.map((c) => ({
+    classId: c.classId,
+    name: c.name,
+  }));
 
   // ─── Permissions ───────────────────────────────────────────
   const canImportAttendance = checkPermission('attendance', 'create');
 
-  // ─── Effects ───────────────────────────────────────────────
-  React.useEffect(() => {
-    fetchClasses();
-  }, []);
-
-  // ─── Functions ─────────────────────────────────────────────
-  const fetchClasses = async () => {
-    setIsLoadingClasses(true);
-    try {
-      const response = await fetch('/api/settings/classes?hasStudents=true', {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const json = await response.json();
-        setClasses(
-          (json.data || []).map((c: any) => ({
-            classId: c.class_id || c.classId,
-            name: c.name,
-          }))
-        );
-      }
-    } catch (err) {
-      console.error('Failed to fetch classes:', err);
-    } finally {
-      setIsLoadingClasses(false);
-    }
-  };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];

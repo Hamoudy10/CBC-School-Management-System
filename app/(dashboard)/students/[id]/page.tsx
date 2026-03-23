@@ -1,7 +1,7 @@
 // app/(dashboard)/students/[id]/page.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import {
   ArrowLeft,
@@ -478,6 +478,25 @@ export default function StudentDetailPage() {
   const canDelete = checkPermission('students', 'delete');
   const canViewFinance = checkPermission('finance', 'view');
   const canViewDiscipline = checkPermission('compliance', 'view');
+  const canViewAttendance = checkPermission('attendance', 'view');
+  const canViewAcademics =
+    checkPermission('academics', 'view') || checkPermission('assessments', 'view');
+
+  const availableTabs = useMemo(
+    () =>
+      [
+        { key: 'overview', allowed: true },
+        { key: 'academics', allowed: canViewAcademics },
+        { key: 'attendance', allowed: canViewAttendance },
+        { key: 'finance', allowed: canViewFinance },
+        { key: 'guardians', allowed: true },
+        { key: 'discipline', allowed: canViewDiscipline },
+        { key: 'history', allowed: true },
+      ]
+        .filter((tab) => tab.allowed)
+        .map((tab) => tab.key),
+    [canViewAcademics, canViewAttendance, canViewFinance, canViewDiscipline],
+  );
 
   // ─── Fetch Student Data ────────────────────────────────────
   const fetchStudent = useCallback(async () => {
@@ -497,7 +516,43 @@ export default function StudentDetailPage() {
       }
 
       const json = await response.json();
-      setStudent(json.data);
+      const payload = json.data ?? {};
+      setStudent(payload.student ?? payload);
+      if (payload.attendanceSummary) {
+        setAttendanceSummary(payload.attendanceSummary);
+      }
+      if (payload.feeSummary) {
+        setFeeSummary(payload.feeSummary);
+      }
+      if (payload.assessmentSummary) {
+        const learningAreas = payload.assessmentSummary.map((item: any, index: number) => ({
+          learningAreaId: String(index),
+          name: item.learningArea,
+          averageScore: item.averageScore,
+          level: item.performanceLevel ?? 'below_expectation',
+        }));
+        const overallAverage =
+          learningAreas.length > 0
+            ? learningAreas.reduce((sum: number, area: any) => sum + area.averageScore, 0) /
+              learningAreas.length
+            : 0;
+
+        setPerformanceSummary({
+          studentId,
+          academicYearId: '',
+          termId: payload.attendanceSummary?.termId ?? '',
+          overallAverage,
+          overallLevel:
+            overallAverage >= 3.5
+              ? 'exceeding'
+              : overallAverage >= 2.5
+                ? 'meeting'
+                : overallAverage >= 1.5
+                  ? 'approaching'
+                  : 'below_expectation',
+          learningAreas,
+        });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred';
       setError(message);
@@ -511,83 +566,83 @@ export default function StudentDetailPage() {
     if (!student) {return;}
 
     try {
-      // Fetch class history
-      const historyResponse = await fetch(
-        `/api/students/${studentId}/class-history`,
-        { credentials: 'include' }
-      );
-      if (historyResponse.ok) {
-        const json = await historyResponse.json();
-        setClassHistory(json.data || []);
+      const requests: Array<Promise<Response>> = [
+        fetch(`/api/students/${studentId}/class-history`, {
+          credentials: 'include',
+        }),
+      ];
+
+      if (canViewAttendance) {
+        requests.push(
+          fetch(`/api/students/${studentId}/attendance-summary`, { credentials: 'include' }),
+          fetch(`/api/students/${studentId}/attendance?limit=10`, { credentials: 'include' }),
+        );
       }
 
-      // Fetch attendance summary
-      const attendanceResponse = await fetch(
-        `/api/students/${studentId}/attendance-summary`,
-        { credentials: 'include' }
-      );
-      if (attendanceResponse.ok) {
-        const json = await attendanceResponse.json();
-        setAttendanceSummary(json.data);
-      }
-
-      // Fetch recent attendance
-      const recentAttendanceResponse = await fetch(
-        `/api/students/${studentId}/attendance?limit=10`,
-        { credentials: 'include' }
-      );
-      if (recentAttendanceResponse.ok) {
-        const json = await recentAttendanceResponse.json();
-        setRecentAttendance(json.data || []);
-      }
-
-      // Fetch fee summary
       if (canViewFinance) {
-        const feeResponse = await fetch(
-          `/api/students/${studentId}/fee-summary`,
-          { credentials: 'include' }
+        requests.push(
+          fetch(`/api/students/${studentId}/fee-summary`, { credentials: 'include' }),
+          fetch(`/api/students/${studentId}/payments?limit=5`, { credentials: 'include' }),
         );
-        if (feeResponse.ok) {
-          const json = await feeResponse.json();
-          setFeeSummary(json.data);
-        }
-
-        // Fetch recent payments
-        const paymentsResponse = await fetch(
-          `/api/students/${studentId}/payments?limit=5`,
-          { credentials: 'include' }
-        );
-        if (paymentsResponse.ok) {
-          const json = await paymentsResponse.json();
-          setRecentPayments(json.data || []);
-        }
       }
 
-      // Fetch performance summary
-      const performanceResponse = await fetch(
-        `/api/students/${studentId}/performance-summary`,
-        { credentials: 'include' }
-      );
-      if (performanceResponse.ok) {
-        const json = await performanceResponse.json();
-        setPerformanceSummary(json.data);
+      if (canViewAcademics) {
+        requests.push(
+          fetch(`/api/students/${studentId}/performance-summary`, { credentials: 'include' }),
+        );
       }
 
-      // Fetch disciplinary records
       if (canViewDiscipline) {
-        const disciplineResponse = await fetch(
-          `/api/students/${studentId}/discipline`,
-          { credentials: 'include' }
+        requests.push(
+          fetch(`/api/students/${studentId}/discipline`, { credentials: 'include' }),
         );
-        if (disciplineResponse.ok) {
-          const json = await disciplineResponse.json();
-          setDisciplinaryRecords(json.data || []);
-        }
       }
+
+      const responses = await Promise.allSettled(requests);
+      const fulfilled = await Promise.all(
+        responses.map(async (result) => {
+          if (result.status !== 'fulfilled' || !result.value.ok) {
+            return null;
+          }
+
+          const json = await result.value.json();
+          return {
+            url: result.value.url,
+            data: json.data,
+          };
+        }),
+      );
+
+      fulfilled.forEach((result) => {
+        if (!result) {return;}
+
+        if (result.url.includes('/class-history')) {
+          setClassHistory(result.data || []);
+        } else if (result.url.includes('/attendance-summary')) {
+          setAttendanceSummary(result.data);
+        } else if (result.url.includes('/attendance?')) {
+          setRecentAttendance(result.data || []);
+        } else if (result.url.includes('/fee-summary')) {
+          setFeeSummary(result.data);
+        } else if (result.url.includes('/payments?')) {
+          setRecentPayments(result.data || []);
+        } else if (result.url.includes('/performance-summary')) {
+          setPerformanceSummary(result.data);
+        } else if (result.url.includes('/discipline')) {
+          setDisciplinaryRecords(result.data || []);
+        }
+      });
     } catch (err) {
       console.error('Failed to fetch related data:', err);
     }
-  }, [studentId, student, canViewFinance, canViewDiscipline]);
+  }, [
+    studentId,
+    student,
+    canViewFinance,
+    canViewDiscipline,
+    canViewAttendance,
+    canViewAcademics,
+  ]);
 
   // ─── Effects ───────────────────────────────────────────────
   useEffect(() => {
@@ -599,6 +654,12 @@ export default function StudentDetailPage() {
       fetchRelatedData();
     }
   }, [student, fetchRelatedData]);
+
+  useEffect(() => {
+    if (!availableTabs.includes(activeTab)) {
+      setActiveTab(availableTabs[0] ?? 'overview');
+    }
+  }, [availableTabs, activeTab]);
 
   // ─── Handlers ──────────────────────────────────────────────
   const handleEdit = () => {
@@ -642,7 +703,7 @@ export default function StudentDetailPage() {
         throw new Error('Failed to delete student');
       }
 
-      success('Student Deleted', 'The student has been removed from the system.');
+      success('Student Updated', 'The student has been withdrawn.');
 
       router.push('/students');
     } catch (err) {
@@ -797,8 +858,9 @@ export default function StudentDetailPage() {
 
       {/* ── Stats Cards ─────────────────────────────────────── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Attendance Rate"
+        {canViewAttendance && (
+          <StatCard
+            title="Attendance Rate"
           value={
             attendanceSummary
               ? `${attendanceSummary.attendanceRate.toFixed(0)}%`
@@ -817,11 +879,13 @@ export default function StudentDetailPage() {
                 ? 'amber'
                 : 'red'
           }
-          onClick={() => setActiveTab('attendance')}
-        />
+            onClick={() => setActiveTab('attendance')}
+          />
+        )}
 
-        <StatCard
-          title="Fee Balance"
+        {canViewFinance && (
+          <StatCard
+            title="Fee Balance"
           value={feeSummary ? formatCurrency(feeSummary.balance) : '—'}
           subtitle={
             feeSummary
@@ -836,11 +900,13 @@ export default function StudentDetailPage() {
                 ? 'red'
                 : 'blue'
           }
-          onClick={() => setActiveTab('finance')}
-        />
+            onClick={() => setActiveTab('finance')}
+          />
+        )}
 
-        <StatCard
-          title="Overall Performance"
+        {canViewAcademics && (
+          <StatCard
+            title="Overall Performance"
           value={
             performanceSummary
               ? `${performanceSummary.overallAverage.toFixed(1)} / 4.0`
@@ -859,11 +925,13 @@ export default function StudentDetailPage() {
                 ? 'amber'
                 : 'purple'
           }
-          onClick={() => setActiveTab('academics')}
-        />
+            onClick={() => setActiveTab('academics')}
+          />
+        )}
 
-        <StatCard
-          title="Discipline"
+        {canViewDiscipline && (
+          <StatCard
+            title="Discipline"
           value={disciplinaryRecords.length}
           subtitle={
             disciplinaryRecords.length === 0
@@ -872,16 +940,21 @@ export default function StudentDetailPage() {
           }
           icon={<Shield className="h-5 w-5" />}
           color={disciplinaryRecords.length === 0 ? 'green' : 'amber'}
-          onClick={() => setActiveTab('discipline')}
-        />
+            onClick={() => setActiveTab('discipline')}
+          />
+        )}
       </div>
 
       {/* ── Tabs Content ────────────────────────────────────── */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full justify-start overflow-x-auto">
           <TabTrigger value="overview">Overview</TabTrigger>
-          <TabTrigger value="academics">Academics</TabTrigger>
-          <TabTrigger value="attendance">Attendance</TabTrigger>
+          {canViewAcademics && (
+            <TabTrigger value="academics">Academics</TabTrigger>
+          )}
+          {canViewAttendance && (
+            <TabTrigger value="attendance">Attendance</TabTrigger>
+          )}
           {canViewFinance && <TabTrigger value="finance">Finance</TabTrigger>}
           <TabTrigger value="guardians">Guardians</TabTrigger>
           {canViewDiscipline && (
@@ -962,46 +1035,49 @@ export default function StudentDetailPage() {
           </div>
 
           {/* Recent Activity */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Recent Attendance</CardTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setActiveTab('attendance')}
-              >
-                View All
-                <ChevronRight className="ml-1 h-4 w-4" />
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {recentAttendance.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {recentAttendance.slice(0, 14).map((record, idx) => (
-                    <div
-                      key={idx}
-                      className={cn(
-                        'flex h-10 w-10 items-center justify-center rounded-lg text-xs font-medium',
-                        record.status === 'present' && 'bg-green-100 text-green-700',
-                        record.status === 'absent' && 'bg-red-100 text-red-700',
-                        record.status === 'late' && 'bg-amber-100 text-amber-700',
-                        record.status === 'excused' && 'bg-blue-100 text-blue-700'
-                      )}
-                      title={`${formatDate(record.date)} - ${record.status}`}
-                    >
-                      {new Date(record.date).getDate()}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500">No attendance records</p>
-              )}
-            </CardContent>
-          </Card>
+          {canViewAttendance && (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-base">Recent Attendance</CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setActiveTab('attendance')}
+                >
+                  View All
+                  <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {recentAttendance.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {recentAttendance.slice(0, 14).map((record, idx) => (
+                      <div
+                        key={idx}
+                        className={cn(
+                          'flex h-10 w-10 items-center justify-center rounded-lg text-xs font-medium',
+                          record.status === 'present' && 'bg-green-100 text-green-700',
+                          record.status === 'absent' && 'bg-red-100 text-red-700',
+                          record.status === 'late' && 'bg-amber-100 text-amber-700',
+                          record.status === 'excused' && 'bg-blue-100 text-blue-700'
+                        )}
+                        title={`${formatDate(record.date)} - ${record.status}`}
+                      >
+                        {new Date(record.date).getDate()}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">No attendance records</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabContent>
 
         {/* ── Academics Tab ───────────────────────────────── */}
-        <TabContent value="academics" className="mt-6 space-y-6">
+        {canViewAcademics && (
+          <TabContent value="academics" className="mt-6 space-y-6">
           {performanceSummary ? (
             <>
               <Card>
@@ -1074,8 +1150,11 @@ export default function StudentDetailPage() {
               </CardContent>
             </Card>
           )}
-        <TabContent value="attendance" className="mt-6 space-y-6">
-        </TabContent>
+          </TabContent>
+        )}
+
+        {canViewAttendance && (
+          <TabContent value="attendance" className="mt-6 space-y-6">
           {attendanceSummary && (
             <div className="grid gap-4 sm:grid-cols-4">
               <Card>
@@ -1149,6 +1228,7 @@ export default function StudentDetailPage() {
             </CardContent>
           </Card>
         </TabContent>
+        )}
 
         {/* ── Finance Tab ─────────────────────────────────── */}
         {canViewFinance && (

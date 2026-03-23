@@ -1,200 +1,52 @@
-// @ts-nocheck
-import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { z } from 'zod';
+import { NextRequest } from 'next/server';
+import {
+  STUDENT_READ_ROLES,
+  STUDENT_WRITE_ROLES,
+  errorResponse,
+  getCurrentAcademicContext,
+  getStudentRequestContext,
+  normalizeStudent,
+  successResponse,
+  toArray,
+} from '@/app/api/students/_utils';
 
-// ─── Response Helpers ─────────────────────────────────────────────────────────
+function normalizeUpdateBody(body: Record<string, unknown>) {
+  const specialNeedsDetails =
+    body.special_needs_details ??
+    body.specialNeedsDetails ??
+    body.special_needs ??
+    null;
 
-function successResponse(data: unknown, message: string, status: number = 200) {
-  return NextResponse.json({ success: true, message, data }, { status });
-}
-
-function errorResponse(message: string, status: number = 400) {
-  return NextResponse.json({ success: false, message, data: null }, { status });
-}
-
-// ─── Validation Schemas ───────────────────────────────────────────────────────
-
-const updateStudentSchema = z
-  .object({
-    first_name: z
-      .string()
-      .min(1, 'First name is required')
-      .max(100, 'First name must be 100 characters or fewer')
-      .trim()
-      .optional(),
-    last_name: z
-      .string()
-      .min(1, 'Last name is required')
-      .max(100, 'Last name must be 100 characters or fewer')
-      .trim()
-      .optional(),
-    middle_name: z
-      .string()
-      .max(100, 'Middle name must be 100 characters or fewer')
-      .trim()
-      .optional()
-      .nullable(),
-    admission_number: z
-      .string()
-      .min(1, 'Admission number is required')
-      .max(50, 'Admission number must be 50 characters or fewer')
-      .trim()
-      .optional(),
-    date_of_birth: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date of birth must be in YYYY-MM-DD format')
-      .optional(),
-    gender: z
-      .enum(['male', 'female', 'other'], {
-        errorMap: () => ({ message: 'Gender must be male, female, or other' }),
-      })
-      .optional(),
-    current_class_id: z.string().uuid('Invalid class ID').optional().nullable(),
-    admission_date: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Admission date must be in YYYY-MM-DD format')
-      .optional()
-      .nullable(),
-    status: z
-      .enum(['active', 'inactive', 'graduated', 'transferred', 'suspended', 'expelled'], {
-        errorMap: () => ({ message: 'Invalid student status' }),
-      })
-      .optional(),
-    photo_url: z.string().url('Invalid photo URL').optional().nullable(),
-    medical_info: z.string().max(1000).optional().nullable(),
-    special_needs: z.string().max(1000).optional().nullable(),
-    nationality: z.string().max(100).trim().optional().nullable(),
-    religion: z.string().max(100).trim().optional().nullable(),
-    birth_certificate_number: z.string().max(50).trim().optional().nullable(),
-    nemis_number: z.string().max(50).trim().optional().nullable(),
-    previous_school: z.string().max(200).trim().optional().nullable(),
-    transport_mode: z.string().max(100).trim().optional().nullable(),
-    blood_group: z.string().max(10).trim().optional().nullable(),
-  })
-  .strict();
-
-// ─── Auth Helper ──────────────────────────────────────────────────────────────
-
-interface AuthResult {
-  userId: string;
-  schoolId: string;
-  roleName: string;
-}
-
-async function authenticate(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>
-): Promise<{ auth: AuthResult } | { error: NextResponse }> {
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-
-  if (!authUser) {
-    return { error: errorResponse('Unauthorized', 401) };
-  }
-
-  const { data: user } = await supabase
-    .from('users')
-    .select('user_id, school_id, roles ( name )')
-    .eq('user_id', authUser.id)
-    .single();
-
-  if (!user?.school_id) {
-    return { error: errorResponse('Forbidden — no school associated', 403) };
-  }
-
-  const roleName = (user.roles as Record<string, string>)?.name ?? 'student';
+  const normalizedStatus = body.status === 'inactive' ? 'withdrawn' : body.status;
 
   return {
-    auth: {
-      userId: user.user_id,
-      schoolId: user.school_id,
-      roleName,
-    },
+    first_name: body.first_name ?? body.firstName,
+    last_name: body.last_name ?? body.lastName,
+    middle_name: body.middle_name ?? body.middleName ?? null,
+    admission_number: body.admission_number ?? body.admissionNumber,
+    date_of_birth: body.date_of_birth ?? body.dateOfBirth,
+    gender: body.gender,
+    current_class_id: body.current_class_id ?? body.currentClassId ?? body.classId ?? null,
+    enrollment_date:
+      body.enrollment_date ?? body.enrollmentDate ?? body.admission_date ?? body.admissionDate,
+    status: normalizedStatus,
+    photo_url: body.photo_url ?? body.photoUrl ?? null,
+    medical_info: body.medical_info ?? body.medicalInfo ?? null,
+    has_special_needs:
+      body.has_special_needs ?? body.hasSpecialNeeds ?? Boolean(specialNeedsDetails),
+    special_needs_details: specialNeedsDetails,
+    previous_school: body.previous_school ?? body.previousSchool ?? null,
+    birth_certificate_no:
+      body.birth_certificate_no ??
+      body.birthCertificateNo ??
+      body.birth_certificate_number ??
+      null,
+    nemis_number: body.nemis_number ?? body.nemisNumber ?? null,
   };
 }
 
-// ─── Param Helper ─────────────────────────────────────────────────────────────
-
-interface RouteContext {
-  params: { id: string };
-}
-
-const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function validateStudentId(id: string): NextResponse | null {
-  if (!id || !uuidRegex.test(id)) {
-    return errorResponse('Invalid student ID format', 400);
-  }
-  return null;
-}
-
-// ─── GET /api/students/[id] ───────────────────────────────────────────────────
-
-export async function GET(req: NextRequest, { params }: RouteContext) {
-  const supabase = await createSupabaseServerClient();
-
-  // 1. Auth
-  const result = await authenticate(supabase);
-  if ('error' in result) {return result.error;}
-  const { schoolId, roleName, userId } = result.auth;
-
-  // 2. Validate ID
-  const idError = validateStudentId(params.id);
-  if (idError) {return idError;}
-
-  const studentId = params.id;
-
-  // 3. Role check — all staff + parent (scoped) + student (self only)
-  const readRoles = [
-    'super_admin',
-    'school_admin',
-    'principal',
-    'deputy_principal',
-    'teacher',
-    'class_teacher',
-    'subject_teacher',
-    'finance_officer',
-    'bursar',
-    'ict_admin',
-    'parent',
-    'student',
-  ];
-
-  if (!readRoles.includes(roleName)) {
-    return errorResponse('Insufficient permissions', 403);
-  }
-
-  // 4. Parent scoping — verify they are linked to this student
-  if (roleName === 'parent') {
-    const { data: guardianLink } = await supabase
-      .from('student_guardians')
-      .select('student_id')
-      .eq('guardian_user_id', userId)
-      .eq('student_id', studentId)
-      .maybeSingle();
-
-    if (!guardianLink) {
-      return errorResponse('You do not have access to this student record', 403);
-    }
-  }
-
-  // 5. Student scoping — can only view their own record
-  if (roleName === 'student') {
-    const { data: studentRecord } = await supabase
-      .from('students')
-      .select('student_id')
-      .eq('user_id', userId)
-      .eq('student_id', studentId)
-      .maybeSingle();
-
-    if (!studentRecord) {
-      return errorResponse('You can only view your own student record', 403);
-    }
-  }
-
-  // 6. Fetch student with full details
-  const { data: student, error: fetchError } = await supabase
+async function loadNormalizedStudentDetails(supabase: any, studentId: string, schoolId: string | null) {
+  let studentQuery = supabase
     .from('students')
     .select(
       `
@@ -203,540 +55,371 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
         class_id,
         name,
         stream,
-        grades ( grade_id, name, level )
+        grades ( grade_id, name )
       )
-    `
+    `,
     )
-    .eq('student_id', studentId)
-    .eq('school_id', schoolId)
-    .maybeSingle();
+    .eq('student_id', studentId);
 
-  if (fetchError) {
-    return errorResponse(`Failed to fetch student: ${fetchError.message}`, 500);
+  if (schoolId) {
+    studentQuery = studentQuery.eq('school_id', schoolId);
+  }
+
+  const { data: student, error: studentError } = await studentQuery.maybeSingle();
+  if (studentError) {
+    throw new Error(studentError.message);
   }
 
   if (!student) {
-    return errorResponse('Student not found', 404);
+    throw new Error('Student not found');
   }
 
-  // 7. Fetch guardians
-  const { data: guardianLinks } = await supabase
-    .from('student_guardians')
-    .select(
-      `
-      relationship,
-      is_primary,
-      guardians (
+  const [
+    guardianResult,
+    attendanceResult,
+    feeResult,
+    disciplineResult,
+    context,
+  ] = await Promise.all([
+    supabase
+      .from('student_guardians')
+      .select(
+        `
+        id,
+        student_id,
         guardian_id,
-        first_name,
-        last_name,
-        phone_number,
-        email,
-        national_id,
-        occupation,
-        address
+        guardian_user_id,
+        relationship,
+        is_primary_contact,
+        is_primary,
+        can_pickup,
+        created_at,
+        guardians (
+          guardian_id,
+          first_name,
+          last_name,
+          phone_number,
+          email
+        ),
+        guardian:users (
+          user_id,
+          first_name,
+          last_name,
+          phone,
+          email
+        )
+      `,
       )
-    `
-    )
-    .eq('student_id', studentId);
+      .eq('student_id', studentId),
+    supabase
+      .from('attendance')
+      .select('status')
+      .eq('student_id', studentId),
+    supabase
+      .from('student_fees')
+      .select('amount_due, amount_paid, balance, status')
+      .eq('student_id', studentId),
+    supabase
+      .from('disciplinary_records')
+      .select('*', { count: 'exact', head: true })
+      .eq('student_id', studentId),
+    getCurrentAcademicContext(supabase, student.school_id ?? schoolId),
+  ]);
 
-  const guardians = (guardianLinks ?? []).map((link) => ({
-    ...(link.guardians as Record<string, unknown>),
-    relationship: link.relationship,
-    is_primary: link.is_primary,
-  }));
+  const guardians = guardianResult.data ?? [];
+  const attendanceRecords = attendanceResult.data ?? [];
+  const feeRecords = feeResult.data ?? [];
+  const feeBalance = feeRecords.reduce(
+    (sum: number, fee: { balance?: number | string | null }) => sum + Number(fee.balance ?? 0),
+    0,
+  );
+  const totalDue = feeRecords.reduce(
+    (sum: number, fee: { amount_due?: number | string | null }) => sum + Number(fee.amount_due ?? 0),
+    0,
+  );
+  const totalPaid = feeRecords.reduce(
+    (sum: number, fee: { amount_paid?: number | string | null }) => sum + Number(fee.amount_paid ?? 0),
+    0,
+  );
 
-  // 8. Fetch recent attendance summary (last 30 days)
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const totalDays = attendanceRecords.length;
+  const presentDays = attendanceRecords.filter(
+    (record: { status: string }) => record.status === 'present' || record.status === 'late',
+  ).length;
+  const attendanceRate = totalDays > 0 ? (presentDays / totalDays) * 100 : null;
 
-  const { data: attendanceRecords } = await supabase
-    .from('attendance')
-    .select('status')
-    .eq('student_id', studentId)
-    .gte('date', thirtyDaysAgo.toISOString().split('T')[0]);
+  const normalizedStudent = normalizeStudent(student, guardians, feeBalance, attendanceRate);
 
-  const attendanceSummary = {
-    total_days: (attendanceRecords ?? []).length,
-    present: (attendanceRecords ?? []).filter((a) => a.status === 'present').length,
-    absent: (attendanceRecords ?? []).filter((a) => a.status === 'absent').length,
-    late: (attendanceRecords ?? []).filter((a) => a.status === 'late').length,
-    excused: (attendanceRecords ?? []).filter((a) => a.status === 'excused').length,
-  };
+  let assessmentSummary: Array<{
+    learningArea: string;
+    averageScore: number;
+    performanceLevel: string | null;
+  }> = [];
 
-  // 9. Fetch fee balance summary
-  const { data: feeRecords } = await supabase
-    .from('student_fees')
-    .select('amount, paid_amount, balance, fee_structures ( name, fee_type )')
-    .eq('student_id', studentId);
-
-  const feeSummary = {
-    total_fees: (feeRecords ?? []).reduce(
-      (sum, f) => sum + (typeof f.amount === 'number' ? f.amount : 0),
-      0
-    ),
-    total_paid: (feeRecords ?? []).reduce(
-      (sum, f) => sum + (typeof f.paid_amount === 'number' ? f.paid_amount : 0),
-      0
-    ),
-    total_balance: (feeRecords ?? []).reduce(
-      (sum, f) => sum + (typeof f.balance === 'number' ? f.balance : 0),
-      0
-    ),
-    fee_items: (feeRecords ?? []).map((f) => ({
-      name:
-        (f.fee_structures as Record<string, unknown> | null)?.name ?? 'Unknown',
-      fee_type:
-        (f.fee_structures as Record<string, unknown> | null)?.fee_type ?? 'other',
-      amount: f.amount,
-      paid_amount: f.paid_amount,
-      balance: f.balance,
-    })),
-  };
-
-  // 10. Fetch recent disciplinary records count
-  const { count: disciplineCount } = await supabase
-    .from('disciplinary_records')
-    .select('*', { count: 'exact', head: true })
-    .eq('student_id', studentId);
-
-  // 11. Fetch latest assessment aggregates (current term if available)
-  const { data: activeTerm } = await supabase
-    .from('terms')
-    .select('term_id')
-    .eq('school_id', schoolId)
-    .eq('is_active', true)
-    .maybeSingle();
-
-  let assessmentSummary: Array<Record<string, unknown>> = [];
-
-  if (activeTerm) {
+  if (context.term?.term_id) {
     const { data: aggregates } = await supabase
       .from('assessment_aggregates')
       .select(
         `
         average_score,
-        performance_level,
+        overall_level,
         learning_areas ( name )
-      `
+      `,
       )
       .eq('student_id', studentId)
-      .eq('term_id', activeTerm.term_id);
+      .eq('term_id', context.term.term_id);
 
-    assessmentSummary = (aggregates ?? []).map((agg) => ({
-      learning_area:
-        (agg.learning_areas as Record<string, string> | null)?.name ?? 'Unknown',
-      average_score: agg.average_score,
-      performance_level: agg.performance_level,
+    assessmentSummary = (aggregates ?? []).map((aggregate: any) => ({
+      learningArea: toArray(aggregate.learning_areas)[0]?.name ?? 'Unknown',
+      averageScore: Number(aggregate.average_score ?? 0),
+      performanceLevel: aggregate.overall_level ?? null,
     }));
   }
 
-  // 12. Compose response
-  return successResponse(
-    {
-      student,
-      guardians,
-      attendance_summary: attendanceSummary,
-      fee_summary: feeSummary,
-      discipline_count: disciplineCount ?? 0,
-      assessment_summary: assessmentSummary,
+  return {
+    student: normalizedStudent,
+    guardians: normalizedStudent.guardians,
+    attendanceSummary: {
+      totalDays,
+      presentDays: attendanceRecords.filter((record: { status: string }) => record.status === 'present')
+        .length,
+      absentDays: attendanceRecords.filter((record: { status: string }) => record.status === 'absent')
+        .length,
+      lateDays: attendanceRecords.filter((record: { status: string }) => record.status === 'late').length,
+      excusedDays: attendanceRecords.filter((record: { status: string }) => record.status === 'excused')
+        .length,
+      attendanceRate: attendanceRate ?? 0,
+      studentId,
+      termId: context.term?.term_id ?? '',
     },
-    'Student retrieved successfully'
-  );
+    feeSummary: {
+      studentId,
+      academicYearId: context.academicYear?.academic_year_id ?? '',
+      termId: context.term?.term_id ?? undefined,
+      totalDue,
+      totalPaid,
+      balance: feeBalance,
+      status:
+        feeBalance <= 0
+          ? 'paid'
+          : totalPaid > 0
+            ? 'partial'
+            : feeRecords.some((fee: { status?: string | null }) => fee.status === 'overdue')
+              ? 'overdue'
+              : 'pending',
+    },
+    disciplineCount: disciplineResult.count ?? 0,
+    assessmentSummary,
+  };
 }
 
-// ─── PATCH /api/students/[id] ─────────────────────────────────────────────────
-
-export async function PATCH(req: NextRequest, { params }: RouteContext) {
-  const supabase = await createSupabaseServerClient();
-
-  // 1. Auth
-  const result = await authenticate(supabase);
-  if ('error' in result) {return result.error;}
-  const { schoolId, roleName } = result.auth;
-
-  // 2. Validate ID
-  const idError = validateStudentId(params.id);
-  if (idError) {return idError;}
-
-  const studentId = params.id;
-
-  // 3. Role check — only admin/teacher roles can update
-  const writeRoles = [
-    'super_admin',
-    'school_admin',
-    'principal',
-    'deputy_principal',
-    'teacher',
-    'class_teacher',
-    'ict_admin',
-  ];
-
-  if (!writeRoles.includes(roleName)) {
-    return errorResponse('Insufficient permissions', 403);
+export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+  const context = await getStudentRequestContext(params.id, STUDENT_READ_ROLES);
+  if ('error' in context) {
+    return context.error;
   }
 
-  // 4. Verify student exists and belongs to this school
-  const { data: existingStudent } = await supabase
-    .from('students')
-    .select('student_id, admission_number, nemis_number')
-    .eq('student_id', studentId)
-    .eq('school_id', schoolId)
-    .maybeSingle();
+  try {
+    const data = await loadNormalizedStudentDetails(
+      context.supabase,
+      params.id,
+      context.schoolId,
+    );
 
-  if (!existingStudent) {
-    return errorResponse('Student not found', 404);
+    return successResponse(data, 'Student retrieved successfully');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch student';
+    const status = message === 'Student not found' ? 404 : 500;
+    return errorResponse(message, status);
+  }
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const context = await getStudentRequestContext(params.id, STUDENT_WRITE_ROLES);
+  if ('error' in context) {
+    return context.error;
   }
 
-  // 5. Parse and validate request body
-  let body: unknown;
+  let body: Record<string, unknown>;
   try {
     body = await req.json();
   } catch {
     return errorResponse('Invalid JSON body', 400);
   }
 
-  const parsed = updateStudentSchema.safeParse(body);
-  if (!parsed.success) {
-    const fieldErrors = parsed.error.errors.map((e) => ({
-      field: e.path.join('.'),
-      message: e.message,
-    }));
-    return NextResponse.json(
-      {
-        success: false,
-        message: 'Validation failed',
-        data: null,
-        errors: fieldErrors,
-      },
-      { status: 400 }
-    );
-  }
+  const updateData = normalizeUpdateBody(body);
+  const sanitizedUpdate = Object.fromEntries(
+    Object.entries(updateData).filter(([, value]) => value !== undefined),
+  );
 
-  const updateData = parsed.data;
-
-  // 6. If no fields to update, return early
-  if (Object.keys(updateData).length === 0) {
+  if (Object.keys(sanitizedUpdate).length === 0) {
     return errorResponse('No fields provided for update', 400);
   }
 
-  // 7. If admission_number is being changed, check for duplicates
+  const validStatuses = ['active', 'transferred', 'graduated', 'withdrawn', 'suspended'];
   if (
-    updateData.admission_number &&
-    updateData.admission_number !== existingStudent.admission_number
+    sanitizedUpdate.status &&
+    !validStatuses.includes(String(sanitizedUpdate.status))
   ) {
-    const { data: duplicateAdm } = await supabase
-      .from('students')
-      .select('student_id')
-      .eq('school_id', schoolId)
-      .eq('admission_number', updateData.admission_number)
-      .neq('student_id', studentId)
+    return errorResponse('Invalid student status', 400);
+  }
+
+  if (sanitizedUpdate.current_class_id) {
+    const { data: validClass } = await context.supabase
+      .from('classes')
+      .select('class_id')
+      .eq('class_id', sanitizedUpdate.current_class_id)
+      .eq('school_id', context.schoolId)
       .maybeSingle();
 
-    if (duplicateAdm) {
+    if (!validClass) {
+      return errorResponse('Selected class not found or does not belong to this school', 400);
+    }
+  }
+
+  if (sanitizedUpdate.admission_number) {
+    const { data: duplicateAdmission } = await context.supabase
+      .from('students')
+      .select('student_id')
+      .eq('school_id', context.schoolId)
+      .eq('admission_number', sanitizedUpdate.admission_number)
+      .neq('student_id', params.id)
+      .maybeSingle();
+
+    if (duplicateAdmission) {
       return errorResponse(
-        `A student with admission number "${updateData.admission_number}" already exists`,
-        409
+        `A student with admission number "${sanitizedUpdate.admission_number}" already exists`,
+        409,
       );
     }
   }
 
-  // 8. If nemis_number is being changed, check for duplicates
-  if (
-    updateData.nemis_number !== undefined &&
-    updateData.nemis_number !== null &&
-    updateData.nemis_number !== existingStudent.nemis_number
-  ) {
-    const { data: duplicateNemis } = await supabase
+  if (sanitizedUpdate.nemis_number) {
+    const { data: duplicateNemis } = await context.supabase
       .from('students')
       .select('student_id')
-      .eq('school_id', schoolId)
-      .eq('nemis_number', updateData.nemis_number)
-      .neq('student_id', studentId)
+      .eq('school_id', context.schoolId)
+      .eq('nemis_number', sanitizedUpdate.nemis_number)
+      .neq('student_id', params.id)
       .maybeSingle();
 
     if (duplicateNemis) {
       return errorResponse(
-        `A student with NEMIS number "${updateData.nemis_number}" already exists`,
-        409
+        `A student with NEMIS number "${sanitizedUpdate.nemis_number}" already exists`,
+        409,
       );
     }
   }
 
-  // 9. If class_id is being changed, verify it belongs to this school
-  if (updateData.current_class_id) {
-    const { data: validClass } = await supabase
-      .from('classes')
-      .select('class_id')
-      .eq('class_id', updateData.current_class_id)
-      .eq('school_id', schoolId)
-      .maybeSingle();
-
-    if (!validClass) {
-      return errorResponse(
-        'Selected class not found or does not belong to this school',
-        400
-      );
-    }
-  }
-
-  // 10. If date_of_birth is being changed, validate age
-  if (updateData.date_of_birth) {
-    const dob = new Date(updateData.date_of_birth);
-    if (dob > new Date()) {
-      return errorResponse('Date of birth cannot be in the future', 400);
-    }
-
-    const now = new Date();
-    const ageInYears =
-      (now.getTime() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
-    if (ageInYears < 3 || ageInYears > 25) {
-      return errorResponse('Student age must be between 3 and 25 years', 400);
-    }
-  }
-
-  // 11. Execute update
-  const { data: updatedStudent, error: updateError } = await supabase
+  const { error: updateError } = await context.supabase
     .from('students')
     .update({
-      ...updateData,
+      ...sanitizedUpdate,
       updated_at: new Date().toISOString(),
+      updated_by: context.user.id,
     })
-    .eq('student_id', studentId)
-    .eq('school_id', schoolId)
-    .select(
-      `
-      student_id,
-      first_name,
-      last_name,
-      middle_name,
-      admission_number,
-      date_of_birth,
-      gender,
-      status,
-      photo_url,
-      nemis_number,
-      admission_date,
-      current_class_id,
-      medical_info,
-      special_needs,
-      nationality,
-      religion,
-      birth_certificate_number,
-      previous_school,
-      transport_mode,
-      blood_group,
-      created_at,
-      updated_at,
-      classes (
-        class_id,
-        name,
-        stream,
-        grades ( grade_id, name, level )
-      )
-    `
-    )
-    .single();
+    .eq('student_id', params.id)
+    .eq('school_id', context.schoolId);
 
   if (updateError) {
-    if (updateError.code === '23505') {
-      return errorResponse(
-        'A student with this admission number or NEMIS number already exists',
-        409
-      );
-    }
     return errorResponse(`Failed to update student: ${updateError.message}`, 500);
   }
 
+  if (sanitizedUpdate.current_class_id) {
+    const activeContext = await getCurrentAcademicContext(context.supabase, context.schoolId);
+    if (activeContext.academicYear?.academic_year_id && activeContext.term?.term_id) {
+      await context.supabase
+        .from('student_classes')
+        .upsert(
+          {
+            school_id: context.schoolId,
+            student_id: params.id,
+            class_id: sanitizedUpdate.current_class_id,
+            academic_year_id: activeContext.academicYear.academic_year_id,
+            term_id: activeContext.term.term_id,
+            status: sanitizedUpdate.status ?? 'active',
+          },
+          { onConflict: 'student_id,academic_year_id,term_id' },
+        );
+    }
+  }
+
+  const data = await loadNormalizedStudentDetails(context.supabase, params.id, context.schoolId);
   return successResponse(
-    { student: updatedStudent },
-    'Student updated successfully'
+    {
+      ...data,
+      studentId: data.student.studentId,
+    },
+    'Student updated successfully',
   );
 }
 
-// ─── DELETE /api/students/[id] ────────────────────────────────────────────────
-
-export async function DELETE(req: NextRequest, { params }: RouteContext) {
-  const supabase = await createSupabaseServerClient();
-
-  // 1. Auth
-  const result = await authenticate(supabase);
-  if ('error' in result) {return result.error;}
-  const { schoolId, roleName } = result.auth;
-
-  // 2. Validate ID
-  const idError = validateStudentId(params.id);
-  if (idError) {return idError;}
-
-  const studentId = params.id;
-
-  // 3. Role check — only admin roles can delete students
-  const deleteRoles = ['super_admin', 'school_admin', 'principal'];
-
-  if (!deleteRoles.includes(roleName)) {
-    return errorResponse('Insufficient permissions — only administrators can delete students', 403);
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  const context = await getStudentRequestContext(params.id, [
+    'super_admin',
+    'school_admin',
+    'principal',
+  ]);
+  if ('error' in context) {
+    return context.error;
   }
 
-  // 4. Verify student exists and belongs to this school
-  const { data: existingStudent } = await supabase
-    .from('students')
-    .select('student_id, first_name, last_name, status')
-    .eq('student_id', studentId)
-    .eq('school_id', schoolId)
-    .maybeSingle();
+  const hardDelete = new URL(req.url).searchParams.get('hard') === 'true';
 
-  if (!existingStudent) {
-    return errorResponse('Student not found', 404);
+  if (hardDelete && context.user.role !== 'super_admin') {
+    return errorResponse('Only super administrators can permanently delete student records', 403);
   }
-
-  // 5. Check for deletion strategy from query params
-  const { searchParams } = new URL(req.url);
-  const hardDelete = searchParams.get('hard') === 'true';
 
   if (hardDelete) {
-    // Hard delete — only super_admin can do this
-    if (roleName !== 'super_admin') {
-      return errorResponse(
-        'Only super administrators can permanently delete student records',
-        403
-      );
-    }
-
-    // 6a. Check for dependent records that would prevent deletion
-    const dependencyChecks = [
-      {
-        table: 'payments',
-        label: 'payment records',
-      },
-      {
-        table: 'assessments',
-        label: 'assessment records',
-      },
-      {
-        table: 'report_cards',
-        label: 'report cards',
-      },
-    ];
-
-    for (const dep of dependencyChecks) {
-      const { count } = await supabase
-        .from(dep.table)
+    const dependencyTables = ['payments', 'assessments', 'report_cards'];
+    for (const table of dependencyTables) {
+      const { count } = await context.supabase
+        .from(table)
         .select('*', { count: 'exact', head: true })
-        .eq('student_id', studentId);
+        .eq('student_id', params.id);
 
-      if (count && count > 0) {
+      if ((count ?? 0) > 0) {
         return errorResponse(
-          `Cannot permanently delete student: ${count} ${dep.label} exist. ` +
-            `Deactivate the student instead, or remove the ${dep.label} first.`,
-          409
+          `Cannot permanently delete student: dependent ${table} records exist`,
+          409,
         );
       }
     }
 
-    // 6b. Delete guardian links
-    const { error: linkDeleteError } = await supabase
-      .from('student_guardians')
-      .delete()
-      .eq('student_id', studentId);
+    await context.supabase.from('student_guardians').delete().eq('student_id', params.id);
+    await context.supabase.from('attendance').delete().eq('student_id', params.id);
+    await context.supabase.from('disciplinary_records').delete().eq('student_id', params.id);
+    await context.supabase.from('student_fees').delete().eq('student_id', params.id);
 
-    if (linkDeleteError) {
-      return errorResponse(
-        `Failed to remove guardian links: ${linkDeleteError.message}`,
-        500
-      );
-    }
-
-    // 6c. Delete attendance records
-    const { error: attendanceDeleteError } = await supabase
-      .from('attendance')
-      .delete()
-      .eq('student_id', studentId);
-
-    if (attendanceDeleteError) {
-      return errorResponse(
-        `Failed to remove attendance records: ${attendanceDeleteError.message}`,
-        500
-      );
-    }
-
-    // 6d. Delete disciplinary records
-    const { error: disciplineDeleteError } = await supabase
-      .from('disciplinary_records')
-      .delete()
-      .eq('student_id', studentId);
-
-    if (disciplineDeleteError) {
-      return errorResponse(
-        `Failed to remove disciplinary records: ${disciplineDeleteError.message}`,
-        500
-      );
-    }
-
-    // 6e. Delete student fees
-    const { error: feesDeleteError } = await supabase
-      .from('student_fees')
-      .delete()
-      .eq('student_id', studentId);
-
-    if (feesDeleteError) {
-      return errorResponse(
-        `Failed to remove fee records: ${feesDeleteError.message}`,
-        500
-      );
-    }
-
-    // 6f. Delete the student record
-    const { error: deleteError } = await supabase
+    const { error } = await context.supabase
       .from('students')
       .delete()
-      .eq('student_id', studentId)
-      .eq('school_id', schoolId);
+      .eq('student_id', params.id)
+      .eq('school_id', context.schoolId);
 
-    if (deleteError) {
-      return errorResponse(
-        `Failed to delete student: ${deleteError.message}`,
-        500
-      );
+    if (error) {
+      return errorResponse(`Failed to delete student: ${error.message}`, 500);
     }
 
-    return successResponse(
-      {
-        student_id: studentId,
-        name: `${existingStudent.first_name} ${existingStudent.last_name}`,
-        action: 'permanently_deleted',
-      },
-      'Student permanently deleted'
-    );
+    return successResponse({ studentId: params.id, action: 'deleted' }, 'Student permanently deleted');
   }
 
-  // 7. Soft delete — set status to 'inactive'
-  if (existingStudent.status === 'inactive') {
-    return errorResponse('Student is already deactivated', 400);
-  }
-
-  const { data: deactivatedStudent, error: deactivateError } = await supabase
+  const { error } = await context.supabase
     .from('students')
     .update({
-      status: 'inactive',
+      status: 'withdrawn',
       updated_at: new Date().toISOString(),
+      updated_by: context.user.id,
     })
-    .eq('student_id', studentId)
-    .eq('school_id', schoolId)
-    .select('student_id, first_name, last_name, status, updated_at')
-    .single();
+    .eq('student_id', params.id)
+    .eq('school_id', context.schoolId);
 
-  if (deactivateError) {
-    return errorResponse(
-      `Failed to deactivate student: ${deactivateError.message}`,
-      500
-    );
+  if (error) {
+    return errorResponse(`Failed to withdraw student: ${error.message}`, 500);
   }
 
   return successResponse(
-    {
-      student: deactivatedStudent,
-      action: 'deactivated',
-    },
-    `Student "${existingStudent.first_name} ${existingStudent.last_name}" has been deactivated`
+    { studentId: params.id, action: 'withdrawn' },
+    'Student has been withdrawn',
   );
 }

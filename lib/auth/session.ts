@@ -52,11 +52,13 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 
     return {
       id: profile.user_id,
+      user_id: profile.user_id,
       email: profile.email,
       firstName: profile.first_name,
       lastName: profile.last_name,
       role: (profile.roles as any)?.name as RoleName,
       schoolId: profile.school_id,
+      school_id: profile.school_id,
       status: profile.status as AuthUser["status"],
       emailVerified: profile.email_verified,
     };

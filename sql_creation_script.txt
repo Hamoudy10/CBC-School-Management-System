@@ -391,26 +391,54 @@ COMMENT ON COLUMN students.nemis_number IS 'National Education Management Inform
 
 
 -- ============================================================
--- SECTION 3B: STUDENT GUARDIANS (Parent-Student Link)
+-- SECTION 3B: GUARDIANS (Parent/Guardian Profiles)
+-- ============================================================
+CREATE TABLE guardians (
+  guardian_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  first_name VARCHAR(100) NOT NULL,
+  last_name VARCHAR(100) NOT NULL,
+  phone_number VARCHAR(20) NOT NULL,
+  email VARCHAR(255),
+  national_id VARCHAR(20),
+  occupation VARCHAR(200),
+  address TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by UUID REFERENCES auth.users(id),
+  updated_by UUID REFERENCES auth.users(id),
+
+  UNIQUE (school_id, phone_number)
+);
+
+COMMENT ON TABLE guardians IS 'Standalone parent/guardian contact records (may or may not have a user account).';
+
+
+-- ============================================================
+-- SECTION 3C: STUDENT GUARDIANS (Parent-Student Link)
 -- ============================================================
 CREATE TABLE student_guardians (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
   student_id UUID NOT NULL REFERENCES students(student_id) ON DELETE RESTRICT,
-  guardian_user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE RESTRICT,
+  guardian_id UUID REFERENCES guardians(guardian_id) ON DELETE RESTRICT,
+  guardian_user_id UUID REFERENCES users(user_id) ON DELETE RESTRICT,
   relationship VARCHAR(50) NOT NULL,  -- e.g., 'father', 'mother', 'guardian'
   is_primary_contact BOOLEAN NOT NULL DEFAULT false,
+  is_primary BOOLEAN NOT NULL DEFAULT false,
   can_pickup BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
+  CHECK (guardian_id IS NOT NULL OR guardian_user_id IS NOT NULL),
+  UNIQUE (student_id, guardian_id),
   UNIQUE (student_id, guardian_user_id)
 );
 
-COMMENT ON TABLE student_guardians IS 'Links parents/guardians to students. Enables parent portal RLS filtering.';
+COMMENT ON TABLE student_guardians IS 'Links parents/guardians to students. Supports both contact-only guardians and auth-linked parents.';
 
 
 -- ============================================================
--- SECTION 3C: STUDENT CLASS HISTORY (Enrollment per term/year)
+-- SECTION 3D: STUDENT CLASS HISTORY (Enrollment per term/year)
 -- ============================================================
 CREATE TABLE student_classes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -582,7 +610,51 @@ COMMENT ON TABLE report_cards IS 'Generated report cards per student per term/ye
 
 
 -- ============================================================
--- SECTION 4D: ATTENDANCE
+-- SECTION 4D: EXAM BANK
+-- ============================================================
+CREATE TABLE exam_bank (
+  exam_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  learning_area_id UUID NOT NULL REFERENCES learning_areas(learning_area_id) ON DELETE RESTRICT,
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  content TEXT,
+  exam_type VARCHAR(20) NOT NULL DEFAULT 'exam',
+  file_url TEXT,
+  file_name VARCHAR(255),
+  file_type VARCHAR(100),
+  term_id UUID REFERENCES terms(term_id) ON DELETE SET NULL,
+  academic_year_id UUID REFERENCES academic_years(academic_year_id) ON DELETE SET NULL,
+  created_by UUID REFERENCES users(user_id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  CHECK (exam_type IN ('exam', 'cat', 'mock', 'past_paper'))
+);
+
+COMMENT ON TABLE exam_bank IS 'Reusable exam papers uploaded or typed by teachers. Indexed for fast subject and term lookup.';
+
+CREATE TABLE exam_sets (
+  exam_set_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE RESTRICT,
+  exam_id UUID NOT NULL REFERENCES exam_bank(exam_id) ON DELETE RESTRICT,
+  class_id UUID NOT NULL REFERENCES classes(class_id) ON DELETE RESTRICT,
+  term_id UUID NOT NULL REFERENCES terms(term_id) ON DELETE RESTRICT,
+  academic_year_id UUID NOT NULL REFERENCES academic_years(academic_year_id) ON DELETE RESTRICT,
+  exam_date DATE NOT NULL,
+  notes TEXT,
+  created_by UUID REFERENCES users(user_id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  UNIQUE (exam_id, class_id, term_id, academic_year_id, exam_date)
+);
+
+COMMENT ON TABLE exam_sets IS 'Scheduled exams based on the exam bank. Links an exam paper to a class and date.';
+
+
+-- ============================================================
+-- SECTION 4E: ATTENDANCE
 -- ============================================================
 CREATE TABLE attendance (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -604,7 +676,7 @@ COMMENT ON TABLE attendance IS 'Daily student attendance. One record per student
 
 
 -- ============================================================
--- SECTION 4E: TIMETABLE
+-- SECTION 4F: TIMETABLE
 -- ============================================================
 CREATE TABLE timetable_slots (
   slot_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -672,6 +744,7 @@ CREATE TABLE student_fees (
   status fee_status NOT NULL DEFAULT 'pending',
   academic_year_id UUID NOT NULL REFERENCES academic_years(academic_year_id) ON DELETE RESTRICT,
   term_id UUID REFERENCES terms(term_id) ON DELETE RESTRICT,
+  invoice_number VARCHAR(40),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_by UUID REFERENCES auth.users(id),
@@ -705,6 +778,50 @@ CREATE TABLE payments (
 );
 
 COMMENT ON TABLE payments IS 'Individual payment records. Links to student_fees. Transaction ID ensures no duplicate payments.';
+
+
+-- ============================================================
+-- SECTION 5D: MPESA C2B TRANSACTIONS
+-- ============================================================
+CREATE TABLE mpesa_c2b_transactions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  school_id UUID REFERENCES schools(school_id) ON DELETE SET NULL,
+  student_id UUID REFERENCES students(student_id) ON DELETE SET NULL,
+  student_fee_id UUID REFERENCES student_fees(id) ON DELETE SET NULL,
+  payment_id UUID REFERENCES payments(id) ON DELETE SET NULL,
+
+  transaction_type VARCHAR(40) NOT NULL,
+  trans_id VARCHAR(40) NOT NULL,
+  trans_time TIMESTAMPTZ,
+  trans_amount DECIMAL(12,2) NOT NULL,
+  business_short_code VARCHAR(20),
+  bill_ref_number VARCHAR(100),
+  invoice_number VARCHAR(100),
+  msisdn VARCHAR(20),
+  first_name VARCHAR(100),
+  middle_name VARCHAR(100),
+  last_name VARCHAR(100),
+  org_account_balance VARCHAR(50),
+  third_party_trans_id VARCHAR(50),
+
+  status VARCHAR(30) NOT NULL DEFAULT 'received',
+  validation_result_code INTEGER,
+  validation_result_desc TEXT,
+  confirmation_result_code INTEGER,
+  confirmation_result_desc TEXT,
+  reconciliation_status VARCHAR(30) NOT NULL DEFAULT 'pending',
+  reconciliation_reason TEXT,
+  reconciled_at TIMESTAMPTZ,
+  reconciled_by UUID REFERENCES users(user_id) ON DELETE SET NULL,
+
+  raw_payload JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  UNIQUE (trans_id)
+);
+
+COMMENT ON TABLE mpesa_c2b_transactions IS 'M-Pesa C2B payment callbacks and reconciliation tracking.';
 
 -- ============================================================
 -- SECTION 6A: DISCIPLINARY RECORDS
@@ -853,6 +970,10 @@ CREATE INDEX idx_student_classes_year ON student_classes(academic_year_id);
 -- Student Guardians
 CREATE INDEX idx_student_guardians_student ON student_guardians(student_id);
 CREATE INDEX idx_student_guardians_guardian ON student_guardians(guardian_user_id);
+CREATE INDEX idx_student_guardians_guardian_id ON student_guardians(guardian_id);
+CREATE INDEX idx_guardians_school_id ON guardians(school_id);
+CREATE INDEX idx_guardians_phone ON guardians(phone_number);
+CREATE INDEX idx_guardians_email ON guardians(email);
 
 -- Staff
 CREATE INDEX idx_staff_school_id ON staff(school_id);
@@ -888,6 +1009,22 @@ CREATE INDEX idx_attendance_date ON attendance(date);
 CREATE INDEX idx_attendance_class ON attendance(class_id);
 CREATE INDEX idx_attendance_created ON attendance(created_at);
 
+-- Exam Bank
+CREATE INDEX idx_exam_bank_school_id ON exam_bank(school_id);
+CREATE INDEX idx_exam_bank_learning_area ON exam_bank(learning_area_id);
+CREATE INDEX idx_exam_bank_type ON exam_bank(exam_type);
+CREATE INDEX idx_exam_bank_term ON exam_bank(term_id);
+CREATE INDEX idx_exam_bank_year ON exam_bank(academic_year_id);
+CREATE INDEX idx_exam_bank_created ON exam_bank(created_at);
+
+-- Exam Sets
+CREATE INDEX idx_exam_sets_school_id ON exam_sets(school_id);
+CREATE INDEX idx_exam_sets_exam ON exam_sets(exam_id);
+CREATE INDEX idx_exam_sets_class ON exam_sets(class_id);
+CREATE INDEX idx_exam_sets_term ON exam_sets(term_id);
+CREATE INDEX idx_exam_sets_year ON exam_sets(academic_year_id);
+CREATE INDEX idx_exam_sets_date ON exam_sets(exam_date);
+
 -- Report Cards
 CREATE INDEX idx_report_cards_student ON report_cards(student_id);
 CREATE INDEX idx_report_cards_term ON report_cards(term_id);
@@ -900,6 +1037,18 @@ CREATE INDEX idx_payments_date ON payments(payment_date);
 CREATE INDEX idx_payments_method ON payments(payment_method);
 CREATE INDEX idx_payments_transaction ON payments(transaction_id);
 CREATE INDEX idx_payments_created ON payments(created_at);
+
+-- Student Fees (invoice tracking)
+CREATE UNIQUE INDEX idx_student_fees_invoice_number
+  ON student_fees (school_id, invoice_number)
+  WHERE invoice_number IS NOT NULL;
+
+-- Mpesa Transactions
+CREATE INDEX idx_mpesa_c2b_school ON mpesa_c2b_transactions (school_id);
+CREATE INDEX idx_mpesa_c2b_status ON mpesa_c2b_transactions (status);
+CREATE INDEX idx_mpesa_c2b_recon ON mpesa_c2b_transactions (reconciliation_status);
+CREATE INDEX idx_mpesa_c2b_billref ON mpesa_c2b_transactions (bill_ref_number);
+CREATE INDEX idx_mpesa_c2b_msisdn ON mpesa_c2b_transactions (msisdn);
 
 -- Student Fees
 CREATE INDEX idx_student_fees_student ON student_fees(student_id);
@@ -949,11 +1098,30 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- ============================================================
+-- SECTION 9A1: STUDENT GUARDIAN FLAG SYNC
+-- Ensures is_primary and is_primary_contact stay consistent
+-- ============================================================
+CREATE OR REPLACE FUNCTION sync_student_guardian_primary_flags()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF COALESCE(NEW.is_primary, false) OR COALESCE(NEW.is_primary_contact, false) THEN
+    NEW.is_primary := true;
+    NEW.is_primary_contact := true;
+  ELSE
+    NEW.is_primary := false;
+    NEW.is_primary_contact := false;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Apply to all tables with updated_at
 CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER trg_user_profiles_updated_at BEFORE UPDATE ON user_profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER trg_schools_updated_at BEFORE UPDATE ON schools FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER trg_students_updated_at BEFORE UPDATE ON students FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER trg_guardians_updated_at BEFORE UPDATE ON guardians FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER trg_staff_updated_at BEFORE UPDATE ON staff FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER trg_assessments_updated_at BEFORE UPDATE ON assessments FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER trg_attendance_updated_at BEFORE UPDATE ON attendance FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -962,9 +1130,16 @@ CREATE TRIGGER trg_fee_structures_updated_at BEFORE UPDATE ON fee_structures FOR
 CREATE TRIGGER trg_learning_areas_updated_at BEFORE UPDATE ON learning_areas FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER trg_academic_years_updated_at BEFORE UPDATE ON academic_years FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER trg_terms_updated_at BEFORE UPDATE ON terms FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER trg_exam_bank_updated_at BEFORE UPDATE ON exam_bank FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER trg_exam_sets_updated_at BEFORE UPDATE ON exam_sets FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER trg_disciplinary_updated_at BEFORE UPDATE ON disciplinary_records FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER trg_parent_consents_updated_at BEFORE UPDATE ON parent_consents FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER trg_classes_updated_at BEFORE UPDATE ON classes FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER trg_mpesa_c2b_updated_at BEFORE UPDATE ON mpesa_c2b_transactions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_student_guardians_primary_sync
+  BEFORE INSERT OR UPDATE ON student_guardians
+  FOR EACH ROW EXECUTE FUNCTION sync_student_guardian_primary_flags();
 
 
 -- ============================================================
@@ -999,7 +1174,22 @@ BEGIN
   VALUES (
     v_school,
     TG_TABLE_NAME,
-    COALESCE(NEW.id, NEW.student_id, NEW.staff_id, NEW.user_id, OLD.id, OLD.student_id, OLD.staff_id, OLD.user_id),
+    COALESCE(
+      NEW.id,
+      NEW.exam_id,
+      NEW.exam_set_id,
+      NEW.student_id,
+      NEW.staff_id,
+      NEW.user_id,
+      NEW.guardian_id,
+      OLD.id,
+      OLD.exam_id,
+      OLD.exam_set_id,
+      OLD.student_id,
+      OLD.staff_id,
+      OLD.user_id,
+      OLD.guardian_id
+    ),
     v_action,
     COALESCE(current_setting('app.current_user_id', true)::UUID, NULL),
     v_old,
@@ -1020,7 +1210,10 @@ CREATE TRIGGER trg_audit_students AFTER INSERT OR UPDATE OR DELETE ON students F
 CREATE TRIGGER trg_audit_staff AFTER INSERT OR UPDATE OR DELETE ON staff FOR EACH ROW EXECUTE FUNCTION fn_audit_log();
 CREATE TRIGGER trg_audit_disciplinary AFTER INSERT OR UPDATE OR DELETE ON disciplinary_records FOR EACH ROW EXECUTE FUNCTION fn_audit_log();
 CREATE TRIGGER trg_audit_report_cards AFTER INSERT OR UPDATE OR DELETE ON report_cards FOR EACH ROW EXECUTE FUNCTION fn_audit_log();
+CREATE TRIGGER trg_audit_exam_bank AFTER INSERT OR UPDATE OR DELETE ON exam_bank FOR EACH ROW EXECUTE FUNCTION fn_audit_log();
+CREATE TRIGGER trg_audit_exam_sets AFTER INSERT OR UPDATE OR DELETE ON exam_sets FOR EACH ROW EXECUTE FUNCTION fn_audit_log();
 CREATE TRIGGER trg_audit_parent_consents AFTER INSERT OR UPDATE OR DELETE ON parent_consents FOR EACH ROW EXECUTE FUNCTION fn_audit_log();
+CREATE TRIGGER trg_audit_guardians AFTER INSERT OR UPDATE OR DELETE ON guardians FOR EACH ROW EXECUTE FUNCTION fn_audit_log();
 
 
 -- ============================================================
@@ -1248,6 +1441,7 @@ ALTER TABLE sub_strands ENABLE ROW LEVEL SECURITY;
 ALTER TABLE competencies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE performance_levels ENABLE ROW LEVEL SECURITY;
 ALTER TABLE students ENABLE ROW LEVEL SECURITY;
+ALTER TABLE guardians ENABLE ROW LEVEL SECURITY;
 ALTER TABLE student_guardians ENABLE ROW LEVEL SECURITY;
 ALTER TABLE student_classes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staff ENABLE ROW LEVEL SECURITY;
@@ -1256,11 +1450,14 @@ ALTER TABLE teacher_subjects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE assessments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE assessment_aggregates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE report_cards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE exam_bank ENABLE ROW LEVEL SECURITY;
+ALTER TABLE exam_sets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE attendance ENABLE ROW LEVEL SECURITY;
 ALTER TABLE timetable_slots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fee_structures ENABLE ROW LEVEL SECURITY;
 ALTER TABLE student_fees ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mpesa_c2b_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE disciplinary_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE parent_consents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
@@ -1537,7 +1734,23 @@ CREATE POLICY students_update ON students
 
 
 -- ============================================================
--- 10H: STUDENT GUARDIANS
+-- 10H: GUARDIANS
+-- ============================================================
+CREATE POLICY guardians_select ON guardians
+  FOR SELECT TO authenticated
+  USING (
+    is_super_admin()
+    OR school_id = get_user_school_id()
+  );
+
+CREATE POLICY guardians_manage ON guardians
+  FOR ALL TO authenticated
+  USING (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()))
+  WITH CHECK (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()));
+
+
+-- ============================================================
+-- 10I: STUDENT GUARDIANS
 -- ============================================================
 CREATE POLICY student_guardians_select ON student_guardians
   FOR SELECT TO authenticated
@@ -1554,7 +1767,7 @@ CREATE POLICY student_guardians_manage ON student_guardians
 
 
 -- ============================================================
--- 10I: STAFF & TEACHER SUBJECTS
+-- 10J: STAFF & TEACHER SUBJECTS
 -- ============================================================
 CREATE POLICY staff_select ON staff
   FOR SELECT TO authenticated
@@ -1669,6 +1882,47 @@ CREATE POLICY report_cards_manage ON report_cards
   USING (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()))
   WITH CHECK (is_super_admin() OR (is_school_admin_level() AND school_id = get_user_school_id()));
 
+-- Exam Bank
+CREATE POLICY exam_bank_select ON exam_bank
+  FOR SELECT TO authenticated
+  USING (
+    is_super_admin()
+    OR school_id = get_user_school_id()
+  );
+
+CREATE POLICY exam_bank_manage ON exam_bank
+  FOR ALL TO authenticated
+  USING (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR (get_user_role() IN ('teacher', 'class_teacher', 'subject_teacher') AND school_id = get_user_school_id())
+  )
+  WITH CHECK (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR (get_user_role() IN ('teacher', 'class_teacher', 'subject_teacher') AND school_id = get_user_school_id())
+  );
+
+CREATE POLICY exam_sets_select ON exam_sets
+  FOR SELECT TO authenticated
+  USING (
+    is_super_admin()
+    OR school_id = get_user_school_id()
+  );
+
+CREATE POLICY exam_sets_manage ON exam_sets
+  FOR ALL TO authenticated
+  USING (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR (get_user_role() IN ('teacher', 'class_teacher', 'subject_teacher') AND school_id = get_user_school_id())
+  )
+  WITH CHECK (
+    is_super_admin()
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+    OR (get_user_role() IN ('teacher', 'class_teacher', 'subject_teacher') AND school_id = get_user_school_id())
+  );
+
 
 -- ============================================================
 -- 10L: ATTENDANCE
@@ -1756,6 +2010,19 @@ CREATE POLICY payments_insert ON payments
     is_super_admin()
     OR (is_finance_role() AND school_id = get_user_school_id())
   );
+
+CREATE POLICY mpesa_c2b_select ON mpesa_c2b_transactions
+  FOR SELECT TO authenticated
+  USING (
+    is_super_admin()
+    OR (is_finance_role() AND school_id = get_user_school_id())
+    OR (is_school_admin_level() AND school_id = get_user_school_id())
+  );
+
+CREATE POLICY mpesa_c2b_manage ON mpesa_c2b_transactions
+  FOR UPDATE TO authenticated
+  USING (is_super_admin() OR (is_finance_role() AND school_id = get_user_school_id()))
+  WITH CHECK (is_super_admin() OR (is_finance_role() AND school_id = get_user_school_id()));
 
 
 -- ============================================================

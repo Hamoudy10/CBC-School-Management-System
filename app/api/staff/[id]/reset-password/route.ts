@@ -18,7 +18,7 @@ function generatePassword(length = 12) {
 }
 
 export const POST = withPermission(
-  "staff",
+  "teachers",
   "update",
   async (request: NextRequest, { user, params }: any) => {
     try {
@@ -98,3 +98,4 @@ export const POST = withPermission(
     }
   },
 );
+

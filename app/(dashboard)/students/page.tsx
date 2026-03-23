@@ -23,6 +23,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils';
+import { useReferenceData } from '@/hooks/useReferenceData';
 import { StudentFilters } from './components/StudentFilters';
 import { StudentTable } from './components/StudentTable';
 import {
@@ -40,6 +41,7 @@ const ExportModal = lazy(() => import('./components/ExportModal'));
 interface ClassOption {
   classId: string;
   name: string;
+  gradeId?: string;
   gradeName: string;
 }
 
@@ -187,33 +189,31 @@ export default function StudentsPage() {
   const { data: statsResponse, mutate: mutateStats } = useSWR<
     ApiResponse<StudentStats>
   >(shouldFetch ? '/api/students/stats' : null);
-
-  const { data: classesResponse } = useSWR<ApiResponse<any[]>>(
-    shouldFetch ? '/api/settings/classes' : null
-  );
-
-  const { data: gradesResponse } = useSWR<ApiResponse<any[]>>(
-    shouldFetch ? '/api/settings/classes/levels' : null
-  );
+  const {
+    classes: referenceClasses,
+    levels: referenceLevels,
+    isLoading: isReferenceLoading,
+  } = useReferenceData({ enabled: shouldFetch });
 
   const students = studentsResponse?.data ?? emptyStudents;
   const stats = statsResponse?.data ?? null;
   const classes = useMemo<ClassOption[]>(
     () =>
-      (classesResponse?.data || []).map((c: any) => ({
-        classId: c.class_id || c.classId,
+      referenceClasses.map((c) => ({
+        classId: c.classId,
         name: c.name,
-        gradeName: c.grade?.name || c.gradeName || '',
+        gradeId: c.gradeId ?? undefined,
+        gradeName: c.gradeName || '',
       })),
-    [classesResponse]
+    [referenceClasses]
   );
   const grades = useMemo<GradeOption[]>(
     () =>
-      (gradesResponse?.data || []).map((g: any) => ({
-        gradeId: g.grade_id || g.gradeId || g.id,
+      referenceLevels.map((g) => ({
+        gradeId: g.gradeId,
         name: g.name,
       })),
-    [gradesResponse]
+    [referenceLevels]
   );
   const studentsErrorMessage = studentsError
     ? studentsError instanceof Error
@@ -221,7 +221,7 @@ export default function StudentsPage() {
       : 'Failed to fetch students'
     : null;
   const isStudentsLoading = shouldFetch && !studentsResponse && !studentsError;
-  const isStudentsBusy = isStudentsLoading || isStudentsValidating;
+  const isStudentsBusy = isStudentsLoading || isStudentsValidating || isReferenceLoading;
 
   // â”€â”€â”€ Permissions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const canCreate = checkPermission('students', 'create');
@@ -300,7 +300,7 @@ export default function StudentsPage() {
         throw new Error('Failed to delete student');
       }
 
-      success('Student Deleted', `${student.fullName} has been removed.`);
+      success('Student Updated', `${student.fullName} has been withdrawn.`);
 
       await Promise.all([mutateStudents(), mutateStats()]);
     } catch (err) {

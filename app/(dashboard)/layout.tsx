@@ -1,51 +1,25 @@
-// app/(dashboard)/layout.tsx
-'use client';
-
-import React, { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { DashboardLayout } from '@/components/layout';
-import { useAuth } from '@/hooks/useAuth';
-import { Spinner } from '@/components/ui';
+import React from "react";
+import { redirect } from "next/navigation";
+import { DashboardLayout } from "@/components/layout";
+import { AuthProvider } from "@/components/providers/AuthProvider";
+import { getServerUser } from "@/services/auth.server.service";
 
 interface DashboardLayoutWrapperProps {
   children: React.ReactNode;
 }
 
-export default function DashboardLayoutWrapper({
+export default async function DashboardLayoutWrapper({
   children,
 }: DashboardLayoutWrapperProps) {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!loading && !user) {
-      router.replace('/login');
-    }
-  }, [user, loading, router]);
-
-  if (loading) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center gap-4">
-          <Spinner size="lg" />
-          <p className="text-sm text-gray-500 animate-pulse">
-            Loading your dashboard...
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const user = await getServerUser();
 
   if (!user) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center gap-4">
-          <Spinner size="lg" />
-          <p className="text-sm text-gray-500">Redirecting to login...</p>
-        </div>
-      </div>
-    );
+    redirect("/login");
   }
 
-  return <DashboardLayout>{children}</DashboardLayout>;
+  return (
+    <AuthProvider initialUser={user}>
+      <DashboardLayout>{children}</DashboardLayout>
+    </AuthProvider>
+  );
 }

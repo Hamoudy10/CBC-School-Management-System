@@ -25,7 +25,7 @@ import {
 // GET Handler - List Staff
 // ============================================================
 export const GET = withPermission(
-  'staff',
+  'teachers',
   'view',
   async (request: NextRequest, { user }) => {
     try {
@@ -62,7 +62,7 @@ export const GET = withPermission(
 // POST Handler - Create Staff
 // ============================================================
 export const POST = withPermission(
-  'staff',
+  'teachers',
   'create',
   async (request: NextRequest, { user }) => {
     try {
@@ -94,3 +94,4 @@ export const POST = withPermission(
     }
   }
 );
+

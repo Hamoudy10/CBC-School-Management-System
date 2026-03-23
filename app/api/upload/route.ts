@@ -11,7 +11,7 @@ import { withAuth } from "@/lib/api/withAuth";
 import { errorResponse } from "@/lib/api/response";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 
-const ALLOWED_FOLDERS = new Set(["students", "staff", "users", "uploads"]);
+const ALLOWED_FOLDERS = new Set(["students", "staff", "users", "exams", "uploads"]);
 const STORAGE_BUCKET = "school-assets";
 
 export const POST = withAuth(async (request: NextRequest, user) => {

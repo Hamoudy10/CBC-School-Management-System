@@ -43,6 +43,7 @@ import { Modal, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@/compon
 import { Tabs, TabsList, TabTrigger, TabContent } from '@/components/ui/Tabs';
 import { useToast } from '@/components/ui/Toast';
 import { cn, formatDate } from '@/lib/utils';
+import { useReferenceData } from '@/hooks/useReferenceData';
 import type { ClassAttendanceSummary, WeeklyTrend } from './types';
 
 // â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -532,7 +533,6 @@ export default function AttendancePage() {
 
   // â”€â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [classes, setClasses] = useState<ClassOption[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>('');
   const [students, setStudents] = useState<StudentAttendance[]>([]);
   const [classSummaries, setClassSummaries] = useState<ClassAttendanceSummary[]>([]);
@@ -544,13 +544,39 @@ export default function AttendancePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const studentsFetchRef = useRef<AbortController | null>(null);
+  const {
+    classes: referenceClasses,
+    isLoading: isReferenceLoading,
+  } = useReferenceData({ enabled: Boolean(user) });
+  const classes = useMemo<ClassOption[]>(
+    () =>
+      referenceClasses.map((c) => ({
+        classId: c.classId,
+        name: c.name,
+        gradeName: c.gradeName || '',
+        studentCount: c.studentCount || 0,
+      })),
+    [referenceClasses],
+  );
 
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('roll-call');
 
   // â”€â”€â”€ Permissions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const canRecordAttendance = checkPermission('attendance', 'create');
-  const canViewAllClasses = checkPermission('attendance', 'view');
+  const canRecordAttendance =
+    checkPermission('attendance', 'create') || checkPermission('attendance', 'update');
+  const canViewAttendance = checkPermission('attendance', 'view');
+
+  const availableTabs = useMemo(() => {
+    const tabs: string[] = [];
+    if (canRecordAttendance) {
+      tabs.push('roll-call');
+    }
+    if (canViewAttendance) {
+      tabs.push('overview', 'trends');
+    }
+    return tabs;
+  }, [canRecordAttendance, canViewAttendance]);
 
   // â”€â”€â”€ Date Navigation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const isToday = formatDateForAPI(selectedDate) === formatDateForAPI(new Date());
@@ -583,33 +609,6 @@ export default function AttendancePage() {
   };
 
   // â”€â”€â”€ Fetch Data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const fetchClasses = useCallback(async () => {
-    try {
-      const response = await fetch('/api/settings/classes?hasStudents=true', {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const json = await response.json();
-        const classOptions = (json.data || []).map((c: any) => ({
-          classId: c.class_id || c.classId,
-          name: c.name,
-          gradeName: c.grade?.name || c.gradeName || '',
-          studentCount: c.studentCount || c.student_count || 0,
-        }));
-
-        setClasses(classOptions);
-
-        // Auto-select first class if teacher
-        if (classOptions.length > 0 && !selectedClassId) {
-          setSelectedClassId(classOptions[0].classId);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to fetch classes:', err);
-    }
-  }, [selectedClassId]);
-
   const fetchTodayStats = useCallback(async () => {
     try {
       const dateStr = formatDateForAPI(selectedDate);
@@ -646,35 +645,35 @@ export default function AttendancePage() {
   const fetchWeeklyTrend = useCallback(async () => {
     try {
       const weekDates = getWeekDates(selectedDate);
-      const trends: WeeklyTrend[] = [];
+      const trendResponses = await Promise.all(
+        weekDates.map(async (date) => {
+          const dateStr = formatDateForAPI(date);
+          const response = await fetch(`/api/attendance/school?date=${dateStr}`, {
+            credentials: 'include',
+          });
 
-      for (const date of weekDates) {
-        const dateStr = formatDateForAPI(date);
-        const response = await fetch(`/api/attendance/school?date=${dateStr}`, {
-          credentials: 'include',
-        });
+          if (!response.ok) {
+            return {
+              date: dateStr,
+              dayName: DAY_NAMES[date.getDay()],
+              rate: 0,
+              present: 0,
+              total: 0,
+            };
+          }
 
-        if (response.ok) {
           const json = await response.json();
-          trends.push({
+          return {
             date: dateStr,
             dayName: DAY_NAMES[date.getDay()],
             rate: json.data?.attendanceRate || 0,
             present: json.data?.present || 0,
             total: json.data?.totalStudents || 0,
-          });
-        } else {
-          trends.push({
-            date: dateStr,
-            dayName: DAY_NAMES[date.getDay()],
-            rate: 0,
-            present: 0,
-            total: 0,
-          });
-        }
-      }
+          };
+        }),
+      );
 
-      setWeeklyTrend(trends);
+      setWeeklyTrend(trendResponses);
     } catch (err) {
       console.error('Failed to fetch weekly trend:', err);
     }
@@ -725,27 +724,39 @@ export default function AttendancePage() {
 
     // â”€â”€â”€ Effects â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
+    if (!selectedClassId && classes.length > 0) {
+      setSelectedClassId(classes[0].classId);
+    }
+  }, [classes, selectedClassId]);
+
+  useEffect(() => {
     const loadInitialData = async () => {
+      if (!user || isReferenceLoading) {
+        return;
+      }
+
       setIsLoading(true);
-      
-      // Stagger requests to avoid overloading
-      // 1. First load classes (needed for dropdown)
-      await fetchClasses();
-      
-      // 2. Then load today's stats (important for dashboard)
-      await fetchTodayStats();
-      
-      // 3. Then load summaries and trends after delay
-      setTimeout(() => {
-        fetchClassSummaries();
-        fetchWeeklyTrend();
-      }, 500);
-      
+
+      if (canViewAttendance) {
+        await Promise.all([
+          fetchTodayStats(),
+          fetchClassSummaries(),
+          fetchWeeklyTrend(),
+        ]);
+      }
+
       setIsLoading(false);
     };
 
     loadInitialData();
-  }, [fetchClasses, fetchTodayStats, fetchClassSummaries, fetchWeeklyTrend]);
+  }, [
+    fetchTodayStats,
+    fetchClassSummaries,
+    fetchWeeklyTrend,
+    canViewAttendance,
+    isReferenceLoading,
+    user,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -763,9 +774,18 @@ export default function AttendancePage() {
 
   useEffect(() => {
     // Refresh stats when date changes
-    fetchTodayStats();
-    fetchClassSummaries();
-  }, [selectedDate, fetchTodayStats, fetchClassSummaries]);
+    if (canViewAttendance) {
+      fetchTodayStats();
+      fetchClassSummaries();
+      fetchWeeklyTrend();
+    }
+  }, [selectedDate, fetchTodayStats, fetchClassSummaries, fetchWeeklyTrend, canViewAttendance]);
+
+  useEffect(() => {
+    if (!availableTabs.includes(activeTab)) {
+      setActiveTab(availableTabs[0] ?? 'roll-call');
+    }
+  }, [availableTabs, activeTab]);
 
   // â”€â”€â”€ Handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleStatusChange = (
@@ -825,9 +845,11 @@ export default function AttendancePage() {
       setHasChanges(false);
 
       // Refresh stats
-      await fetchTodayStats();
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      await fetchClassSummaries();
+      if (canViewAttendance) {
+        await fetchTodayStats();
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        await fetchClassSummaries();
+      }
     } catch (err) {
       error('Error', 'Failed to save attendance. Please try again.');
     } finally {
@@ -868,7 +890,7 @@ export default function AttendancePage() {
     return null;
   }
 
-  if (isLoading) {
+  if (isLoading || isReferenceLoading) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
         <div className="flex flex-col items-center gap-3">
@@ -1016,13 +1038,20 @@ export default function AttendancePage() {
       {/* â”€â”€ Tabs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabTrigger value="roll-call">Roll Call</TabTrigger>
-          <TabTrigger value="overview">Class Overview</TabTrigger>
-          <TabTrigger value="trends">Trends</TabTrigger>
+          {availableTabs.includes('roll-call') && (
+            <TabTrigger value="roll-call">Roll Call</TabTrigger>
+          )}
+          {availableTabs.includes('overview') && (
+            <TabTrigger value="overview">Class Overview</TabTrigger>
+          )}
+          {availableTabs.includes('trends') && (
+            <TabTrigger value="trends">Trends</TabTrigger>
+          )}
         </TabsList>
 
         {/* â”€â”€ Roll Call Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-        <TabContent value="roll-call" className="mt-6">
+        {availableTabs.includes('roll-call') && (
+          <TabContent value="roll-call" className="mt-6">
           {selectedClassId ? (
             isLoadingStudents ? (
               <div className="flex items-center justify-center py-12">
@@ -1061,10 +1090,12 @@ export default function AttendancePage() {
               </CardContent>
             </Card>
           )}
-        </TabContent>
+          </TabContent>
+        )}
 
         {/* â”€â”€ Overview Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-        <TabContent value="overview" className="mt-6">
+        {availableTabs.includes('overview') && (
+          <TabContent value="overview" className="mt-6">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {classSummaries.map((summary) => (
               <ClassSummaryCard
@@ -1092,10 +1123,12 @@ export default function AttendancePage() {
               </CardContent>
             </Card>
           )}
-        </TabContent>
+          </TabContent>
+        )}
 
         {/* â”€â”€ Trends Tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-        <TabContent value="trends" className="mt-6">
+        {availableTabs.includes('trends') && (
+          <TabContent value="trends" className="mt-6">
           <div className="grid gap-6 lg:grid-cols-2">
             <WeeklyTrendChart data={weeklyTrend} />
 
@@ -1148,7 +1181,8 @@ export default function AttendancePage() {
               </CardContent>
             </Card>
           </div>
-        </TabContent>
+          </TabContent>
+        )}
       </Tabs>
 
       {/* â”€â”€ Unsaved Changes Warning â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}

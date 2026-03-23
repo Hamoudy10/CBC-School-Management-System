@@ -147,8 +147,8 @@ export function StaffForm({
   const [isEmailSending, setIsEmailSending] = useState(false);
   const staffEmail = defaultValues?.email || '';
 
-  const canCreate = checkPermission('staff', 'create');
-  const canUpdate = checkPermission('staff', 'update');
+  const canCreate = checkPermission('teachers', 'create');
+  const canUpdate = checkPermission('teachers', 'update');
   const isAllowed = isCreate ? canCreate : canUpdate;
 
   useEffect(() => {
@@ -313,7 +313,7 @@ export function StaffForm({
   const handlePhotoUpload = async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('folder', 'staff');
+    formData.append('folder', 'teachers');
 
     const response = await fetch('/api/upload', {
       method: 'POST',
@@ -899,3 +899,4 @@ function PhotoUpload({ value, onUpload, disabled }: PhotoUploadProps) {
     </div>
   );
 }
+

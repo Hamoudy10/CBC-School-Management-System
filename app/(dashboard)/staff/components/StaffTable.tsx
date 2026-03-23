@@ -302,10 +302,10 @@ export async function StaffTable({ filters }: StaffTableProps) {
                           </Button>
                         }
                       >
-                        <DropdownItem href={`/staff/${member.staff_id}/leaves`}>
+                        <DropdownItem href={`/staff/${member.staff_id}?tab=leaves`}>
                           View Leaves
                         </DropdownItem>
-                        <DropdownItem href={`/staff/${member.staff_id}/assignments`}>
+                        <DropdownItem href={`/staff/${member.staff_id}?tab=assignments`}>
                           Subject Assignments
                         </DropdownItem>
                         <DropdownItem

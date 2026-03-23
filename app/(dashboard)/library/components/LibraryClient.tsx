@@ -1,30 +1,47 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useAuth } from '@/hooks/useAuth';
 
 type TabType = 'overview' | 'catalog' | 'borrowing' | 'returns';
 
-const tabs: { key: TabType; label: string }[] = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'catalog', label: 'Book Catalog' },
-  { key: 'borrowing', label: 'Borrowing' },
-  { key: 'returns', label: 'Returns' },
-];
-
 export function LibraryClient() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const { checkPermission } = useAuth();
+
+  const canView = checkPermission('library', 'view');
+  const canManage =
+    checkPermission('library', 'create') ||
+    checkPermission('library', 'update') ||
+    checkPermission('library', 'delete');
+
+  const visibleTabs = useMemo(
+    () =>
+      [
+        { key: 'overview', label: 'Overview', allowed: canView },
+        { key: 'catalog', label: 'Book Catalog', allowed: canView },
+        { key: 'borrowing', label: 'Borrowing', allowed: canManage },
+        { key: 'returns', label: 'Returns', allowed: canManage },
+      ].filter((tab) => tab.allowed),
+    [canView, canManage],
+  );
+
+  useEffect(() => {
+    if (!visibleTabs.find((tab) => tab.key === activeTab)) {
+      setActiveTab(visibleTabs[0]?.key ?? 'overview');
+    }
+  }, [activeTab, visibleTabs]);
 
   return (
     <div className="space-y-6">
       {/* Tab Navigation */}
       <div className="border-b border-gray-200">
         <nav className="-mb-px flex space-x-8">
-          {tabs.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
@@ -40,15 +57,23 @@ export function LibraryClient() {
         </nav>
       </div>
 
-      {activeTab === 'overview' && <LibraryOverview />}
-      {activeTab === 'catalog' && <BookCatalog />}
-      {activeTab === 'borrowing' && <BorrowingSection />}
-      {activeTab === 'returns' && <ReturnsSection />}
+      {activeTab === 'overview' && canView && (
+        <LibraryOverview canManage={canManage} />
+      )}
+      {activeTab === 'catalog' && canView && (
+        <BookCatalog canManage={canManage} />
+      )}
+      {activeTab === 'borrowing' && canManage && (
+        <BorrowingSection canManage={canManage} />
+      )}
+      {activeTab === 'returns' && canManage && (
+        <ReturnsSection canManage={canManage} />
+      )}
     </div>
   );
 }
 
-function LibraryOverview() {
+function LibraryOverview({ canManage }: { canManage: boolean }) {
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
@@ -84,7 +109,8 @@ function LibraryOverview() {
       </div>
 
       {/* Quick Actions */}
-      <Card>
+      {canManage && (
+        <Card>
         <div className="p-6">
           <h3 className="mb-4 text-lg font-semibold text-gray-900">Quick Actions</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -130,7 +156,8 @@ function LibraryOverview() {
             </button>
           </div>
         </div>
-      </Card>
+        </Card>
+      )}
 
       {/* Recent Activity */}
       <Card>
@@ -146,7 +173,7 @@ function LibraryOverview() {
   );
 }
 
-function BookCatalog() {
+function BookCatalog({ canManage }: { canManage: boolean }) {
   const [search, setSearch] = useState('');
 
   return (
@@ -159,7 +186,7 @@ function BookCatalog() {
           onChange={(e) => setSearch(e.target.value)}
           className="w-full sm:w-80"
         />
-        <Button>Add Book</Button>
+        {canManage && <Button>Add Book</Button>}
       </div>
 
       <Card>
@@ -203,7 +230,9 @@ function BookCatalog() {
   );
 }
 
-function BorrowingSection() {
+function BorrowingSection({ canManage }: { canManage: boolean }) {
+  if (!canManage) {return null;}
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -251,7 +280,9 @@ function BorrowingSection() {
   );
 }
 
-function ReturnsSection() {
+function ReturnsSection({ canManage }: { canManage: boolean }) {
+  if (!canManage) {return null;}
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">

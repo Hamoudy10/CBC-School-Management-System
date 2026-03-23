@@ -1,7 +1,13 @@
 // app/(dashboard)/finance/page.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback, useDeferredValue } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useDeferredValue,
+  useMemo,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import {
   DollarSign,
@@ -88,6 +94,7 @@ interface FinanceStats {
 
 interface RecentPayment {
   id: string;
+  studentId?: string | null;
   studentName: string;
   admissionNumber: string;
   className: string;
@@ -122,7 +129,7 @@ interface FeeStructure {
   isMandatory: boolean;
   isActive: boolean;
   assignedCount: number;
-  collectedAmount: number;
+  totalCollected?: number;
   collectionRate: number;
 }
 
@@ -461,7 +468,11 @@ function RecentPaymentsTable({
                   <TableRow
                     key={payment.id}
                     className="cursor-pointer hover:bg-gray-50"
-                    onClick={() => router.push(`/students/${payment.id}`)}
+                    onClick={() => {
+                      if (payment.studentId) {
+                        router.push(`/students/${payment.studentId}`);
+                      }
+                    }}
                   >
                     <TableCell>
                       <div>
@@ -720,7 +731,7 @@ function FeeStructuresTable({
                       <Badge variant="default">{structure.assignedCount}</Badge>
                     </TableCell>
                     <TableCell className="text-right text-green-600">
-                      {formatCurrency(structure.collectedAmount)}
+                      {formatCurrency(structure.totalCollected || 0)}
                     </TableCell>
                     <TableCell className="text-center">
                       <span
@@ -794,8 +805,18 @@ export default function FinancePage() {
 
   // ─── Permissions ───────────────────────────────────────────
   const canViewFinance = checkPermission('finance', 'view');
-  const canManageFees = checkPermission('finance', 'create');
+  const canManageFees =
+    checkPermission('finance', 'create') || checkPermission('finance', 'update');
   const canRecordPayments = checkPermission('finance', 'create');
+
+  const availableTabs = useMemo(() => {
+    if (!canViewFinance) {return [];}
+    const tabs = ['overview', 'payments', 'balances'];
+    if (canManageFees) {
+      tabs.push('structures');
+    }
+    return tabs;
+  }, [canViewFinance, canManageFees]);
 
   // ─── Fetch Data ────────────────────────────────────────────
   const fetchOverviewData = useCallback(async () => {
@@ -901,6 +922,13 @@ export default function FinancePage() {
     hasLoadedStructures,
   ]);
 
+  useEffect(() => {
+    if (availableTabs.length === 0) {return;}
+    if (!availableTabs.includes(activeTab)) {
+      setActiveTab(availableTabs[0]);
+    }
+  }, [availableTabs, activeTab]);
+
   // ─── Handlers ──────────────────────────────────────────────
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -929,7 +957,10 @@ export default function FinancePage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `finance-report-${new Date().toISOString().split('T')[0]}.xlsx`;
+      const disposition = response.headers.get('content-disposition');
+      const matchedFileName = disposition?.match(/filename=\"?([^"]+)\"?/i)?.[1];
+      a.download =
+        matchedFileName || `finance-report-${new Date().toISOString().split('T')[0]}.csv`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -1104,41 +1135,52 @@ export default function FinancePage() {
       {/* ── Tabs ────────────────────────────────────────────── */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabTrigger value="overview">Overview</TabTrigger>
-          <TabTrigger value="payments">Payments</TabTrigger>
-          <TabTrigger value="balances">
-            Balances
-            {(stats?.studentsWithBalance || studentsWithBalance.length) > 0 && (
-              <Badge variant="error" className="ml-2">
-                {stats?.studentsWithBalance || studentsWithBalance.length}
-              </Badge>
-            )}
-          </TabTrigger>
-          {canManageFees && <TabTrigger value="structures">Fee Structures</TabTrigger>}
+          {availableTabs.includes('overview') && (
+            <TabTrigger value="overview">Overview</TabTrigger>
+          )}
+          {availableTabs.includes('payments') && (
+            <TabTrigger value="payments">Payments</TabTrigger>
+          )}
+          {availableTabs.includes('balances') && (
+            <TabTrigger value="balances">
+              Balances
+              {(stats?.studentsWithBalance || studentsWithBalance.length) > 0 && (
+                <Badge variant="error" className="ml-2">
+                  {stats?.studentsWithBalance || studentsWithBalance.length}
+                </Badge>
+              )}
+            </TabTrigger>
+          )}
+          {availableTabs.includes('structures') && (
+            <TabTrigger value="structures">Fee Structures</TabTrigger>
+          )}
         </TabsList>
 
         {/* ── Overview Tab ────────────────────────────────── */}
-        <TabContent value="overview" className="mt-6 space-y-6">
-          <div className="grid gap-6 lg:grid-cols-3">
-            {stats && (
-              <CollectionProgressBar
-                collected={stats.totalCollected}
-                expected={stats.totalExpected}
-                rate={stats.collectionRate}
-              />
-            )}
-            {stats && <PaymentMethodChart data={stats.paymentMethodBreakdown} />}
-            {stats && <GradeCollectionChart data={stats.gradeBreakdown} />}
-          </div>
+        {availableTabs.includes('overview') && (
+          <TabContent value="overview" className="mt-6 space-y-6">
+            <div className="grid gap-6 lg:grid-cols-3">
+              {stats && (
+                <CollectionProgressBar
+                  collected={stats.totalCollected}
+                  expected={stats.totalExpected}
+                  rate={stats.collectionRate}
+                />
+              )}
+              {stats && <PaymentMethodChart data={stats.paymentMethodBreakdown} />}
+              {stats && <GradeCollectionChart data={stats.gradeBreakdown} />}
+            </div>
 
-          <RecentPaymentsTable
-            payments={recentPayments}
-            onViewAll={() => setActiveTab('payments')}
-          />
-        </TabContent>
+            <RecentPaymentsTable
+              payments={recentPayments}
+              onViewAll={() => setActiveTab('payments')}
+            />
+          </TabContent>
+        )}
 
         {/* ── Payments Tab ────────────────────────────────── */}
-        <TabContent value="payments" className="mt-6">
+        {availableTabs.includes('payments') && (
+          <TabContent value="payments" className="mt-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Payment History</CardTitle>
@@ -1232,21 +1274,24 @@ export default function FinancePage() {
               )}
             </CardContent>
           </Card>
-        </TabContent>
+          </TabContent>
+        )}
 
         {/* ── Balances Tab ────────────────────────────────── */}
-        <TabContent value="balances" className="mt-6">
-          <StudentsWithBalanceTable
-            students={filteredStudents}
-            isLoading={isLoadingBalances && !hasLoadedBalances}
-            searchTerm={balanceSearchTerm}
-            onSearchChange={setBalanceSearchTerm}
-            onViewStudent={(id) => router.push(`/students/${id}`)}
-          />
-        </TabContent>
+        {availableTabs.includes('balances') && (
+          <TabContent value="balances" className="mt-6">
+            <StudentsWithBalanceTable
+              students={filteredStudents}
+              isLoading={isLoadingBalances && !hasLoadedBalances}
+              searchTerm={balanceSearchTerm}
+              onSearchChange={setBalanceSearchTerm}
+              onViewStudent={(id) => router.push(`/students/${id}`)}
+            />
+          </TabContent>
+        )}
 
         {/* ── Fee Structures Tab ──────────────────────────── */}
-        {canManageFees && (
+        {availableTabs.includes('structures') && (
           <TabContent value="structures" className="mt-6">
             {isLoadingStructures && !hasLoadedStructures ? (
               <div className="rounded-2xl border border-slate-200 bg-white p-6">
