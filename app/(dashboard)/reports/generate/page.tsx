@@ -17,6 +17,14 @@ import {
 } from 'lucide-react';
 import ReportGenerationClient from './ReportGenerationClient';
 
+function firstRelation<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function GenerateReportsPage() {
@@ -47,7 +55,7 @@ export default async function GenerateReportsPage() {
   // 4. Get active academic year
   const { data: activeYear } = await supabase
     .from('academic_years')
-    .select('academic_year_id, name')
+    .select('academic_year_id, year')
     .eq('school_id', schoolId)
     .eq('is_active', true)
     .maybeSingle();
@@ -114,7 +122,7 @@ export default async function GenerateReportsPage() {
             <div>
               <p className="font-medium">No Terms Configured</p>
               <p className="text-sm">
-                The active academic year &quot;{(activeYear as any).name}&quot; has no terms defined. Please
+                The active academic year &quot;{(activeYear as any).year}&quot; has no terms defined. Please
                 add terms before generating report cards.
               </p>
             </div>
@@ -140,9 +148,9 @@ export default async function GenerateReportsPage() {
     class_id: (cls as any).class_id as string,
     name: (cls as any).name as string,
     stream: (cls as any).stream as string | null,
-    grade_name: ((cls as any).grades as Record<string, string> | null)?.name ?? '',
+    grade_name: (firstRelation((cls as any).grades as any)?.name as string | undefined) ?? '',
     grade_level: String(
-      ((cls as any).grades as Record<string, string | number> | null)?.level_order ?? '',
+      (firstRelation((cls as any).grades as any)?.level_order as string | number | undefined) ?? '',
     ),
   }));
 
@@ -226,7 +234,7 @@ export default async function GenerateReportsPage() {
         activeTermId={defaultTermId}
         activeYear={{ 
           academic_year_id: (activeYear as any).academic_year_id, 
-          year: (activeYear as any).name 
+          year: (activeYear as any).year 
         }}
         schoolId={schoolId}
         roleName={roleName}

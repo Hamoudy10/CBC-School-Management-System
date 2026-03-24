@@ -1,151 +1,230 @@
-// @ts-nocheck
-// app/api/timetable/route.ts
-
-import { NextRequest } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { successResponse, errorResponse } from '@/lib/api/response';
+import { NextRequest, NextResponse } from 'next/server';
+import { withAuth, withPermission } from '@/lib/api/withAuth';
+import {
+  errorResponse,
+  successResponse,
+  validationErrorResponse,
+} from '@/lib/api/response';
+import { validateBody } from '@/lib/api/validation';
 import {
   createTimetableSlotSchema,
   updateTimetableSlotSchema,
 } from '@/features/timetable/validators/timetable.schema';
 import {
-  getTimetableSlots,
+  ConflictError,
+  TimetableError,
   createTimetableSlot,
-  updateTimetableSlot,
   deleteTimetableSlot,
+  getTimetableSlots,
+  updateTimetableSlot,
 } from '@/features/timetable/services/timetable.service';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import type { AuthUser } from '@/types/auth';
 import type { TimetableFilters } from '@/features/timetable/types';
 
-// Helper: extract user with school context
-async function getAuthenticatedUser(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>) {
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-  if (!authUser) {return null;}
+type TimetableContext = {
+  academicYearId: string;
+  termId: string;
+};
 
-  const { data: user } = await supabase
-    .from('users')
-    .select('user_id, school_id, roles ( name )')
-    .eq('user_id', authUser.id)
-    .single();
+async function getActiveContext(user: AuthUser): Promise<TimetableContext | null> {
+  if (!user.schoolId) {
+    return null;
+  }
 
-  if (!user?.school_id) {return null;}
+  const supabase = await createSupabaseServerClient();
+  const [{ data: activeYear, error: yearError }, { data: activeTerm, error: termError }] =
+    await Promise.all([
+      supabase
+        .from('academic_years')
+        .select('academic_year_id')
+        .eq('school_id', user.schoolId)
+        .eq('is_active', true)
+        .maybeSingle(),
+      supabase
+        .from('terms')
+        .select('term_id')
+        .eq('school_id', user.schoolId)
+        .eq('is_active', true)
+        .maybeSingle(),
+    ]);
+
+  if (yearError) {
+    throw new TimetableError(yearError.message, 'ACTIVE_YEAR_ERROR', 500);
+  }
+
+  if (termError) {
+    throw new TimetableError(termError.message, 'ACTIVE_TERM_ERROR', 500);
+  }
+
+  if (!activeYear?.academic_year_id || !activeTerm?.term_id) {
+    return null;
+  }
 
   return {
-    userId: user.user_id as string,
-    schoolId: user.school_id as string,
-    roleName: ((user.roles as Record<string, string>)?.name ?? 'student') as string,
+    academicYearId: activeYear.academic_year_id,
+    termId: activeTerm.term_id,
   };
 }
 
-// GET /api/timetable — Fetch timetable slots with optional filters
-export async function GET(req: NextRequest) {
+async function getUserTeacherId(user: AuthUser): Promise<string | null> {
+  if (!user.schoolId) {
+    return null;
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from('staff')
+    .select('staff_id')
+    .eq('school_id', user.schoolId)
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (error) {
+    throw new TimetableError(error.message, 'STAFF_LOOKUP_ERROR', 500);
+  }
+
+  return data?.staff_id ?? null;
+}
+
+async function getUserStudentClassId(user: AuthUser): Promise<string | null> {
+  if (!user.schoolId) {
+    return null;
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from('students')
+    .select('current_class_id')
+    .eq('school_id', user.schoolId)
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (error) {
+    throw new TimetableError(error.message, 'STUDENT_LOOKUP_ERROR', 500);
+  }
+
+  return data?.current_class_id ?? null;
+}
+
+function mapFilters(searchParams: URLSearchParams, context: TimetableContext): TimetableFilters {
+  const filters: TimetableFilters = {
+    academicYearId:
+      searchParams.get('academic_year_id') ??
+      searchParams.get('academicYearId') ??
+      context.academicYearId,
+    termId: searchParams.get('term_id') ?? searchParams.get('termId') ?? context.termId,
+    page: Number(searchParams.get('page') ?? '1'),
+    limit: Number(searchParams.get('limit') ?? searchParams.get('pageSize') ?? '200'),
+    isActive: searchParams.has('is_active')
+      ? searchParams.get('is_active') === 'true'
+      : searchParams.has('isActive')
+        ? searchParams.get('isActive') === 'true'
+        : true,
+  };
+
+  const classId = searchParams.get('class_id') ?? searchParams.get('classId');
+  const teacherId = searchParams.get('teacher_id') ?? searchParams.get('teacherId');
+  const learningAreaId =
+    searchParams.get('learning_area_id') ?? searchParams.get('learningAreaId');
+  const dayOfWeek = searchParams.get('day_of_week') ?? searchParams.get('dayOfWeek');
+
+  if (classId) {
+    filters.classId = classId;
+  }
+
+  if (teacherId) {
+    filters.teacherId = teacherId;
+  }
+
+  if (learningAreaId) {
+    filters.learningAreaId = learningAreaId;
+  }
+
+  if (dayOfWeek) {
+    filters.dayOfWeek = Number(dayOfWeek) as TimetableFilters['dayOfWeek'];
+  }
+
+  return filters;
+}
+
+function handleTimetableError(error: unknown) {
+  if (error instanceof ConflictError) {
+    return NextResponse.json(
+      {
+        success: false,
+        data: null,
+        error: error.message,
+        conflicts: error.conflicts,
+      },
+      { status: error.statusCode }
+    );
+  }
+
+  if (error instanceof TimetableError) {
+    return errorResponse(error.message, error.statusCode);
+  }
+
+  return errorResponse(
+    error instanceof Error ? error.message : 'Failed to process timetable request',
+    500
+  );
+}
+
+export const GET = withAuth(async (request: NextRequest, { user }) => {
   try {
-    const supabase = await createSupabaseServerClient();
-    const authUser = await getAuthenticatedUser(supabase);
-    if (!authUser) {return errorResponse('Unauthorized', 401);}
+    const context = await getActiveContext(user);
+    if (!context) {
+      return errorResponse(
+        'No active academic year or term. Please configure the academic calendar first.',
+        400
+      );
+    }
 
-    const { searchParams } = new URL(req.url);
-    const filters: TimetableFilters = {};
+    const filters = mapFilters(new URL(request.url).searchParams, context);
 
-    const classId = searchParams.get('class_id');
-    const teacherId = searchParams.get('teacher_id');
-    const dayOfWeek = searchParams.get('day_of_week');
-    const learningAreaId = searchParams.get('learning_area_id');
-    const termId = searchParams.get('term_id');
-
-    if (classId) {filters.classId = classId;}
-    if (teacherId) {filters.teacherId = teacherId;}
-    if (dayOfWeek) {filters.dayOfWeek = dayOfWeek as TimetableFilters['dayOfWeek'];}
-    if (learningAreaId) {filters.learningAreaId = learningAreaId;}
-    if (termId) {filters.termId = termId;}
-
-    // Teacher role: default to their own timetable
     if (
-      ['teacher', 'class_teacher', 'subject_teacher'].includes(authUser.roleName) &&
+      ['teacher', 'class_teacher', 'subject_teacher'].includes(user.role) &&
       !filters.teacherId &&
       !filters.classId
     ) {
-      // Fetch staff record for this user
-      const { data: staff } = await supabase
-        .from('staff')
-        .select('staff_id')
-        .eq('user_id', authUser.userId)
-        .eq('school_id', authUser.schoolId)
-        .maybeSingle();
-
-      if (staff) {
-        filters.teacherId = staff.staff_id;
+      const teacherId = await getUserTeacherId(user);
+      if (teacherId) {
+        filters.teacherId = teacherId;
       }
     }
 
-    // Student/Parent: default to their class timetable
-    if (authUser.roleName === 'student' && !filters.classId) {
-      const { data: student } = await supabase
-        .from('students')
-        .select('current_class_id')
-        .eq('user_id', authUser.userId)
-        .eq('school_id', authUser.schoolId)
-        .maybeSingle();
-
-      if (student?.current_class_id) {
-        filters.classId = student.current_class_id;
+    if (user.role === 'student' && !filters.classId) {
+      const classId = await getUserStudentClassId(user);
+      if (classId) {
+        filters.classId = classId;
       }
     }
 
-    const slots = await getTimetableSlots(authUser.schoolId, filters);
-
-    return successResponse(slots, 'Timetable retrieved', 200);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    return errorResponse(message, 500);
+    const result = await getTimetableSlots(filters, user);
+    return successResponse(result.data, {
+      page: filters.page,
+      pageSize: filters.limit,
+      total: result.total,
+      totalPages:
+        filters.limit && filters.limit > 0
+          ? Math.max(1, Math.ceil(result.total / filters.limit))
+          : 1,
+    });
+  } catch (error) {
+    return handleTimetableError(error);
   }
-}
+});
 
-// POST /api/timetable — Create a new timetable slot
-export async function POST(req: NextRequest) {
+export const POST = withPermission('timetable', 'create', async (request, { user }) => {
   try {
-    const supabase = await createSupabaseServerClient();
-    const authUser = await getAuthenticatedUser(supabase);
-    if (!authUser) {return errorResponse('Unauthorized', 401);}
-
-    const allowedRoles = [
-      'super_admin',
-      'school_admin',
-      'principal',
-      'deputy_principal',
-      'ict_admin',
-    ];
-    if (!allowedRoles.includes(authUser.roleName)) {
-      return errorResponse('Insufficient permissions', 403);
-    }
-
-    const body = await req.json();
-    const validation = createTimetableSlotSchema.safeParse(body);
-
+    const validation = await validateBody(request, createTimetableSlotSchema);
     if (!validation.success) {
-      const errors = validation.error.errors
-        .map((e) => `${e.path.join('.')}: ${e.message}`)
-        .join('; ');
-      return errorResponse(`Validation failed: ${errors}`, 400);
+      return validationErrorResponse(validation.errors!);
     }
 
-    // Get active academic year and term
-    const { data: activeYear } = await supabase
-      .from('academic_years')
-      .select('academic_year_id')
-      .eq('school_id', authUser.schoolId)
-      .eq('is_active', true)
-      .maybeSingle();
-
-    const { data: activeTerm } = await supabase
-      .from('terms')
-      .select('term_id')
-      .eq('school_id', authUser.schoolId)
-      .eq('is_active', true)
-      .maybeSingle();
-
-    if (!activeYear || !activeTerm) {
+    const context = await getActiveContext(user);
+    if (!context) {
       return errorResponse(
         'No active academic year or term. Please configure the academic calendar first.',
         400
@@ -153,96 +232,67 @@ export async function POST(req: NextRequest) {
     }
 
     const slot = await createTimetableSlot(
-      authUser.schoolId,
-      activeTerm.term_id,
-      activeYear.academic_year_id,
-      validation.data
+      {
+        ...validation.data,
+        academicYearId: context.academicYearId,
+        termId: context.termId,
+      },
+      user
     );
 
-    return successResponse(slot, 'Timetable slot created', 201);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    // Conflict errors from checkConflicts
-    if (message.includes('already assigned') || message.includes('already booked') || message.includes('already has a lesson')) {
-      return errorResponse(message, 409);
-    }
-    return errorResponse(message, 500);
+    return NextResponse.json(
+      {
+        success: true,
+        data: slot,
+        error: null,
+        message: 'Timetable slot created',
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    return handleTimetableError(error);
   }
-}
+});
 
-// PATCH /api/timetable — Update an existing timetable slot
-export async function PATCH(req: NextRequest) {
+export const PATCH = withPermission('timetable', 'update', async (request, { user }) => {
   try {
-    const supabase = await createSupabaseServerClient();
-    const authUser = await getAuthenticatedUser(supabase);
-    if (!authUser) {return errorResponse('Unauthorized', 401);}
+    const body = await request.json();
+    const slotId = body.slotId ?? body.slot_id;
 
-    const allowedRoles = [
-      'super_admin',
-      'school_admin',
-      'principal',
-      'deputy_principal',
-      'ict_admin',
-    ];
-    if (!allowedRoles.includes(authUser.roleName)) {
-      return errorResponse('Insufficient permissions', 403);
+    if (!slotId || typeof slotId !== 'string') {
+      return errorResponse('slotId is required', 400);
     }
 
-    const body = await req.json();
-    const validation = updateTimetableSlotSchema.safeParse(body);
+    const validation = validateBody(
+      Object.fromEntries(
+        Object.entries(body).filter(([key]) => !['slotId', 'slot_id'].includes(key))
+      ),
+      updateTimetableSlotSchema
+    );
 
     if (!validation.success) {
-      const errors = validation.error.errors
-        .map((e) => `${e.path.join('.')}: ${e.message}`)
-        .join('; ');
-      return errorResponse(`Validation failed: ${errors}`, 400);
+      return validationErrorResponse(validation.errors!);
     }
 
-    const slot = await updateTimetableSlot(authUser.schoolId, validation.data);
-
-    return successResponse(slot, 'Timetable slot updated', 200);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    if (message.includes('not found')) {
-      return errorResponse(message, 404);
-    }
-    if (message.includes('already assigned') || message.includes('already booked') || message.includes('already has a lesson')) {
-      return errorResponse(message, 409);
-    }
-    return errorResponse(message, 500);
+    const slot = await updateTimetableSlot(slotId, validation.data, user);
+    return successResponse(slot);
+  } catch (error) {
+    return handleTimetableError(error);
   }
-}
+});
 
-// DELETE /api/timetable — Soft delete a timetable slot
-export async function DELETE(req: NextRequest) {
+export const DELETE = withPermission('timetable', 'delete', async (request, { user }) => {
   try {
-    const supabase = await createSupabaseServerClient();
-    const authUser = await getAuthenticatedUser(supabase);
-    if (!authUser) {return errorResponse('Unauthorized', 401);}
-
-    const allowedRoles = [
-      'super_admin',
-      'school_admin',
-      'principal',
-      'deputy_principal',
-      'ict_admin',
-    ];
-    if (!allowedRoles.includes(authUser.roleName)) {
-      return errorResponse('Insufficient permissions', 403);
-    }
-
-    const { searchParams } = new URL(req.url);
-    const slotId = searchParams.get('slot_id');
+    const searchParams = new URL(request.url).searchParams;
+    const slotId = searchParams.get('slot_id') ?? searchParams.get('slotId');
 
     if (!slotId) {
       return errorResponse('slot_id query parameter is required', 400);
     }
 
-    await deleteTimetableSlot(authUser.schoolId, slotId);
-
-    return successResponse(null, 'Timetable slot deleted', 200);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    return errorResponse(message, 500);
+    await deleteTimetableSlot(slotId, user);
+    return successResponse({ deleted: true });
+  } catch (error) {
+    return handleTimetableError(error);
   }
-}
+});

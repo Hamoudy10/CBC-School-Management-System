@@ -1102,6 +1102,7 @@ function ClassesSection() {
     async (year?: string) => {
       const params = new URLSearchParams();
       if (year) {params.set("academic_year", year);}
+      params.set("status", "all");
       const res = await fetch(`/api/settings/classes?${params.toString()}`);
       if (!res.ok) {throw new Error("Failed to fetch classes");}
       const json = await res.json();

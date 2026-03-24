@@ -65,15 +65,45 @@ export async function listReportCards(
     query = query.eq("school_id", currentUser.schoolId!);
   }
 
+  if (currentUser.role === "parent") {
+    const { data: guardianLinks } = await supabase
+      .from("student_guardians")
+      .select("student_id")
+      .eq("guardian_user_id", currentUser.id);
+
+    const childIds = (guardianLinks ?? []).map((link: any) => link.student_id);
+    query = query.in("student_id", childIds.length > 0 ? childIds : ["__none__"]);
+  }
+
+  if (currentUser.role === "student") {
+    const { data: studentRecord } = await supabase
+      .from("students")
+      .select("student_id")
+      .eq("user_id", currentUser.id)
+      .maybeSingle();
+
+    query = query.eq("student_id", studentRecord?.student_id ?? "__none__");
+  }
+
   // Apply filters
-  if (filters.studentId) query = query.eq("student_id", filters.studentId);
-  if (filters.classId) query = query.eq("class_id", filters.classId);
-  if (filters.academicYearId)
+  if (filters.studentId) {
+    query = query.eq("student_id", filters.studentId);
+  }
+  if (filters.classId) {
+    query = query.eq("class_id", filters.classId);
+  }
+  if (filters.academicYearId) {
     query = query.eq("academic_year_id", filters.academicYearId);
-  if (filters.termId) query = query.eq("term_id", filters.termId);
-  if (filters.reportType) query = query.eq("report_type", filters.reportType);
-  if (filters.isPublished !== undefined)
+  }
+  if (filters.termId) {
+    query = query.eq("term_id", filters.termId);
+  }
+  if (filters.reportType) {
+    query = query.eq("report_type", filters.reportType);
+  }
+  if (filters.isPublished !== undefined) {
     query = query.eq("is_published", filters.isPublished);
+  }
 
   query = query
     .order("generated_at", { ascending: false })
@@ -163,7 +193,9 @@ export async function getReportCardById(
 
   const { data, error } = await query.single();
 
-  if (error || !data) return null;
+  if (error || !data) {
+    return null;
+  }
 
   return {
     reportId: data.report_id,

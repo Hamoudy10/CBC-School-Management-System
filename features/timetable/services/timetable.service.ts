@@ -52,7 +52,7 @@ export class TimetableService {
   ): Promise<TimetableSlotWithDetails | null> {
     const supabase = await createSupabaseServerClient();
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('timetable_slots')
       .select(
         `
@@ -74,11 +74,18 @@ export class TimetableService {
         term:terms(term_id, name)
       `
       )
-      .eq('slot_id', slotId)
-      .single();
+      .eq('slot_id', slotId);
+
+    if (user.schoolId && user.role !== 'super_admin') {
+      query = query.eq('school_id', user.schoolId);
+    }
+
+    const { data, error } = await query.single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {
+        return null;
+      }
       throw new TimetableError(error.message, 'FETCH_ERROR', 500);
     }
 
@@ -207,7 +214,7 @@ export class TimetableService {
 
     // Pagination
     const page = filters.page ?? 1;
-    const limit = filters.limit ?? 10;
+    const limit = filters.limit ?? DEFAULT_PAGE_SIZE;
     const from = (page - 1) * limit;
     const to = from + limit - 1;
     query = query.range(from, to);
@@ -237,6 +244,8 @@ export class TimetableService {
     }
 
     const schoolId = user.schoolId!;
+
+    await this.ensureTeacherAssignmentExists(input, schoolId);
 
     // Check for conflicts
     const conflicts = await this.checkConflicts(input, schoolId);
@@ -320,6 +329,8 @@ export class TimetableService {
         room: input.room ?? existing.room ?? undefined,
       };
 
+      await this.ensureTeacherAssignmentExists(checkInput, existing.schoolId);
+
       const conflicts = await this.checkConflicts(
         checkInput,
         existing.schoolId,
@@ -343,15 +354,30 @@ export class TimetableService {
     }
 
     const updateData: Record<string, unknown> = {};
-    if (input.classId !== undefined) updateData.class_id = input.classId;
-    if (input.teacherId !== undefined) updateData.teacher_id = input.teacherId;
-    if (input.learningAreaId !== undefined)
+    if (input.classId !== undefined) {
+      updateData.class_id = input.classId;
+    }
+    if (input.teacherId !== undefined) {
+      updateData.teacher_id = input.teacherId;
+    }
+    if (input.learningAreaId !== undefined) {
       updateData.learning_area_id = input.learningAreaId;
-    if (input.dayOfWeek !== undefined) updateData.day_of_week = input.dayOfWeek;
-    if (input.startTime !== undefined) updateData.start_time = input.startTime;
-    if (input.endTime !== undefined) updateData.end_time = input.endTime;
-    if (input.room !== undefined) updateData.room = input.room;
-    if (input.isActive !== undefined) updateData.is_active = input.isActive;
+    }
+    if (input.dayOfWeek !== undefined) {
+      updateData.day_of_week = input.dayOfWeek;
+    }
+    if (input.startTime !== undefined) {
+      updateData.start_time = input.startTime;
+    }
+    if (input.endTime !== undefined) {
+      updateData.end_time = input.endTime;
+    }
+    if (input.room !== undefined) {
+      updateData.room = input.room;
+    }
+    if (input.isActive !== undefined) {
+      updateData.is_active = input.isActive;
+    }
 
     const { data, error } = await (supabase as any).from('timetable_slots')
       .update(updateData)
@@ -693,6 +719,13 @@ export class TimetableService {
 
   // ─── Helper: Map Row to SlotWithDetails ──────────────────
   private static mapRowToSlotWithDetails(row: any): TimetableSlotWithDetails {
+    const teacherFirstName = row.teacher?.user?.first_name ?? '';
+    const teacherLastName = row.teacher?.user?.last_name ?? '';
+    const teacherInitials = [teacherFirstName, teacherLastName]
+      .filter(Boolean)
+      .map((part: string) => part.charAt(0).toUpperCase())
+      .join('');
+
     return {
       slotId: row.slot_id,
       schoolId: row.school_id,
@@ -713,11 +746,43 @@ export class TimetableService {
       gradeName: row.class?.grade?.name ?? '',
       learningAreaName: row.learning_area?.name ?? '',
       teacherName: row.teacher?.user
-        ? `${row.teacher.user.first_name} ${row.teacher.user.last_name}`
+        ? `${teacherFirstName} ${teacherLastName}`.trim()
         : '',
+      teacherInitials,
       academicYear: row.academic_year?.year ?? '',
       termName: row.term?.name ?? '',
     };
+  }
+
+  private static async ensureTeacherAssignmentExists(
+    input: CreateTimetableSlotInput,
+    schoolId: string
+  ): Promise<void> {
+    const supabase = await createSupabaseServerClient();
+
+    const { data, error } = await supabase
+      .from('teacher_subjects')
+      .select('id')
+      .eq('school_id', schoolId)
+      .eq('teacher_id', input.teacherId)
+      .eq('learning_area_id', input.learningAreaId)
+      .eq('class_id', input.classId)
+      .eq('academic_year_id', input.academicYearId)
+      .eq('term_id', input.termId)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (error) {
+      throw new TimetableError(error.message, 'ASSIGNMENT_CHECK_ERROR', 500);
+    }
+
+    if (!data) {
+      throw new TimetableError(
+        'The selected teacher is not assigned to this class and learning area for the active term.',
+        'INVALID_ASSIGNMENT',
+        400
+      );
+    }
   }
 }
 

@@ -1197,7 +1197,7 @@ export default function DisciplinePage() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'Failed to save incident');
+        throw new Error(error.message || error.error || 'Failed to save incident');
       }
 
       success(formMode === 'edit' ? 'Incident Updated' : 'Incident Reported', 'The disciplinary record has been saved successfully.');
@@ -1227,7 +1227,8 @@ export default function DisciplinePage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to resolve incident');
+        const payload = await response.json();
+        throw new Error(payload.message || payload.error || 'Failed to resolve incident');
       }
 
       success('Incident Resolved', 'The incident has been marked as resolved.');
@@ -1254,7 +1255,8 @@ export default function DisciplinePage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to notify parent');
+        const payload = await response.json();
+        throw new Error(payload.message || payload.error || 'Failed to notify parent');
       }
 
       success('Parent Notified', 'The parent/guardian has been notified about this incident.');
@@ -1281,7 +1283,8 @@ export default function DisciplinePage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete incident');
+        const payload = await response.json();
+        throw new Error(payload.message || payload.error || 'Failed to delete incident');
       }
 
       success('Incident Deleted', 'The disciplinary record has been removed.');

@@ -19,13 +19,11 @@ import {
   TableCell,
   Badge,
   Spinner,
-  Input,
 } from '@/components/ui';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Alert } from '@/components/ui/Alert';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { FileText, ChevronLeft, AlertCircle, CheckCircle, Users } from 'lucide-react';
-import { cn, formatDate } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 
 interface Props {
   schoolId: string;
@@ -53,16 +51,12 @@ interface StudentPreview {
 type GenerationStatus = 'idle' | 'previewing' | 'generating' | 'completed' | 'error';
 
 export default function ReportGenerationClient({
-  schoolId,
-  roleName,
   activeYear,
   terms,
   activeTermId,
   classes,
-  learningAreas,
 }: Props) {
   const router = useRouter();
-  const supabase = createSupabaseBrowserClient();
 
   const [selectedTermId, setSelectedTermId] = useState(activeTermId ?? '');
   const [selectedClassId, setSelectedClassId] = useState('');
@@ -114,19 +108,29 @@ export default function ReportGenerationClient({
       try {
         setStatus('previewing');
 
-        // Fetch students in the selected class
-        const { data: studentsData, error: studentsError } = await supabase
-          .from('students')
-          .select('student_id, first_name, last_name, admission_number')
-          .eq('school_id', schoolId)
-          .eq('current_class_id', selectedClassId)
-          .eq('status', 'active')
-          .order('last_name')
-          .order('first_name');
+        const previewResponse = await fetch(
+          `/api/students?classId=${selectedClassId}&academicYearId=${activeYear.academic_year_id}&termId=${selectedTermId}&pageSize=200`,
+          {
+            credentials: 'include',
+          }
+        );
 
-        if (studentsError) {throw new Error(studentsError.message);}
+        if (!previewResponse.ok) {
+          throw new Error('Failed to load students for the selected class');
+        }
 
-        const studentList = studentsData ?? [];
+        const previewJson = await previewResponse.json();
+        const studentList: Array<{
+          student_id: string;
+          first_name: string;
+          last_name: string;
+          admission_number: string;
+        }> = (previewJson.data ?? []).map((student: any) => ({
+          student_id: student.student_id ?? student.studentId,
+          first_name: student.first_name ?? student.firstName,
+          last_name: student.last_name ?? student.lastName,
+          admission_number: student.admission_number ?? student.admissionNumber,
+        }));
 
         if (studentList.length === 0) {
           setStudents([]);
@@ -137,33 +141,45 @@ export default function ReportGenerationClient({
 
         const studentIds = studentList.map((s) => (s as any).student_id);
 
-        // Check existing report cards
-        const { data: existingReports } = await supabase
-          .from('report_cards')
-          .select('student_id')
-          .eq('school_id', schoolId)
-          .eq('term_id', selectedTermId)
-          .in('student_id', studentIds);
+        const [existingReportsResponse, assessmentsResponse] = await Promise.all([
+          fetch(
+            `/api/reports/report-cards?classId=${selectedClassId}&academicYearId=${activeYear.academic_year_id}&termId=${selectedTermId}&reportType=term&pageSize=200`,
+            {
+              credentials: 'include',
+            }
+          ),
+          fetch(
+            `/api/assessments?classId=${selectedClassId}&academicYearId=${activeYear.academic_year_id}&termId=${selectedTermId}&pageSize=500`,
+            {
+              credentials: 'include',
+            }
+          ),
+        ]);
 
-        const existingReportStudentIds = new Set(
-          (existingReports ?? []).map((r) => (r as any).student_id)
-        );
-
-        // Check assessment counts per student
-        const { data: assessmentCounts } = await supabase
-          .from('assessments')
-          .select('student_id')
-          .eq('school_id', schoolId)
-          .eq('term_id', selectedTermId)
-          .in('student_id', studentIds);
+        const assessmentsJson = assessmentsResponse.ok
+          ? await assessmentsResponse.json()
+          : { data: [] };
+        const existingReportsJson = existingReportsResponse.ok
+          ? await existingReportsResponse.json()
+          : { data: [] };
 
         const assessmentCountMap = new Map<string, number>();
-        for (const a of assessmentCounts ?? []) {
+        for (const assessment of assessmentsJson.data ?? []) {
+          const studentId = assessment.studentId ?? assessment.student_id;
+
+          if (!studentId) {continue;}
+
           assessmentCountMap.set(
-            (a as any).student_id,
-            (assessmentCountMap.get((a as any).student_id) ?? 0) + 1
+            studentId,
+            (assessmentCountMap.get(studentId) ?? 0) + 1
           );
         }
+
+        const existingReportStudentIds = new Set(
+          (existingReportsJson.data ?? []).map(
+            (report: any) => report.studentId ?? report.student_id
+          )
+        );
 
         const previewStudents: StudentPreview[] = studentList.map((s: any) => ({
           student_id: s.student_id,
@@ -245,88 +261,27 @@ export default function ReportGenerationClient({
               continue;
             }
 
-            // Fetch assessment aggregates for this student
-            const { data: aggregates } = await supabase
-              .from('assessment_aggregates')
-              .select(
-                `
-                *,
-                learning_areas ( name, code )
-              `
-              )
-              .eq('student_id', student.student_id)
-              .eq('school_id', schoolId)
-              .eq('term_id', selectedTermId);
-
-            if (!aggregates || aggregates.length === 0) {
+            if (student.assessment_count === 0) {
               skipped++;
               continue;
             }
 
-            // Compute overall average score
-            const totalScore = aggregates.reduce(
-              (sum, a) => sum + ((a as any).average_score ?? 0),
-              0
-            );
-            const overallScore =
-              aggregates.length > 0 ? totalScore / aggregates.length : 0;
+            const generateResponse = await fetch('/api/reports/report-cards', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              credentials: 'include',
+              body: JSON.stringify({
+                studentId: student.student_id,
+                classId: selectedClassId,
+                academicYearId: activeYear.academic_year_id,
+                termId: selectedTermId,
+                reportType: 'term',
+              }),
+            });
 
-            // Determine performance level
-            let performanceLevel: string;
-            if (overallScore >= 3.5) {
-              performanceLevel = 'exceeding';
-            } else if (overallScore >= 2.5) {
-              performanceLevel = 'meeting';
-            } else if (overallScore >= 1.5) {
-              performanceLevel = 'approaching';
-            } else {
-              performanceLevel = 'below';
-            }
-
-            // Build analytics JSON
-            const analyticsJson = {
-              learning_area_scores: aggregates.map((a) => ({
-                learning_area: ((a as any).learning_areas as Record<string, string>)?.name ?? 'Unknown',
-                code: ((a as any).learning_areas as Record<string, string>)?.code ?? '',
-                average_score: (a as any).average_score,
-                competencies_assessed: (a as any).competencies_assessed ?? 0,
-              })),
-              overall_score: Math.round(overallScore * 100) / 100,
-              performance_level: performanceLevel,
-              generated_at: new Date().toISOString(),
-            };
-
-            // If overwriting, delete existing report first
-            if (student.has_existing_report && overwriteExisting) {
-              await supabase
-                .from('report_cards')
-                .delete()
-                .eq('student_id', student.student_id)
-                .eq('school_id', schoolId)
-                .eq('term_id', selectedTermId);
-            }
-
-            // Insert report card
-            const { error: insertError } = await supabase
-              .from('report_cards')
-              .insert({
-                school_id: schoolId,
-                student_id: student.student_id,
-                class_id: selectedClassId,
-                term_id: selectedTermId,
-                academic_year_id: activeYear.academic_year_id,
-                overall_score: Math.round(overallScore * 100) / 100,
-                performance_level: performanceLevel,
-                analytics_json: analyticsJson,
-                status: 'draft',
-                generated_at: new Date().toISOString(),
-              } as any);
-
-            if (insertError) {
-              console.error(
-                `Failed to generate report for ${student.student_id}:`,
-                insertError.message
-              );
+            if (!generateResponse.ok) {
               failed++;
             } else {
               generated++;
@@ -356,7 +311,7 @@ export default function ReportGenerationClient({
     <div className="space-y-6">
       <PageHeader
         title="Generate Report Cards"
-        description={`${activeYear.year} — Bulk generate CBC report cards`}
+        description={`${activeYear.year} - Bulk generate CBC report cards`}
         icon={<FileText className="h-6 w-6" />}
       >
         <Button variant="ghost" onClick={() => router.push('/reports')}>
@@ -577,8 +532,8 @@ export default function ReportGenerationClient({
           </CardContent>
           <CardFooter className="flex justify-between">
             <p className="text-sm text-gray-500">
-              Generating for: <strong>{selectedClassName}</strong> —{' '}
-              <strong>{selectedTermName}</strong> —{' '}
+              Generating for: <strong>{selectedClassName}</strong> -{' '}
+              <strong>{selectedTermName}</strong> -{' '}
               <strong>{activeYear.year}</strong>
             </p>
             <Button

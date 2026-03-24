@@ -19,7 +19,7 @@ import {
   CardFooter,
   buttonVariants,
 } from "@/components/ui";
-import { BookOpen, FileText, Download, Printer, Plus } from "lucide-react";
+import { BookOpen, FileText, Download, Plus } from "lucide-react";
 import { formatDate, getInitials } from "@/lib/utils";
 
 type RoleRelation = { name: string } | { name: string }[] | null;
@@ -63,6 +63,7 @@ interface ReportCardRow {
   class_id: string;
   term_id: string;
   academic_year_id: string;
+  report_type: "term" | "yearly";
   overall_average: number | null;
   overall_level: ReportCard["overall_level"];
   is_published: boolean;
@@ -230,6 +231,11 @@ export default async function ReportsPage({
     .from("report_cards")
     .select(`
       report_id,
+      student_id,
+      class_id,
+      term_id,
+      academic_year_id,
+      report_type,
       overall_average,
       overall_level,
       is_published,
@@ -267,7 +273,18 @@ export default async function ReportsPage({
     const childrenIds = guardianLinks?.map(link => link.student_id) || [];
     reportQuery = reportQuery.in("student_id", childrenIds);
   } else if (isStudent) {
-    reportQuery = reportQuery.eq("student_id", user.user_id); // Assuming student_id is user_id for student role
+    const { data: studentRecord, error: studentError } = await supabase
+      .from("students")
+      .select("student_id")
+      .eq("user_id", userId)
+      .eq("school_id", schoolId)
+      .maybeSingle();
+
+    if (studentError || !studentRecord?.student_id) {
+      return <p>Error loading student reports.</p>;
+    }
+
+    reportQuery = reportQuery.eq("student_id", studentRecord.student_id);
   } else if (selectedStudentId) {
     reportQuery = reportQuery.eq("student_id", selectedStudentId);
   }
@@ -286,7 +303,7 @@ export default async function ReportsPage({
       class_id: report.class_id,
       term_id: report.term_id,
       academic_year_id: report.academic_year_id,
-      report_type: "term",
+      report_type: report.report_type,
       overall_average: report.overall_average,
       overall_level: report.overall_level,
       class_teacher_remarks: null,
@@ -308,6 +325,12 @@ export default async function ReportsPage({
   const totalReports = count || 0;
   const publishedReports = reportCards.filter((rc) => rc.is_published).length;
   const pendingReports = totalReports - publishedReports;
+  const reportsWithScores = reportCards.filter((report) => report.overall_average !== null);
+  const averagePerformance =
+    reportsWithScores.length > 0
+      ? reportsWithScores.reduce((sum, report) => sum + (report.overall_average ?? 0), 0) /
+        reportsWithScores.length
+      : null;
 
   const performanceLevels: Record<NonNullable<ReportCard["overall_level"]>, number> = {
     exceeding: 0,
@@ -373,7 +396,9 @@ export default async function ReportsPage({
         <Card>
           <CardContent className="flex flex-col items-center justify-center p-4">
             <CardTitle className="text-lg font-semibold">Avg. Performance</CardTitle>
-            <p className="text-3xl font-bold">N/A</p> {/* TODO: Calculate average performance if needed */}
+            <p className="text-3xl font-bold">
+              {averagePerformance !== null ? averagePerformance.toFixed(2) : "N/A"}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -446,7 +471,9 @@ export default async function ReportsPage({
                     </TableCell>
                     <TableCell>{report.classes?.name} {report.classes?.stream}</TableCell>
                     <TableCell>{report.terms?.name}</TableCell>
-                    <TableCell>{report.overall_average?.toFixed(2) || "N/A"}</TableCell>
+                    <TableCell>
+                      {report.overall_average !== null ? report.overall_average.toFixed(2) : "N/A"}
+                    </TableCell>
                     <TableCell>
                       <Badge variant={getLevelBadgeVariant(report.overall_level)}>
                         {report.overall_level?.replace(/_/g, " ") || "N/A"}
@@ -475,13 +502,6 @@ export default async function ReportsPage({
                           <Download className="mr-1 h-4 w-4" /> PDF
                         </a>
                       )}
-                      <Link
-                        href={`/api/reports/print/${report.student_id}`}
-                        target="_blank"
-                        className={buttonVariants({ variant: "ghost", size: "sm" })}
-                      >
-                        <Printer className="mr-1 h-4 w-4" /> Print
-                      </Link>
                     </TableCell>
                   </TableRow>
                 ))

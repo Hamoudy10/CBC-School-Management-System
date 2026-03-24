@@ -1,48 +1,66 @@
-// app/api/reports/report-card/route.ts
-// POST generate single student report card
+// app/api/reports/report-cards/route.ts
+// ============================================================
+// POST /api/reports/report-cards - Generate or refresh a single report card
+// ============================================================
 
-import { NextRequest } from "next/server";
 import { withPermission } from "@/lib/api/withAuth";
-import { validateBody } from "@/lib/api/validation";
-import { apiSuccess, apiError } from "@/lib/api/response";
-import { generateReportCardSchema } from "@/features/reports";
-import { generateStudentReportCard } from "@/features/reports/services/reports.service";
+import { validateBody, validateQuery } from "@/lib/api/validation";
+import {
+  createdResponse,
+  errorResponse,
+  successResponse,
+  validationErrorResponse,
+} from "@/lib/api/response";
+import {
+  generateReportCard,
+  generateReportCardSchema,
+  listReportCards,
+  reportCardFiltersSchema,
+} from "@/features/assessments";
+
+export const GET = withPermission(
+  "reports",
+  "view",
+  async (request, { user }) => {
+    const { searchParams } = new URL(request.url);
+    const validation = validateQuery(searchParams, reportCardFiltersSchema);
+
+    if (!validation.success) {
+      return validationErrorResponse(validation.errors!);
+    }
+
+    const result = await listReportCards(validation.data!, user);
+
+    return successResponse(result.data, {
+      page: result.page,
+      pageSize: result.pageSize,
+      total: result.total,
+      totalPages: result.totalPages,
+    });
+  },
+);
 
 export const POST = withPermission(
-  { module: "reports", action: "create" },
-  async (req: NextRequest, user) => {
-    try {
-      const body = await req.json();
-      const validation = validateBody(body, generateReportCardSchema);
+  "reports",
+  "create",
+  async (request, { user }) => {
+    const validation = await validateBody(request, generateReportCardSchema);
 
-      if (!validation.success) {
-        return apiError(validation.error, 422);
-      }
-
-      const { student_id, term, academic_year } = validation.data;
-
-      const result = await generateStudentReportCard(
-        student_id,
-        term,
-        academic_year,
-        user.school_id,
-        user.id,
-      );
-
-      if (!result.success) {
-        return apiError(result.message, 400);
-      }
-
-      return apiSuccess(
-        {
-          html: result.html,
-          data: result.data,
-        },
-        result.message,
-        201,
-      );
-    } catch (error) {
-      return apiError("Internal server error", 500);
+    if (!validation.success) {
+      return validationErrorResponse(validation.errors!);
     }
+
+    const result = await generateReportCard(validation.data!, user);
+
+    if (!result.success) {
+      return errorResponse(result.message);
+    }
+
+    return createdResponse(
+      {
+        reportId: result.reportId,
+      },
+      result.message,
+    );
   },
 );

@@ -1,14 +1,13 @@
 // features/settings/services/classes.service.ts
 // Class management service
 
-import { createClient } from "@/lib/supabase/client";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { ClassInfo } from "../types";
 import type {
   CreateClassInput,
   UpdateClassInput,
 } from "../validators/settings.schema";
-
-const supabase = createClient();
+import { getSchoolSettings } from "./school.service";
 
 export async function getClasses(
   schoolId: string,
@@ -18,6 +17,7 @@ export async function getClasses(
     status?: string;
   },
 ): Promise<{ success: boolean; data: ClassInfo[]; message?: string }> {
+  const supabase = await createSupabaseServerClient();
   let query = supabase
     .from("classes")
     .select(
@@ -46,9 +46,9 @@ export async function getClasses(
   if (filters?.grade_level) {
     query = query.eq("grades.level_order", filters.grade_level);
   }
-  if (filters?.status) {
+  if (filters?.status && filters.status !== "all") {
     query = query.eq("is_active", filters.status === "active");
-  } else {
+  } else if (!filters?.status) {
     query = query.eq("is_active", true);
   }
 
@@ -84,6 +84,7 @@ export async function getClassById(
   classId: string,
   schoolId: string,
 ): Promise<{ success: boolean; data?: ClassInfo; message?: string }> {
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("classes")
     .select(
@@ -118,12 +119,42 @@ export async function createClass(
   input: CreateClassInput,
   schoolId: string,
 ): Promise<{ success: boolean; id?: string; message: string }> {
+  const supabase = await createSupabaseServerClient();
+  const { data: academicYear } = await supabase
+    .from("academic_years")
+    .select("academic_year_id")
+    .eq("school_id", schoolId)
+    .eq("year", input.academic_year)
+    .maybeSingle();
+
+  if (!academicYear) {
+    return {
+      success: false,
+      message: `Academic year ${input.academic_year} does not exist`,
+    };
+  }
+
+  const { data: grade } = await supabase
+    .from("grades")
+    .select("grade_id")
+    .eq("school_id", schoolId)
+    .eq("level_order", input.grade_level)
+    .maybeSingle();
+
+  if (!grade) {
+    return {
+      success: false,
+      message: `Grade ${input.grade_level} does not exist`,
+    };
+  }
+
   // Check for duplicate
   const { data: existing } = await supabase
     .from("classes")
     .select("class_id")
     .eq("name", input.name)
     .eq("school_id", schoolId)
+    .eq("academic_year_id", (academicYear as any).academic_year_id)
     .maybeSingle();
 
   if (existing) {
@@ -149,34 +180,6 @@ export async function createClass(
         message: "Class teacher not found or not active",
       };
     }
-  }
-
-  const { data: grade } = await supabase
-    .from("grades")
-    .select("grade_id")
-    .eq("school_id", schoolId)
-    .eq("level_order", input.grade_level)
-    .maybeSingle();
-
-  if (!grade) {
-    return {
-      success: false,
-      message: `Grade ${input.grade_level} does not exist`,
-    };
-  }
-
-  const { data: academicYear } = await supabase
-    .from("academic_years")
-    .select("academic_year_id")
-    .eq("school_id", schoolId)
-    .eq("year", input.academic_year)
-    .maybeSingle();
-
-  if (!academicYear) {
-    return {
-      success: false,
-      message: `Academic year ${input.academic_year} does not exist`,
-    };
   }
 
   const { data, error } = await (supabase
@@ -210,16 +213,23 @@ export async function updateClass(
   input: UpdateClassInput,
   schoolId: string,
 ): Promise<{ success: boolean; message: string }> {
+  const supabase = await createSupabaseServerClient();
   const updateData: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
 
-  if (input.name !== undefined) updateData.name = input.name;
+  if (input.name !== undefined) {
+    updateData.name = input.name;
+  }
   if (input.stream !== undefined) {
     updateData.stream = input.stream === "" ? null : input.stream;
   }
-  if (input.capacity !== undefined) updateData.capacity = input.capacity;
-  if (input.status !== undefined) updateData.is_active = input.status === "active";
+  if (input.capacity !== undefined) {
+    updateData.capacity = input.capacity;
+  }
+  if (input.status !== undefined) {
+    updateData.is_active = input.status === "active";
+  }
 
   if (input.class_teacher_id !== undefined) {
     if (input.class_teacher_id === "") {
@@ -258,6 +268,7 @@ export async function deleteClass(
   classId: string,
   schoolId: string,
 ): Promise<{ success: boolean; message: string }> {
+  const supabase = await createSupabaseServerClient();
   // Check for students
   const { count } = await supabase
     .from("student_classes")
@@ -294,6 +305,7 @@ export async function deleteClass(
 export async function getSystemConfig(
   schoolId: string,
 ): Promise<{ success: boolean; data?: any; message?: string }> {
+  const supabase = await createSupabaseServerClient();
   // Fetch all config data in parallel
   const [schoolResult, yearsResult, activeYearResult, activeTermResult] =
     await Promise.all([
@@ -343,12 +355,14 @@ export async function getSystemConfig(
     .eq("is_active", true)
     .order("name");
 
-  // Get settings
-  const settingsResult = await supabase
-    .from("school_settings")
-    .select("*")
-    .eq("school_id", schoolId)
-    .maybeSingle();
+  const settingsResult = await getSchoolSettings(schoolId);
+
+  if (!settingsResult.success) {
+    return {
+      success: false,
+      message: settingsResult.message || "Failed to load school settings",
+    };
+  }
 
   return {
     success: true,

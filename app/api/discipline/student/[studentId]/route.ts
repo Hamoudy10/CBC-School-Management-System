@@ -1,34 +1,65 @@
-// app/api/discipline/student/[studentId]/route.ts
-// GET student discipline history
-
-import { NextRequest } from "next/server";
 import { withPermission } from "@/lib/api/withAuth";
-import { apiSuccess, apiError } from "@/lib/api/response";
-import { getStudentDisciplineHistory } from "@/features/discipline/services/discipline.service";
+import { errorResponse, successResponse } from "@/lib/api/response";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  getVisibleStudentIdsForUser,
+  mapDisciplineRows,
+} from "../../_lib";
+
+const detailSelect = `
+  *,
+  student:students!disciplinary_records_student_id_fkey(
+    student_id,
+    first_name,
+    last_name,
+    admission_number,
+    photo_url,
+    current_class_id
+  ),
+  recorded_by_user:users!disciplinary_records_recorded_by_fkey(
+    user_id,
+    first_name,
+    last_name
+  ),
+  resolved_by_user:users!disciplinary_records_resolved_by_fkey(
+    user_id,
+    first_name,
+    last_name
+  )
+`;
 
 export const GET = withPermission(
-  { module: "compliance", action: "view" },
-  async (
-    req: NextRequest,
-    user,
-    { params }: { params: { studentId: string } },
-  ) => {
+  "compliance",
+  "view",
+  async (_request, { user, params }) => {
     try {
-      const result = await getStudentDisciplineHistory(
-        params.studentId,
-        user.school_id,
-      );
-
-      if (!result.success) {
-        return apiError(result.message || "Failed to fetch history", 500);
+      const visibleStudentIds = await getVisibleStudentIdsForUser(user);
+      if (visibleStudentIds && !visibleStudentIds.includes(params.studentId)) {
+        return successResponse({ records: [], total: 0 });
       }
 
-      return apiSuccess({
-        records: result.data,
-        total: result.total,
+      const supabase = await createSupabaseServerClient();
+      const { data, error, count } = await supabase
+        .from("disciplinary_records")
+        .select(detailSelect, { count: "exact" })
+        .eq("school_id", user.schoolId!)
+        .eq("student_id", params.studentId)
+        .order("incident_date", { ascending: false });
+
+      if (error) {
+        return errorResponse(error.message, 500);
+      }
+
+      const records = await mapDisciplineRows(data ?? []);
+      return successResponse({
+        records,
+        total: count ?? records.length,
       });
     } catch (error) {
-      return apiError("Internal server error", 500);
+      return errorResponse(
+        error instanceof Error ? error.message : "Failed to fetch discipline history",
+        500,
+      );
     }
   },
 );

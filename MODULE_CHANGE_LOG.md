@@ -44,11 +44,11 @@ For each module, follow this order:
 | Assessments | Reviewed | Major fixes implemented | Entry workflow and service layer restored |
 | Attendance | Reviewed | Major fixes implemented | CRUD and summary routes restored |
 | Exams | Previously implemented | Needs review pass | Exam bank exists |
-| Reports | Partially fixed earlier | Needs structured review | |
-| Communication | Not reviewed in this pass | Pending | |
-| Timetable | Not reviewed in this pass | Pending | |
-| Settings | Not reviewed in this pass | Pending | |
-| Compliance/Audit | Not reviewed in this pass | Pending | |
+| Reports | Reviewed | Major fixes implemented | Listing, generation, and detail flow corrected |
+| Communication | Reviewed | Major fixes implemented | Live dashboard routes aligned with schema |
+| Timetable | Reviewed | Major fixes implemented | Dashboard/API/service contract restored |
+| Settings | Reviewed | Major fixes implemented | Server-side settings, config, and class status flows aligned |
+| Compliance/Audit | Reviewed | Major fixes implemented | Discipline workflows and compliance landing restored |
 
 ---
 
@@ -430,6 +430,289 @@ Assessments was reviewed next because the dashboard page existed, but the live e
 1. Add assessment template CRUD and connect it to teacher entry flows.
 2. Implement the class overview tab using existing analytics endpoints.
 3. Add term-close locking rules so assessment edits can be intentionally restricted.
+
+---
+
+## 7. Reports Module
+
+### Review Summary
+Reports was reviewed next because the module had a visible dashboard and generation flow, but several live paths still depended on outdated report-card contracts and missing pages.
+
+### Initial Findings
+- The reports list page queried `report_cards`, but did not actually select several fields it later used:
+  - `student_id`
+  - `class_id`
+  - `term_id`
+  - `academic_year_id`
+  - `report_type`
+- Student report visibility on the list page assumed `student_id === user_id`, which is incorrect for the current schema.
+- The list page linked to `/reports/:id`, but no report detail page existed.
+- The report generation client was writing directly from the browser using outdated columns such as:
+  - `overall_score`
+  - `performance_level`
+  - `status`
+- `app/api/reports/report-cards/route.ts` only supported an outdated single-report generation flow and did not expose a working `GET` list endpoint for the UI preview state.
+
+### Implemented Changes
+
+#### Backend
+- Updated `app/api/reports/report-cards/route.ts`
+  - added working `GET` list support backed by the live report-card service
+  - reworked `POST` to use the current assessment report-card generation service
+- Updated `features/assessments/services/reportCards.service.ts`
+  - added parent/student scoping to report-card listing
+  - kept report listing aligned with the current schema and live route usage
+
+#### Frontend
+- Updated `app/(dashboard)/reports/page.tsx`
+  - fixed report-card query shape to include the fields the page actually consumes
+  - corrected student scoping through the `students` table
+  - added real average-performance calculation
+  - removed the broken print action
+- Updated `app/(dashboard)/reports/generate/page.tsx`
+  - fixed active academic year field usage (`year` instead of `name`)
+  - normalized grade relation handling
+- Updated `app/(dashboard)/reports/generate/ReportGenerationClient.tsx`
+  - moved generation onto live API routes instead of direct browser inserts
+  - switched preview loading to live student/report/assessment endpoints
+  - kept overwrite behavior by allowing API-backed regeneration of existing reports
+- Added a working report detail page:
+  - `app/(dashboard)/reports/[id]/page.tsx`
+
+### Validation
+- Targeted ESLint passed for the modified reports files.
+- `npm run type-check` passed.
+
+### Remaining Gaps
+- The dedicated PDF and printable report routes still need their own schema-alignment pass.
+- The reports list filters are still minimal and do not yet expose class/student selectors in the UI.
+- Legacy `features/reports/*` services still contain outdated schema assumptions and should be reconciled or retired.
+- Report export/storage hardening is still incomplete compared to the assessment-backed report-card flow.
+
+### Next Recommended Reports Work
+1. Rebuild the PDF and print routes on top of the current `report_cards` and analytics schema.
+2. Consolidate or retire the outdated `features/reports/*` service layer to avoid future drift.
+3. Expand the reports list filters and add publish/detail actions directly from the dashboard.
+
+---
+
+## 8. Communication Module
+
+### Review Summary
+Communication was reviewed next because the dashboard UI already targeted `/api/communication/*`, but those live routes were sitting on top of stale service assumptions and mixed-schema field names.
+
+### Initial Findings
+- The communication dashboard depended on:
+  - `/api/communication/messages`
+  - `/api/communication/announcements`
+  - `/api/communication/notifications`
+  - `/api/communication/notifications/:id/read`
+  - `/api/communication/unread-count`
+- The older communication services were built around a mix of:
+  - browser Supabase clients used on the server
+  - partially added `message_recipients` assumptions
+  - outdated announcement field names such as `publish_date`, `expiry_date`, and `target_classes`
+- The actual schema in use for the live dashboard is different:
+  - `messages.receiver_id`
+  - `notifications.read_status` as enum values
+  - `announcements.publish_at`, `expires_at`, and `target_class_ids`
+- As a result, the dashboard routes were not reliably aligned with the database even though the UI was already wired up.
+
+### Implemented Changes
+
+#### Backend
+- Rebuilt live communication routes directly against the current schema:
+  - `app/api/communication/messages/route.ts`
+  - `app/api/communication/notifications/route.ts`
+  - `app/api/communication/notifications/[id]/read/route.ts`
+  - `app/api/communication/notifications/read-all/route.ts`
+  - `app/api/communication/unread-count/route.ts`
+  - `app/api/communication/announcements/route.ts`
+  - `app/api/communication/announcements/[id]/route.ts`
+- Messages route changes:
+  - inbox/sent listing now uses the real `messages` table
+  - unread/read state is normalized for the UI
+  - direct user-to-user message creation is supported through the live route
+- Notifications route changes:
+  - list/read/read-all now use enum-backed `read_status`
+  - unread counts now combine live message and notification totals correctly
+- Announcements route changes:
+  - list/create/update/delete now use `publish_at`, `expires_at`, and `target_class_ids`
+  - role-target filtering is applied safely for the live dashboard response shape
+
+#### Frontend
+- No dashboard component rewrites were required because the existing communication UI already targeted the `/api/communication/*` surface.
+- The updated routes now return shapes compatible with:
+  - `app/(dashboard)/communication/components/MessagesList.tsx`
+  - `app/(dashboard)/communication/components/NotificationsList.tsx`
+  - `app/(dashboard)/communication/components/AnnouncementsList.tsx`
+
+### Validation
+- Targeted ESLint passed for the modified communication routes.
+- `npm run type-check` passed.
+
+### Remaining Gaps
+- Duplicate legacy communication surfaces still exist under `/api/messages`, `/api/notifications`, and related non-dashboard routes.
+- Broadcast and advanced recipient flows still need a deliberate pass because they depend on mixed `messages` vs `message_recipients` behavior.
+- The old `features/communication/services/*` layer still contains stale schema assumptions and should be consolidated or retired.
+- The communication UI still lacks compose/reply and sent-folder management UX completeness.
+
+### Next Recommended Communication Work
+1. Consolidate duplicate communication routes so there is one canonical messaging/notification API surface.
+2. Rebuild broadcast and multi-recipient messaging on a single consistent data model.
+3. Add compose, sent-folder, and message-detail UX on top of the stabilized routes.
+
+---
+
+## 9. Timetable Module
+
+### Review Summary
+Timetable was reviewed next because the dashboard page, API route, and service layer were all present, but they had drifted into incompatible contracts and could no longer complete the live weekly scheduling workflow.
+
+### Initial Findings
+- The dashboard queried `/api/timetable` with camelCase filters such as `classId` and `teacherId`, while the route only read snake_case query parameters.
+- The dashboard edited and deleted slots through `/api/timetable/:id`, but only `/api/timetable` existed.
+- The API route called the timetable service with the wrong argument order and returned the wrong shape for the dashboard, so listing could not work reliably.
+- Create and update flows did not enforce the teacher-subject assignment rules already used elsewhere in academics and assessments.
+- The page loaded teachers from a response shape that does not match the live `/api/staff` payload, which left teacher selection broken.
+
+### Implemented Changes
+
+#### Backend
+- Rebuilt `app/api/timetable/route.ts` around the real service contract:
+  - resolves the active academic year and term automatically
+  - accepts both camelCase and snake_case query parameters for compatibility
+  - returns timetable rows in the flat list shape the dashboard expects
+  - returns conflict payloads directly when scheduling collisions are detected
+- Tightened `features/timetable/validators/timetable.schema.ts` so create/update requests validate required IDs, day-of-week values, time formats, and room length.
+- Updated `features/timetable/services/timetable.service.ts` so:
+  - slot listing uses the correct pagination defaults
+  - slot lookups are school-scoped
+  - create/update enforce matching active `teacher_subjects` assignments
+  - mapped slot rows include display-ready teacher name data
+
+#### Frontend
+- Updated `app/(dashboard)/timetable/page.tsx` to:
+  - load classes and learning areas from shared reference data
+  - load teachers from the real `/api/staff` response and filter to teaching roles
+  - query `/api/timetable` using the live filter names
+  - submit edits through `PATCH /api/timetable` with `slotId`
+  - delete through `DELETE /api/timetable?slot_id=...`
+  - surface API conflict and validation errors correctly in the modal flow
+
+### Validation
+- Targeted ESLint passed for the modified timetable files.
+- `npm run type-check` passed.
+
+### Remaining Gaps
+- The timetable module still lacks bulk copy/template tooling despite service stubs existing for those workflows.
+- The dashboard still uses hard-coded default lesson periods rather than school-configurable bell times.
+- There is still no dedicated timetable detail/export API beyond the repaired dashboard flow.
+
+### Next Recommended Timetable Work
+1. Review and wire the bulk copy/deactivate timetable operations that already exist in the service layer.
+2. Move lesson-period definitions into configurable school settings instead of hard-coded frontend constants.
+3. Continue to the `Settings` module, since active academic context and reference-data flows now underpin most of the remaining modules.
+
+---
+
+## 10. Settings Module
+
+### Review Summary
+Settings was reviewed next because it underpins the academic-year, term, class, and shared configuration flows already used by the other repaired modules.
+
+### Initial Findings
+- Core settings services were using the browser Supabase client inside server-side API routes, which made the module fragile and inconsistent on the server.
+- The code assumed `school_settings` was stored as one JSON document, but the live schema stores settings as key/value rows.
+- `/api/settings/config` therefore could not reliably return or update real school settings.
+- Class listing defaulted to active-only records even in the settings dashboard, which made the built-in reactivate action unreachable.
+- Class duplicate checks were too broad and blocked valid same-name class creation across different academic years.
+
+### Implemented Changes
+
+#### Backend
+- Reworked `features/settings/services/academicYear.service.ts` to use the server Supabase client per request for academic-year and term CRUD.
+- Reworked `features/settings/services/classes.service.ts` to use the server client, support `status=all`, and scope duplicate class checks to the academic year.
+- Rebuilt `features/settings/services/school.service.ts` around the real `school_settings` table shape:
+  - reads key/value setting rows
+  - seeds default rows when a school has no settings yet
+  - normalizes rows into the nested settings object expected by the app
+  - upserts partial settings updates back into key/value rows
+- Kept `getSystemConfig` compatible with the dashboard by returning school profile, academic context, classes, and normalized settings together.
+
+#### Frontend
+- Updated `app/(dashboard)/settings/components/SettingsClient.tsx` so the classes view requests `status=all`, allowing inactive classes to remain visible and be reactivated from the UI.
+
+### Validation
+- Targeted ESLint passed for the modified settings files.
+- `npm run type-check` passed.
+
+### Remaining Gaps
+- The school profile section is still read-only; edit/update UX is not yet exposed in the dashboard.
+- System configuration is still largely a viewer and does not yet provide a full settings editor.
+- Settings sub-areas mentioned in the original requirements such as grading-scale and promotion-rule management still need dedicated UI and route work.
+
+### Next Recommended Settings Work
+1. Add editable school-profile UX and wire `PUT /api/settings/school`.
+2. Build a real settings editor for academic, finance, communication, and general config instead of the current read-only summary.
+3. Continue to `Compliance/Audit`, which is the last major pending module in the current pass.
+
+---
+
+## 11. Compliance/Audit Module
+
+### Review Summary
+Compliance/Audit was reviewed last in the current pass because the visible module entry point, discipline workflows, and audit-adjacent routes had drifted apart into several partially working surfaces.
+
+### Initial Findings
+- The `/compliance` page was only a redirect to `/discipline`, which sent parents into the wrong screen and provided no audit or consent overview.
+- The discipline dashboard expected create, update, delete, resolve, and notify flows, but the route surface only partially existed.
+- `POST /api/discipline` was inserting stale columns and enum values that do not match the live disciplinary schema.
+- The discipline detail, summary, and student-history routes were still wired to the older discipline service, which uses outdated field names and the browser Supabase client.
+- Compliance as a whole was split across discipline, parent-consent, and audit-log surfaces without a real module landing page.
+
+### Implemented Changes
+
+#### Backend
+- Rebuilt the live discipline API around the actual schema:
+  - `app/api/discipline/route.ts`
+  - `app/api/discipline/[id]/route.ts`
+  - `app/api/discipline/[id]/notify/route.ts`
+  - `app/api/discipline/summary/route.ts`
+  - `app/api/discipline/student/[studentId]/route.ts`
+- Added shared discipline mapping/scoping helpers in:
+  - `app/api/discipline/_lib.ts`
+- The repaired discipline routes now:
+  - align create/update payloads with the dashboard’s camelCase form payloads
+  - write to live columns such as `incident_date`, `recorded_by`, `parent_notified_date`, and `resolved_by`
+  - support resolve and delete actions
+  - add the missing parent-notify route used by the dashboard
+  - enforce role-based visibility for class teachers and parents through student scoping
+- The existing audit log route remained valid and did not require a contract rewrite:
+  - `app/api/audit-logs/route.ts`
+
+#### Frontend
+- Replaced the compliance redirect page with a real role-aware landing page:
+  - `app/(dashboard)/compliance/page.tsx`
+- The new compliance landing page now:
+  - shows consent-focused summaries for parents
+  - shows discipline, consent, and recent audit summaries for school-side roles
+  - provides a working entry point into discipline management
+- Updated `app/(dashboard)/discipline/page.tsx` error handling so it surfaces repaired API errors correctly.
+
+### Validation
+- Targeted ESLint passed for the modified compliance/discipline files.
+- `npm run type-check` passed.
+
+### Remaining Gaps
+- The older `features/discipline/services/discipline.service.ts` still contains stale assumptions and should be consolidated or retired now that the live routes have been repaired directly.
+- Parent-consent management still lacks a dedicated dashboard workflow beyond the new compliance landing overview.
+- Audit logs are available through the API and compliance overview, but there is still no dedicated audit-log management page.
+
+### Next Recommended Compliance/Audit Work
+1. Consolidate the stale discipline service layer so there is one canonical implementation behind the repaired routes.
+2. Add a dedicated parent-consent management UI for school staff and guardians.
+3. Review `Exams` next, since it is the main remaining module still marked as needing a fresh review pass.
 
 ---
 

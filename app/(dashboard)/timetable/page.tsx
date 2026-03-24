@@ -849,49 +849,51 @@ export default function TimetablePage() {
   // ─── Fetch Data ────────────────────────────────────────────
   const fetchOptions = useCallback(async () => {
     try {
-      // Fetch classes
-      const classesResponse = await fetch('/api/settings/classes', {
-        credentials: 'include',
-      });
-      if (classesResponse.ok) {
-        const json = await classesResponse.json();
+      const [referenceDataResponse, teachersResponse] = await Promise.all([
+        fetch('/api/settings/reference-data?includeLearningAreas=true', {
+          credentials: 'include',
+        }),
+        fetch('/api/staff?pageSize=200&sortBy=first_name&sortOrder=asc', {
+          credentials: 'include',
+        }),
+      ]);
+
+      if (referenceDataResponse.ok) {
+        const json = await referenceDataResponse.json();
+        const referenceData = json.data ?? {};
+
         setClasses(
-          (json.data || []).map((c: any) => ({
-            classId: c.class_id || c.classId,
+          (referenceData.classes || []).map((c: any) => ({
+            classId: c.classId || c.class_id,
             name: c.name,
-            gradeName: c.grade?.name || c.gradeName || '',
+            gradeName: c.gradeName || c.grade?.name || '',
           }))
         );
-      }
 
-      // Fetch teachers
-      const teachersResponse = await fetch('/api/staff?position=teacher', {
-        credentials: 'include',
-      });
-      if (teachersResponse.ok) {
-        const json = await teachersResponse.json();
-        setTeachers(
-          (json.data || []).map((t: any) => ({
-            staffId: t.staff_id || t.staffId,
-            name: t.user?.first_name
-              ? `${t.user.first_name} ${t.user.last_name}`
-              : t.name || 'Unknown',
-            subjects: t.subjects || [],
-          }))
-        );
-      }
-
-      // Fetch learning areas
-      const learningAreasResponse = await fetch('/api/learning-areas', {
-        credentials: 'include',
-      });
-      if (learningAreasResponse.ok) {
-        const json = await learningAreasResponse.json();
         setLearningAreas(
-          (json.data || []).map((la: any) => ({
-            learningAreaId: la.learning_area_id || la.learningAreaId,
+          (referenceData.learningAreas || []).map((la: any) => ({
+            learningAreaId: la.learningAreaId || la.learning_area_id,
             name: la.name,
           }))
+        );
+      }
+
+      if (teachersResponse.ok) {
+        const json = await teachersResponse.json();
+        const teacherPositions = new Set(['teacher', 'class_teacher', 'subject_teacher']);
+
+        setTeachers(
+          (json.data || [])
+            .filter((t: any) => teacherPositions.has(t.position) || teacherPositions.has(t.roleName))
+            .map((t: any) => ({
+              staffId: t.staffId || t.staff_id,
+              name:
+                [t.firstName || t.first_name, t.lastName || t.last_name]
+                  .filter(Boolean)
+                  .join(' ')
+                  .trim() || t.name || 'Unknown',
+              subjects: t.subjects || [],
+            }))
         );
       }
     } catch (err) {
@@ -901,41 +903,48 @@ export default function TimetablePage() {
 
   const fetchTimetable = useCallback(async () => {
     try {
-      let url = '/api/timetable?';
+      const params = new URLSearchParams();
 
       if (viewMode === 'class' && selectedClassId) {
-        url += `classId=${selectedClassId}`;
+        params.set('class_id', selectedClassId);
       } else if (viewMode === 'teacher' && selectedTeacherId) {
-        url += `teacherId=${selectedTeacherId}`;
+        params.set('teacher_id', selectedTeacherId);
       } else {
         setSlots([]);
         return;
       }
 
-      const response = await fetch(url, { credentials: 'include' });
+      const response = await fetch(`/api/timetable?${params.toString()}`, {
+        credentials: 'include',
+      });
 
-      if (response.ok) {
-        const json = await response.json();
-        setSlots(
-          (json.data || []).map((s: any) => ({
-            slotId: s.slot_id || s.slotId,
-            classId: s.class_id || s.classId,
-            className: s.class?.name || s.className || '',
-            gradeName: s.class?.grade?.name || s.gradeName || '',
-            learningAreaId: s.learning_area_id || s.learningAreaId,
-            learningAreaName: s.learning_area?.name || s.learningAreaName || '',
-            teacherId: s.teacher_id || s.teacherId,
-            teacherName: s.teacher?.user
-              ? `${s.teacher.user.first_name} ${s.teacher.user.last_name}`
-              : s.teacherName || '',
-            dayOfWeek: s.day_of_week || s.dayOfWeek,
-            startTime: s.start_time || s.startTime,
-            endTime: s.end_time || s.endTime,
-            room: s.room,
-            isActive: s.is_active ?? s.isActive ?? true,
-          }))
-        );
+      const json = await response.json();
+
+      if (!response.ok) {
+        throw new Error(json.error || 'Failed to fetch timetable');
       }
+
+      setSlots(
+        (json.data || []).map((s: any) => ({
+          slotId: s.slot_id || s.slotId,
+          classId: s.class_id || s.classId,
+          className: s.className || s.class?.name || '',
+          gradeName: s.gradeName || s.class?.grade?.name || '',
+          learningAreaId: s.learning_area_id || s.learningAreaId,
+          learningAreaName: s.learningAreaName || s.learning_area?.name || '',
+          teacherId: s.teacher_id || s.teacherId,
+          teacherName:
+            s.teacherName ||
+            (s.teacher?.user
+              ? `${s.teacher.user.first_name} ${s.teacher.user.last_name}`
+              : ''),
+          dayOfWeek: s.day_of_week || s.dayOfWeek,
+          startTime: s.start_time || s.startTime,
+          endTime: s.end_time || s.endTime,
+          room: s.room,
+          isActive: s.is_active ?? s.isActive ?? true,
+        }))
+      );
     } catch (err) {
       console.error('Failed to fetch timetable:', err);
     }
@@ -1008,29 +1017,27 @@ export default function TimetablePage() {
     setIsSubmitting(true);
 
     try {
-      const url = formMode === 'edit' && selectedSlot
-        ? `/api/timetable/${selectedSlot.slotId}`
-        : '/api/timetable';
+      const isEdit = formMode === 'edit' && selectedSlot;
+      const method = isEdit ? 'PATCH' : 'POST';
+      const body = isEdit ? { ...data, slotId: selectedSlot.slotId } : data;
 
-      const method = formMode === 'edit' ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
+      const response = await fetch('/api/timetable', {
         method,
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(data),
+        body: JSON.stringify(body),
       });
 
-      if (!response.ok) {
-        const error = await response.json();
+      const payload = await response.json();
 
+      if (!response.ok) {
         // Check for conflicts
-        if (error.conflicts && error.conflicts.length > 0) {
-          setConflicts(error.conflicts);
+        if (payload.conflicts && payload.conflicts.length > 0) {
+          setConflicts(payload.conflicts);
           return;
         }
 
-        throw new Error(error.message || 'Failed to save lesson');
+        throw new Error(payload.error || payload.message || 'Failed to save lesson');
       }
 
       success(
@@ -1041,7 +1048,7 @@ export default function TimetablePage() {
       setShowFormModal(false);
       setSelectedSlot(null);
       setConflicts([]);
-      fetchTimetable();
+      await fetchTimetable();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred';
       error('Error', message);
@@ -1056,13 +1063,15 @@ export default function TimetablePage() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(`/api/timetable/${deleteSlot.slotId}`, {
+      const response = await fetch(`/api/timetable?slot_id=${deleteSlot.slotId}`, {
         method: 'DELETE',
         credentials: 'include',
       });
 
+      const payload = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to delete lesson');
+        throw new Error(payload.error || 'Failed to delete lesson');
       }
 
       success(
@@ -1072,9 +1081,9 @@ export default function TimetablePage() {
 
       setShowDeleteConfirm(false);
       setDeleteSlot(null);
-      fetchTimetable();
+      await fetchTimetable();
     } catch (err) {
-      error('Error', 'Failed to delete lesson.');
+      error('Error', err instanceof Error ? err.message : 'Failed to delete lesson.');
     } finally {
       setIsSubmitting(false);
     }

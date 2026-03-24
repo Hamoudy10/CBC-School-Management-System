@@ -1,7 +1,7 @@
 // features/settings/services/academicYear.service.ts
 // Academic year and term management
 
-import { createClient } from "@/lib/supabase/client";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { AcademicYear, AcademicTerm } from "../types";
 import type {
   CreateAcademicYearInput,
@@ -10,8 +10,6 @@ import type {
   UpdateTermInput,
 } from "../validators/settings.schema";
 
-const supabase = createClient();
-
 // ============================================================
 // ACADEMIC YEARS
 // ============================================================
@@ -19,6 +17,7 @@ const supabase = createClient();
 export async function getAcademicYears(
   schoolId: string,
 ): Promise<{ success: boolean; data: AcademicYear[]; message?: string }> {
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("academic_years")
     .select("*")
@@ -35,6 +34,7 @@ export async function getAcademicYears(
 export async function getActiveAcademicYear(
   schoolId: string,
 ): Promise<{ success: boolean; data?: AcademicYear; message?: string }> {
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("academic_years")
     .select("*")
@@ -53,6 +53,7 @@ export async function createAcademicYear(
   input: CreateAcademicYearInput,
   schoolId: string,
 ): Promise<{ success: boolean; id?: string; message: string }> {
+  const supabase = await createSupabaseServerClient();
   // Check for duplicate year
   const { data: existing } = await supabase
     .from("academic_years")
@@ -95,6 +96,7 @@ export async function setActiveAcademicYear(
   yearId: string,
   schoolId: string,
 ): Promise<{ success: boolean; message: string }> {
+  const supabase = await createSupabaseServerClient();
   // Deactivate all years
   const { error: deactivateError } = await supabase
     .from("academic_years")
@@ -124,6 +126,7 @@ export async function updateAcademicYear(
   input: UpdateAcademicYearInput,
   schoolId: string,
 ): Promise<{ success: boolean; message: string }> {
+  const supabase = await createSupabaseServerClient();
   const { data: existing } = await supabase
     .from("academic_years")
     .select("*")
@@ -155,9 +158,15 @@ export async function updateAcademicYear(
   const updateData: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
-  if (input.year !== undefined) updateData.year = input.year;
-  if (input.start_date !== undefined) updateData.start_date = input.start_date;
-  if (input.end_date !== undefined) updateData.end_date = input.end_date;
+  if (input.year !== undefined) {
+    updateData.year = input.year;
+  }
+  if (input.start_date !== undefined) {
+    updateData.start_date = input.start_date;
+  }
+  if (input.end_date !== undefined) {
+    updateData.end_date = input.end_date;
+  }
 
   const { error } = await (supabase
     .from("academic_years") as any)
@@ -176,6 +185,7 @@ export async function deleteAcademicYear(
   yearId: string,
   schoolId: string,
 ): Promise<{ success: boolean; message: string }> {
+  const supabase = await createSupabaseServerClient();
   const { data: existing } = await supabase
     .from("academic_years")
     .select("academic_year_id, is_active")
@@ -238,6 +248,7 @@ export async function getTerms(
   academicYearId: string,
   schoolId: string,
 ): Promise<{ success: boolean; data: AcademicTerm[]; message?: string }> {
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("terms")
     .select("*")
@@ -255,6 +266,7 @@ export async function getTerms(
 export async function getActiveTerm(
   schoolId: string,
 ): Promise<{ success: boolean; data?: AcademicTerm; message?: string }> {
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("terms")
     .select(
@@ -278,6 +290,7 @@ export async function createTerm(
   input: CreateTermInput,
   schoolId: string,
 ): Promise<{ success: boolean; id?: string; message: string }> {
+  const supabase = await createSupabaseServerClient();
   // Verify academic year exists
   const { data: year } = await supabase
     .from("academic_years")
@@ -331,6 +344,7 @@ export async function updateTerm(
   input: UpdateTermInput,
   schoolId: string,
 ): Promise<{ success: boolean; message: string }> {
+  const supabase = await createSupabaseServerClient();
   const { data: existing } = await supabase
     .from("terms")
     .select("*")
@@ -363,9 +377,15 @@ export async function updateTerm(
   const updateData: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
-  if (input.name !== undefined) updateData.name = input.name;
-  if (input.start_date !== undefined) updateData.start_date = input.start_date;
-  if (input.end_date !== undefined) updateData.end_date = input.end_date;
+  if (input.name !== undefined) {
+    updateData.name = input.name;
+  }
+  if (input.start_date !== undefined) {
+    updateData.start_date = input.start_date;
+  }
+  if (input.end_date !== undefined) {
+    updateData.end_date = input.end_date;
+  }
 
   const { error } = await (supabase
     .from("terms") as any)
@@ -384,6 +404,7 @@ export async function deleteTerm(
   termId: string,
   schoolId: string,
 ): Promise<{ success: boolean; message: string }> {
+  const supabase = await createSupabaseServerClient();
   const { data: existing } = await supabase
     .from("terms")
     .select("term_id, is_active")
@@ -416,6 +437,7 @@ export async function setActiveTerm(
   termId: string,
   schoolId: string,
 ): Promise<{ success: boolean; message: string }> {
+  const supabase = await createSupabaseServerClient();
   // Get the term to find its academic year
   const { data: term } = await supabase
     .from("terms")
