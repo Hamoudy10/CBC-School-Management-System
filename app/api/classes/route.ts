@@ -2,6 +2,70 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth/session";
 
+async function ensureGradeExists(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  schoolId: string,
+  rawGradeLevel: unknown,
+) {
+  const normalizedGradeLevel = String(rawGradeLevel ?? "").trim();
+  const matchedDigits = normalizedGradeLevel.match(/\d+/);
+  const parsedLevel = matchedDigits
+    ? Number.parseInt(matchedDigits[0], 10)
+    : Number.parseInt(normalizedGradeLevel, 10);
+
+  if (!Number.isFinite(parsedLevel) || parsedLevel < 1 || parsedLevel > 12) {
+    return { success: false as const, message: "Valid grade level is required" };
+  }
+
+  const { data: existingGrade, error: existingGradeError } = await supabase
+    .from("grades")
+    .select("grade_id")
+    .eq("school_id", schoolId)
+    .eq("level_order", parsedLevel)
+    .maybeSingle();
+
+  if (existingGradeError) {
+    return { success: false as const, message: existingGradeError.message };
+  }
+
+  if (existingGrade) {
+    return { success: true as const, gradeId: existingGrade.grade_id as string };
+  }
+
+  const { data: createdGrade, error: createGradeError } = await (supabase
+    .from("grades") as any)
+    .insert({
+      school_id: schoolId,
+      name: `Grade ${parsedLevel}`,
+      level_order: parsedLevel,
+    })
+    .select("grade_id")
+    .single();
+
+  if (!createGradeError && createdGrade?.grade_id) {
+    return { success: true as const, gradeId: createdGrade.grade_id as string };
+  }
+
+  const { data: retriedGrade, error: retriedGradeError } = await supabase
+    .from("grades")
+    .select("grade_id")
+    .eq("school_id", schoolId)
+    .eq("level_order", parsedLevel)
+    .maybeSingle();
+
+  if (retriedGradeError || !retriedGrade) {
+    return {
+      success: false as const,
+      message:
+        createGradeError?.message ||
+        retriedGradeError?.message ||
+        "Failed to create grade",
+    };
+  }
+
+  return { success: true as const, gradeId: retriedGrade.grade_id as string };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser();
@@ -110,23 +174,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const supabase = await createServerSupabaseClient();
 
-    const parsedLevel = Number.parseInt(String(body.grade_level ?? ""), 10);
-    const gradeName =
-      typeof body.grade_level === "string" && Number.isNaN(parsedLevel)
-        ? body.grade_level.trim()
-        : `Grade ${parsedLevel}`;
-
-    let gradeQuery = supabase.from("grades").select("grade_id").eq("school_id", schoolId);
-    if (!Number.isNaN(parsedLevel)) {
-      gradeQuery = gradeQuery.eq("level_order", parsedLevel);
-    } else {
-      gradeQuery = gradeQuery.eq("name", gradeName);
-    }
-
-    const { data: grade } = await gradeQuery.maybeSingle();
-    if (!grade) {
+    const gradeResult = await ensureGradeExists(
+      supabase,
+      schoolId,
+      body.grade_level,
+    );
+    if (!gradeResult.success) {
       return NextResponse.json(
-        { error: "Valid grade level is required" },
+        { error: gradeResult.message },
         { status: 400 },
       );
     }
@@ -159,7 +214,7 @@ export async function POST(request: NextRequest) {
         class_teacher_id: body.class_teacher_id || null,
         capacity: body.capacity || null,
         stream: body.stream || null,
-        grade_id: grade.grade_id,
+        grade_id: gradeResult.gradeId,
       })
       .select()
       .single();

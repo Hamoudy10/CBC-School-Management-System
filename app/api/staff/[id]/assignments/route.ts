@@ -19,7 +19,7 @@ import {
   createAssignment,
   createAssignmentSchema,
   bulkAssignmentSchema,
-} from '@/features/staff';
+} from '@/features/staff/server';
 
 // ============================================================
 // GET Handler - List Subject Assignments

@@ -11,8 +11,34 @@ import {
 } from '@/lib/api/response';
 import { paginationSchema, validateBody, validateSearchParams } from '@/lib/api/validation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { EXAM_SELECT, normalizeExamRow, resolveAcademicContext } from './_lib';
 
 const examTypeSchema = z.enum(['exam', 'cat', 'mock', 'past_paper']);
+const uuidLikeSchema = z.string().uuid();
+const optionalFilterUuid = z.preprocess((value) => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  return uuidLikeSchema.safeParse(trimmed).success ? trimmed : undefined;
+}, z.string().uuid().optional());
+const optionalExamTypeFilter = z.preprocess((value) => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  return examTypeSchema.safeParse(trimmed).success ? trimmed : undefined;
+}, examTypeSchema.optional());
 
 const createExamSchema = z
   .object({
@@ -39,10 +65,10 @@ const createExamSchema = z
 
 const examFiltersSchema = paginationSchema.extend({
   search: z.string().optional(),
-  learningAreaId: z.string().uuid().optional(),
-  type: examTypeSchema.optional(),
-  termId: z.string().uuid().optional(),
-  academicYearId: z.string().uuid().optional(),
+  learningAreaId: optionalFilterUuid,
+  type: optionalExamTypeFilter,
+  termId: optionalFilterUuid,
+  academicYearId: optionalFilterUuid,
 });
 
 export const GET = withPermission('exams', 'view', async (request, { user }) => {
@@ -57,29 +83,7 @@ export const GET = withPermission('exams', 'view', async (request, { user }) => 
   const supabase = await createSupabaseServerClient();
   let query = supabase
     .from('exam_bank')
-    .select(
-      `
-      exam_id,
-      school_id,
-      learning_area_id,
-      title,
-      description,
-      content,
-      exam_type,
-      file_url,
-      file_name,
-      file_type,
-      term_id,
-      academic_year_id,
-      created_by,
-      created_at,
-      updated_at,
-      learning_areas ( name ),
-      terms ( name ),
-      academic_years ( year )
-    `,
-      { count: 'exact' },
-    );
+    .select(EXAM_SELECT, { count: 'exact' });
 
   if (user.role !== 'super_admin' && user.schoolId) {
     query = query.eq('school_id', user.schoolId);
@@ -113,25 +117,7 @@ export const GET = withPermission('exams', 'view', async (request, { user }) => 
     return errorResponse(`Failed to fetch exams: ${error.message}`, 500);
   }
 
-  const items = (data || []).map((row: any) => ({
-    examId: row.exam_id,
-    learningAreaId: row.learning_area_id,
-    title: row.title,
-    description: row.description,
-    content: row.content,
-    type: row.exam_type,
-    fileUrl: row.file_url,
-    fileName: row.file_name,
-    fileType: row.file_type,
-    termId: row.term_id,
-    academicYearId: row.academic_year_id,
-    learningAreaName: row.learning_areas?.name ?? null,
-    termName: row.terms?.name ?? null,
-    academicYearName: row.academic_years?.year ?? null,
-    createdBy: row.created_by,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }));
+  const items = (data || []).map(normalizeExamRow);
 
   return paginatedResponse(items, count || 0, page, pageSize);
 });
@@ -160,38 +146,16 @@ export const POST = withPermission('exams', 'create', async (request, { user }) 
     return errorResponse('Learning area not found.', 404);
   }
 
-  let resolvedAcademicYearId = payload.academicYearId ?? null;
-
-  if (payload.termId) {
-    const { data: term } = await supabase
-      .from('terms')
-      .select('term_id, academic_year_id')
-      .eq('term_id', payload.termId)
-      .eq('school_id', user.schoolId)
-      .maybeSingle();
-
-    if (!term) {
-      return errorResponse('Term not found.', 404);
-    }
-
-    if (resolvedAcademicYearId && term.academic_year_id !== resolvedAcademicYearId) {
-      return errorResponse('Selected term does not match the academic year.');
-    }
-
-    resolvedAcademicYearId = resolvedAcademicYearId ?? term.academic_year_id;
-  }
-
-  if (resolvedAcademicYearId) {
-    const { data: year } = await supabase
-      .from('academic_years')
-      .select('academic_year_id')
-      .eq('academic_year_id', resolvedAcademicYearId)
-      .eq('school_id', user.schoolId)
-      .maybeSingle();
-
-    if (!year) {
-      return errorResponse('Academic year not found.', 404);
-    }
+  let resolvedAcademicYearId: string | null = null;
+  try {
+    const context = await resolveAcademicContext(supabase, user.schoolId, {
+      termId: payload.termId,
+      academicYearId: payload.academicYearId,
+    });
+    resolvedAcademicYearId = context.academicYearId;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to validate exam context.';
+    return errorResponse(message, 400);
   }
 
   const timestamp = new Date().toISOString();

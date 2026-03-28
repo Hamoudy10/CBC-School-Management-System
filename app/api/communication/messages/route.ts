@@ -1,13 +1,18 @@
 import { NextRequest } from "next/server";
-import { withAuth } from "@/lib/api/withAuth";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { withPermission } from "@/lib/api/withAuth";
 import {
   errorResponse,
   paginatedResponse,
   successResponse,
 } from "@/lib/api/response";
 import { validateSearchParams } from "@/lib/api/validation";
-import { messageFilterSchema, sendMessageSchema } from "@/features/communication";
+import {
+  getInbox,
+  getSentMessages,
+  messageFilterSchema,
+  sendMessage,
+  sendMessageSchema,
+} from "@/features/communication";
 
 function firstRelation<T>(value: T | T[] | null | undefined): T | null {
   if (Array.isArray(value)) {
@@ -17,7 +22,9 @@ function firstRelation<T>(value: T | T[] | null | undefined): T | null {
   return value ?? null;
 }
 
-export const GET = withAuth(async (req: NextRequest, user: any) => {
+export const GET = withPermission(
+  { module: "communication", action: "view" },
+  async (req: NextRequest, { user }) => {
   try {
     const params = validateSearchParams(req, messageFilterSchema);
     if (!params.success) {
@@ -26,121 +33,91 @@ export const GET = withAuth(async (req: NextRequest, user: any) => {
 
     const filters = params.data;
     const folder = req.nextUrl.searchParams.get("folder") ?? "inbox";
-    const supabase = await createSupabaseServerClient();
     const page = filters.page ?? 1;
     const pageSize = filters.pageSize ?? 20;
-    const offset = (page - 1) * pageSize;
-
-    let query = supabase
-      .from("messages")
-      .select(
-        `
-        id,
-        sender_id,
-        receiver_id,
-        subject,
-        body,
-        read_status,
-        read_at,
-        is_archived,
-        sent_at,
-        created_at,
-        sender:users!messages_sender_id_fkey(first_name, last_name),
-        receiver:users!messages_receiver_id_fkey(first_name, last_name)
-      `,
-        { count: "exact" },
-      )
-      .eq("school_id", user.school_id)
-      .eq("is_archived", false);
-
-    query =
+    const result =
       folder === "sent"
-        ? query.eq("sender_id", user.id)
-        : query.eq("receiver_id", user.id);
+        ? await getSentMessages(user.id, user.schoolId!, page, pageSize)
+        : await getInbox(user.id, user.schoolId!, filters, page, pageSize);
 
-    if (filters.search) {
-      query = query.or(
-        `subject.ilike.%${filters.search}%,body.ilike.%${filters.search}%`,
-      );
+    if (!result.success) {
+      return errorResponse(result.message || "Failed to fetch messages", 500);
     }
 
-    if (filters.date_from) {
-      query = query.gte("created_at", `${filters.date_from}T00:00:00`);
-    }
+    const messages = (result.data ?? [])
+      .filter((row: any) => {
+        if (!filters.search) {
+          return true;
+        }
 
-    if (filters.date_to) {
-      query = query.lte("created_at", `${filters.date_to}T23:59:59`);
-    }
+        const content = `${row.subject ?? ""} ${row.body ?? ""}`.toLowerCase();
+        return content.includes(filters.search.toLowerCase());
+      })
+      .map((row: any) => {
+        const recipientRelations = (row.recipients ?? [])
+          .map((recipient: any) => recipient.recipient)
+          .filter(Boolean);
+        const firstRecipient = firstRelation(recipientRelations);
 
-    if (filters.read_status !== undefined && folder !== "sent") {
-      query = query.eq("read_status", filters.read_status ? "read" : "unread");
-    }
-
-    const { data, error, count } = await query
-      .order("sent_at", { ascending: false })
-      .range(offset, offset + pageSize - 1);
-
-    if (error) {
-      return errorResponse(error.message, 500);
-    }
-
-    const messages = (data ?? []).map((row: any) => ({
-      id: row.id,
-      message_id: row.id,
-      subject: row.subject,
-      body: row.body,
-      read_status: row.read_status === "read",
-      is_read: row.read_status === "read",
-      created_at: row.sent_at ?? row.created_at,
-      sender: firstRelation(row.sender),
-      recipient: firstRelation(row.receiver),
-    }));
+        return {
+          id: row.id,
+          message_id: row.id,
+          subject: row.subject,
+          body: row.body,
+          read_status: row.read_status === true,
+          is_read: row.read_status === true,
+          created_at: row.created_at,
+          sender_id: row.sender_id,
+          sender: firstRelation(row.sender),
+          recipient: firstRecipient,
+          recipient_count: recipientRelations.length,
+          recipient_summary:
+            recipientRelations.length > 1
+              ? `${recipientRelations.length} recipients`
+              : firstRecipient
+                ? `${firstRecipient.first_name ?? ""} ${firstRecipient.last_name ?? ""}`.trim()
+                : null,
+        };
+      });
 
     return paginatedResponse(messages, {
       page,
       pageSize,
-      total: count ?? 0,
+      total: result.total ?? messages.length,
     });
   } catch (error: any) {
     return errorResponse(error.message, 500);
   }
-});
+  },
+);
 
-export const POST = withAuth(async (req: NextRequest, user: any) => {
+export const POST = withPermission(
+  { module: "communication", action: "create" },
+  async (req: NextRequest, { user }) => {
   try {
     const body = await req.json();
     const validated = sendMessageSchema.parse(body);
-    const supabase = await createSupabaseServerClient();
 
-    const directRecipients = validated.recipients.filter(
-      (recipient) => recipient.recipient_type === "user",
-    );
-
-    if (directRecipients.length === 0) {
+    if (
+      validated.recipients.some(
+        (recipient) => recipient.recipient_type === "all",
+      )
+    ) {
       return errorResponse(
-        "Only direct user-to-user messages are supported in this flow right now.",
+        "The all-users recipient type is not supported in this workflow yet.",
         400,
       );
     }
 
-    const rows = directRecipients.map((recipient) => ({
-      school_id: user.school_id,
-      sender_id: user.id,
-      receiver_id: recipient.recipient_id,
-      subject: validated.subject,
-      body: validated.body,
-      read_status: "unread",
-    }));
-
-    const { error } = await supabase.from("messages").insert(rows);
-
-    if (error) {
-      return errorResponse(error.message, 400);
+    const result = await sendMessage(validated, user.id, user.schoolId!);
+    if (!result.success) {
+      return errorResponse(result.message, 400);
     }
 
     return successResponse(
       {
-        sent: rows.length,
+        id: result.id,
+        message: result.message,
       },
       201,
     );
@@ -151,4 +128,5 @@ export const POST = withAuth(async (req: NextRequest, user: any) => {
 
     return errorResponse(error.message, 500);
   }
-});
+  },
+);

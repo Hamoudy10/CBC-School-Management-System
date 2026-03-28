@@ -1,144 +1,91 @@
 import { NextRequest } from "next/server";
-import { withAuth, withPermission } from "@/lib/api/withAuth";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { withPermission } from "@/lib/api/withAuth";
 import {
   errorResponse,
   paginatedResponse,
   successResponse,
 } from "@/lib/api/response";
-import { validateSearchParams } from "@/lib/api/validation";
 import {
-  bulkNotificationSchema,
+  createBulkNotifications,
+  createNotification,
   createNotificationSchema,
+  getUserNotifications,
   notificationFilterSchema,
 } from "@/features/communication";
+import { validateBody, validateSearchParams } from "@/lib/api/validation";
 
-export const GET = withAuth(async (req: NextRequest, user: any) => {
-  try {
-    const params = validateSearchParams(req, notificationFilterSchema);
-    if (!params.success) {
-      return errorResponse(params.error, 422);
-    }
+export const GET = withPermission(
+  { module: "communication", action: "view" },
+  async (req: NextRequest, { user }) => {
+    try {
+      const params = validateSearchParams(req, notificationFilterSchema);
+      if (!params.success) {
+        return errorResponse(params.error, 422);
+      }
 
-    const filters = params.data;
-    const page = filters.page ?? 1;
-    const pageSize = filters.pageSize ?? 20;
-    const offset = (page - 1) * pageSize;
-    const supabase = await createSupabaseServerClient();
+      const { page, pageSize, ...filters } = params.data;
+      const result = await getUserNotifications(
+        user.id,
+        user.schoolId!,
+        filters,
+        page,
+        pageSize,
+      );
 
-    let query = supabase
-      .from("notifications")
-      .select(
-        `
-        id,
-        title,
-        body,
-        type,
-        read_status,
-        read_at,
-        action_url,
-        created_at
-      `,
-        { count: "exact" },
-      )
-      .eq("school_id", user.school_id)
-      .eq("user_id", user.id);
+      if (!result.success) {
+        return errorResponse(result.message || "Failed to fetch notifications", 500);
+      }
 
-    if (filters.type) {
-      query = query.eq("type", filters.type);
-    }
+      const notifications = (result.data ?? []).map((row: any) => ({
+        id: row.id,
+        notification_id: row.id,
+        title: row.title,
+        body: row.body,
+        type: row.type,
+        read_status: row.read_status === true,
+        is_read: row.read_status === true,
+        read_at: row.read_at,
+        action_url: row.action_url,
+        created_at: row.created_at,
+      }));
 
-    if (filters.read_status !== undefined) {
-      query = query.eq("read_status", filters.read_status ? "read" : "unread");
-    }
-
-    if (filters.date_from) {
-      query = query.gte("created_at", `${filters.date_from}T00:00:00`);
-    }
-
-    if (filters.date_to) {
-      query = query.lte("created_at", `${filters.date_to}T23:59:59`);
-    }
-
-    const { data, error, count } = await query
-      .order("created_at", { ascending: false })
-      .range(offset, offset + pageSize - 1);
-
-    if (error) {
+      return paginatedResponse(notifications, {
+        page,
+        pageSize,
+        total: result.total ?? notifications.length,
+      });
+    } catch (error: any) {
       return errorResponse(error.message, 500);
     }
-
-    const notifications = (data ?? []).map((row: any) => ({
-      id: row.id,
-      notification_id: row.id,
-      title: row.title,
-      body: row.body,
-      type: row.type,
-      read_status: row.read_status === "read",
-      is_read: row.read_status === "read",
-      read_at: row.read_at,
-      action_url: row.action_url,
-      created_at: row.created_at,
-    }));
-
-    return paginatedResponse(notifications, {
-      page,
-      pageSize,
-      total: count ?? 0,
-    });
-  } catch (error: any) {
-    return errorResponse(error.message, 500);
-  }
-});
+  },
+);
 
 export const POST = withPermission(
-  "communication",
-  "create",
-  async (req: NextRequest, user: any) => {
+  { module: "communication", action: "create" },
+  async (req: NextRequest, { user }) => {
     try {
       const body = await req.json();
-      const supabase = await createSupabaseServerClient();
 
       if (body.user_ids && Array.isArray(body.user_ids)) {
-        const validated = bulkNotificationSchema.parse(body);
-        const rows = validated.user_ids.map((userId) => ({
-          school_id: user.school_id,
-          user_id: userId,
-          title: validated.title,
-          body: validated.body,
-          type: validated.type,
-          action_url: validated.action_url ?? null,
-          read_status: "unread",
-        }));
-
-        const { error } = await supabase.from("notifications").insert(rows);
-        if (error) {
-          return errorResponse(error.message, 400);
+        const result = await createBulkNotifications(body, user.schoolId!);
+        if (!result.success) {
+          return errorResponse(result.message, 400);
         }
 
-        return successResponse({ count: rows.length }, 201);
+        return successResponse({ count: result.count }, 201);
       }
 
-      const validated = createNotificationSchema.parse(body);
-      const { data, error } = await supabase
-        .from("notifications")
-        .insert({
-          school_id: user.school_id,
-          user_id: validated.user_id,
-          title: validated.title,
-          body: validated.body,
-          type: validated.type,
-          action_url: validated.action_url ?? null,
-          read_status: "unread",
-        })
-        .select("id")
-        .single();
-
-      if (error) {
-        return errorResponse(error.message, 400);
+      const validation = validateBody(body, createNotificationSchema);
+      if (!validation.success) {
+        return errorResponse(validation.error, 422);
       }
 
-      return successResponse({ id: data.id }, 201);
+      const result = await createNotification(validation.data, user.schoolId!);
+      if (!result.success) {
+        return errorResponse(result.message, 400);
+      }
+
+      return successResponse({ id: result.id }, 201);
     } catch (error: any) {
       if (error.name === "ZodError") {
         return errorResponse(error.errors, 422);

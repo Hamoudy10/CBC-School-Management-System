@@ -7,13 +7,14 @@ import {
   CardHeader,
   CardTitle,
   PageHeader,
-  buttonVariants,
 } from "@/components/ui";
-import { ArrowLeft, Download, FileText } from "lucide-react";
+import { ArrowLeft, Download, FileText, Printer } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getReportCardById } from "@/features/assessments";
-import { formatDate } from "@/lib/utils";
+import { hasPermission } from "@/lib/auth/permissions";
+import { cn, formatDate } from "@/lib/utils";
 import type { RoleName } from "@/types/roles";
+import { ReportCardOperations } from "../components/ReportCardOperations";
 
 function titleCaseLevel(level: string | null | undefined) {
   if (!level) {
@@ -21,6 +22,22 @@ function titleCaseLevel(level: string | null | undefined) {
   }
 
   return level.replace(/_/g, " ");
+}
+
+function getLinkButtonClasses(
+  variant: "secondary" | "ghost" = "secondary",
+  size: "sm" | "md" = "md",
+) {
+  return cn(
+    "inline-flex items-center justify-center gap-2 font-medium transition-all",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+    "disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]",
+    size === "sm" ? "h-8 px-3 text-sm rounded-md" : "h-10 px-4 text-sm rounded-lg",
+    variant === "secondary" &&
+      "bg-secondary-100 text-secondary-700 hover:bg-secondary-200 focus-visible:ring-secondary-500",
+    variant === "ghost" &&
+      "text-secondary-600 bg-transparent hover:bg-secondary-100 hover:text-secondary-900 focus-visible:ring-secondary-500",
+  );
 }
 
 export default async function ReportDetailPage({
@@ -101,6 +118,8 @@ export default async function ReportDetailPage({
   const analytics = reportCard.analyticsJson as any;
   const learningAreas = analytics?.learningAreas ?? [];
   const attendance = analytics?.attendance;
+  const canManageRemarks = hasPermission(role, "reports", "update");
+  const canPublishReport = hasPermission(role, "reports", "publish");
 
   return (
     <div className="space-y-6">
@@ -109,10 +128,38 @@ export default async function ReportDetailPage({
         description={`${reportCard.termName ?? "Term"} - ${reportCard.academicYear ?? "Academic Year"}`}
         icon={<FileText className="h-6 w-6" />}
       >
-        <Link href="/reports" className={buttonVariants({ variant: "secondary", size: "md" })}>
-          <ArrowLeft className="h-4 w-4" />
-          Back to Reports
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/reports" className={getLinkButtonClasses("secondary", "md")}>
+            <ArrowLeft className="h-4 w-4" />
+            Back to Reports
+          </Link>
+          <a
+            href={`/api/reports/${params.id}/pdf?format=html`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={getLinkButtonClasses("ghost", "md")}
+          >
+            <Printer className="h-4 w-4" />
+            Print Preview
+          </a>
+          <a
+            href={`/api/reports/${params.id}/pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={getLinkButtonClasses("ghost", "md")}
+          >
+            <Download className="h-4 w-4" />
+            Download PDF
+          </a>
+          <ReportCardOperations
+            reportId={reportCard.reportId}
+            isPublished={reportCard.isPublished}
+            canManageRemarks={canManageRemarks}
+            canPublish={canPublishReport}
+            classTeacherRemarks={reportCard.classTeacherRemarks}
+            principalRemarks={reportCard.principalRemarks}
+          />
+        </div>
       </PageHeader>
 
       <div className="grid gap-4 md:grid-cols-4">
@@ -164,17 +211,26 @@ export default async function ReportDetailPage({
           <p>
             <span className="font-medium">Type:</span> {reportCard.reportType}
           </p>
-          {reportCard.pdfUrl ? (
+          <div className="flex flex-wrap gap-2 pt-2">
             <a
-              href={reportCard.pdfUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={buttonVariants({ variant: "ghost", size: "sm" })}
-            >
-              <Download className="h-4 w-4" />
-              Open PDF
+            href={`/api/reports/${params.id}/pdf?format=html`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={getLinkButtonClasses("ghost", "sm")}
+          >
+            <Printer className="h-4 w-4" />
+            Open Print Preview
             </a>
-          ) : null}
+            <a
+            href={`/api/reports/${params.id}/pdf`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={getLinkButtonClasses("ghost", "sm")}
+          >
+            <Download className="h-4 w-4" />
+            Open PDF
+            </a>
+          </div>
         </CardContent>
       </Card>
 

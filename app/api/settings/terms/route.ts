@@ -11,7 +11,6 @@ import {
   getTerms,
   createTerm,
 } from "@/features/settings/services/academicYear.service";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const GET = withAuth(async (req: NextRequest, user) => {
   try {
@@ -20,7 +19,11 @@ export const GET = withAuth(async (req: NextRequest, user) => {
 
     if (!academicYearId) {
       const activeYear = await getActiveAcademicYear(user.school_id);
-      academicYearId = activeYear.success ? activeYear.data?.id ?? null : null;
+      academicYearId = activeYear.success
+        ? (activeYear.data as any)?.academic_year_id ??
+          activeYear.data?.id ??
+          null
+        : null;
     }
 
     if (!academicYearId) {
@@ -40,7 +43,7 @@ export const GET = withAuth(async (req: NextRequest, user) => {
 });
 
 export const POST = withPermission(
-  { module: "settings", action: "create" },
+  { module: "settings", action: "edit" },
   async (req: NextRequest, user) => {
     try {
       const body = await req.json();

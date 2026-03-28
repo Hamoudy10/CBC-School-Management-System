@@ -208,7 +208,7 @@ export async function getStudentRequestContext(
 
   let studentQuery = supabase
     .from('students')
-    .select('student_id, school_id, user_id, current_class_id, first_name, last_name')
+    .select('student_id, school_id, user_id, current_class_id, first_name, last_name, status')
     .eq('student_id', studentId);
 
   if (user.role !== 'super_admin' && schoolId) {

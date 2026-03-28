@@ -24,6 +24,8 @@ import {
   RefreshCw,
   X,
   CheckCircle,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -74,6 +76,8 @@ interface ExamRecord {
   fileUrl?: string | null;
   fileName?: string | null;
   fileType?: string | null;
+  createdBy?: string | null;
+  updatedAt?: string | null;
   createdAt?: string | null;
 }
 
@@ -91,6 +95,8 @@ interface ExamSet {
   academicYearName?: string | null;
   examDate: string;
   notes?: string | null;
+  createdBy?: string | null;
+  updatedAt?: string | null;
   createdAt?: string | null;
 }
 
@@ -138,6 +144,8 @@ function normalizeExam(row: any): ExamRecord {
     fileUrl: row.fileUrl || row.file_url || null,
     fileName: row.fileName || row.file_name || null,
     fileType: row.fileType || row.file_type || null,
+    createdBy: row.createdBy || row.created_by || null,
+    updatedAt: row.updatedAt || row.updated_at || null,
     createdAt: row.createdAt || row.created_at || null,
   };
 }
@@ -170,6 +178,8 @@ function normalizeExamSet(row: any): ExamSet {
     academicYearName: row.academicYearName || yearRow.year || null,
     examDate: row.examDate || row.exam_date || '',
     notes: row.notes ?? null,
+    createdBy: row.createdBy || row.created_by || null,
+    updatedAt: row.updatedAt || row.updated_at || null,
     createdAt: row.createdAt || row.created_at || null,
   };
 }
@@ -182,6 +192,15 @@ function hasFile(exam: ExamRecord) {
   return Boolean(exam.fileUrl);
 }
 
+async function getApiErrorMessage(response: Response, fallback: string) {
+  try {
+    const json = await response.json();
+    return json?.error || json?.message || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function ExamBankPage() {
   const { user, loading, checkPermission } = useAuth();
   const { success, error: toastError } = useToast();
@@ -189,6 +208,8 @@ export default function ExamBankPage() {
 
   const canViewExams = checkPermission('exams', 'view');
   const canCreateExams = checkPermission('exams', 'create');
+  const canUpdateExams = checkPermission('exams', 'update');
+  const canDeleteExams = checkPermission('exams', 'delete');
   const {
     classes,
     academicYears,
@@ -223,6 +244,7 @@ export default function ExamBankPage() {
     description: '',
     content: '',
   });
+  const [editingExam, setEditingExam] = useState<ExamRecord | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isSavingExam, setIsSavingExam] = useState(false);
@@ -236,6 +258,7 @@ export default function ExamBankPage() {
     examDate: '',
     notes: '',
   });
+  const [editingExamSet, setEditingExamSet] = useState<ExamSet | null>(null);
   const [isScheduling, setIsScheduling] = useState(false);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [scheduleExam, setScheduleExam] = useState<ExamRecord | null>(null);
@@ -258,6 +281,50 @@ export default function ExamBankPage() {
 
   const createTerms = termsByYear[createForm.academicYearId] || [];
   const scheduleTerms = termsByYear[scheduleForm.academicYearId] || [];
+  const selectedScheduleExam =
+    scheduleExam ||
+    exams.find((exam) => exam.examId === scheduleForm.examId) ||
+    null;
+
+  const resetExamFileSelection = useCallback(() => {
+    setFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, []);
+
+  const resetExamForm = useCallback(
+    (yearId?: string, type?: ExamType) => {
+      setEditingExam(null);
+      setCreateForm({
+        title: '',
+        learningAreaId: '',
+        type: type || 'exam',
+        academicYearId: yearId || activeYear?.id || '',
+        termId: '',
+        description: '',
+        content: '',
+      });
+      resetExamFileSelection();
+    },
+    [activeYear, resetExamFileSelection],
+  );
+
+  const resetScheduleForm = useCallback(
+    (yearId?: string) => {
+      setEditingExamSet(null);
+      setScheduleExam(null);
+      setScheduleForm({
+        examId: '',
+        classId: '',
+        academicYearId: yearId || activeYear?.id || '',
+        termId: '',
+        examDate: '',
+        notes: '',
+      });
+    },
+    [activeYear],
+  );
 
   const buildExamQuery = useCallback(() => {
     const params = new URLSearchParams();
@@ -301,7 +368,7 @@ export default function ExamBankPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to load exams');
+        throw new Error(await getApiErrorMessage(response, 'Failed to load exams'));
       }
 
       const json = await response.json();
@@ -326,7 +393,9 @@ export default function ExamBankPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to load exam schedule');
+        throw new Error(
+          await getApiErrorMessage(response, 'Failed to load exam schedule'),
+        );
       }
 
       const json = await response.json();
@@ -451,8 +520,31 @@ export default function ExamBankPage() {
     }
   }, [file]);
 
-  const handleCreateExam = async () => {
-    if (!canCreateExams) {
+  const startNewExam = useCallback(() => {
+    resetExamForm(createForm.academicYearId, createForm.type);
+    setActiveTab('create');
+  }, [createForm.academicYearId, createForm.type, resetExamForm]);
+
+  const startEditingExam = useCallback(
+    (exam: ExamRecord) => {
+      setEditingExam(exam);
+      setCreateForm({
+        title: exam.title,
+        learningAreaId: exam.learningAreaId,
+        type: exam.type,
+        academicYearId: exam.academicYearId || activeYear?.id || '',
+        termId: exam.termId || '',
+        description: exam.description || '',
+        content: exam.content || '',
+      });
+      resetExamFileSelection();
+      setActiveTab('create');
+    },
+    [activeYear, resetExamFileSelection],
+  );
+
+  const handleSaveExam = async () => {
+    if (!canCreateExams && !canUpdateExams) {
       return;
     }
 
@@ -462,7 +554,8 @@ export default function ExamBankPage() {
     }
 
     const hasManualContent = createForm.content.trim().length > 0;
-    if (!file && !hasManualContent) {
+    const hasExistingFile = Boolean(editingExam?.fileUrl);
+    if (!file && !hasManualContent && !hasExistingFile) {
       toastError('Missing content', 'Upload a file or provide exam content.');
       return;
     }
@@ -470,9 +563,11 @@ export default function ExamBankPage() {
     setIsSavingExam(true);
     try {
       const fileUrl = await uploadExamFile();
+      const method = editingExam ? 'PATCH' : 'POST';
+      const endpoint = editingExam ? `/api/exams/${editingExam.examId}` : '/api/exams';
 
-      const response = await fetch('/api/exams', {
-        method: 'POST',
+      const response = await fetch(endpoint, {
+        method,
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -483,35 +578,38 @@ export default function ExamBankPage() {
           type: createForm.type,
           termId: createForm.termId || null,
           academicYearId: createForm.academicYearId || null,
-          fileUrl: fileUrl || null,
-          fileName: file?.name || null,
-          fileType: file?.type || null,
+          fileUrl: fileUrl || editingExam?.fileUrl || null,
+          fileName: file?.name || editingExam?.fileName || null,
+          fileType: file?.type || editingExam?.fileType || null,
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save exam');
+        throw new Error(
+          await getApiErrorMessage(
+            response,
+            editingExam ? 'Failed to update exam' : 'Failed to save exam',
+          ),
+        );
       }
 
-      success('Exam saved', 'The exam is now available in the exam bank.');
+      success(
+        editingExam ? 'Exam updated' : 'Exam saved',
+        editingExam
+          ? 'The exam bank entry has been updated.'
+          : 'The exam is now available in the exam bank.',
+      );
 
-      setCreateForm({
-        title: '',
-        learningAreaId: createForm.learningAreaId,
-        type: createForm.type,
-        academicYearId: createForm.academicYearId,
-        termId: createForm.termId,
-        description: '',
-        content: '',
-      });
-      setFile(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      resetExamForm(createForm.academicYearId, createForm.type);
 
       await fetchExams();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to save exam';
+      const message =
+        err instanceof Error
+          ? err.message
+          : editingExam
+            ? 'Failed to update exam'
+            : 'Failed to save exam';
       toastError('Error', message);
     } finally {
       setIsSavingExam(false);
@@ -519,15 +617,36 @@ export default function ExamBankPage() {
   };
 
   const openScheduleModal = (exam: ExamRecord | null) => {
+    setEditingExamSet(null);
     setScheduleExam(exam);
     setScheduleForm((prev) => ({
       ...prev,
       examId: exam?.examId || '',
       academicYearId: exam?.academicYearId || prev.academicYearId || '',
       termId: exam?.termId || prev.termId || '',
+      classId: '',
+      examDate: '',
+      notes: '',
     }));
     setScheduleModalOpen(true);
   };
+
+  const startEditingSchedule = useCallback(
+    (examSet: ExamSet) => {
+      setEditingExamSet(examSet);
+      setScheduleExam(null);
+      setScheduleForm({
+        examId: examSet.examId,
+        classId: examSet.classId,
+        academicYearId: examSet.academicYearId || activeYear?.id || '',
+        termId: examSet.termId || '',
+        examDate: examSet.examDate,
+        notes: examSet.notes || '',
+      });
+      setScheduleModalOpen(true);
+    },
+    [activeYear],
+  );
 
   const handleScheduleExam = async () => {
     if (
@@ -542,8 +661,11 @@ export default function ExamBankPage() {
 
     setIsScheduling(true);
     try {
-      const response = await fetch('/api/exams/sets', {
-        method: 'POST',
+      const endpoint = editingExamSet
+        ? `/api/exams/sets/${editingExamSet.examSetId}`
+        : '/api/exams/sets';
+      const response = await fetch(endpoint, {
+        method: editingExamSet ? 'PATCH' : 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -557,28 +679,129 @@ export default function ExamBankPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to schedule exam');
+        throw new Error(
+          await getApiErrorMessage(
+            response,
+            editingExamSet ? 'Failed to update exam schedule' : 'Failed to schedule exam',
+          ),
+        );
       }
 
-      success('Exam scheduled', 'Exam schedule has been created.');
+      success(
+        editingExamSet ? 'Schedule updated' : 'Exam scheduled',
+        editingExamSet
+          ? 'The exam schedule has been updated.'
+          : 'Exam schedule has been created.',
+      );
       setScheduleModalOpen(false);
-      setScheduleForm({
-        examId: '',
-        classId: '',
-        academicYearId: scheduleForm.academicYearId,
-        termId: '',
-        examDate: '',
-        notes: '',
-      });
-      setScheduleExam(null);
+      resetScheduleForm(scheduleForm.academicYearId);
       await fetchExamSets();
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to schedule exam';
+      const message =
+        err instanceof Error
+          ? err.message
+          : editingExamSet
+            ? 'Failed to update exam schedule'
+            : 'Failed to schedule exam';
       toastError('Error', message);
     } finally {
       setIsScheduling(false);
     }
   };
+
+  const handleDeleteExam = useCallback(
+    async (exam: ExamRecord) => {
+      if (!canDeleteExams) {
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `Delete "${exam.title}" from the exam bank? This cannot be undone.`,
+      );
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/exams/${exam.examId}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        });
+
+        if (!response.ok) {
+          throw new Error(await getApiErrorMessage(response, 'Failed to delete exam'));
+        }
+
+        if (editingExam?.examId === exam.examId) {
+          resetExamForm(createForm.academicYearId, createForm.type);
+        }
+
+        success('Exam deleted', 'The exam bank entry has been removed.');
+        await fetchExams();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to delete exam';
+        toastError('Error', message);
+      }
+    },
+    [
+      canDeleteExams,
+      createForm.academicYearId,
+      createForm.type,
+      editingExam,
+      fetchExams,
+      resetExamForm,
+      success,
+      toastError,
+    ],
+  );
+
+  const handleDeleteSchedule = useCallback(
+    async (examSet: ExamSet) => {
+      if (!canDeleteExams) {
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `Delete the schedule for "${examSet.examTitle}" on ${formatDate(examSet.examDate)}?`,
+      );
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/exams/sets/${examSet.examSetId}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            await getApiErrorMessage(response, 'Failed to delete exam schedule'),
+          );
+        }
+
+        if (editingExamSet?.examSetId === examSet.examSetId) {
+          resetScheduleForm(scheduleForm.academicYearId);
+        }
+
+        success('Schedule deleted', 'The exam schedule has been removed.');
+        await fetchExamSets();
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : 'Failed to delete exam schedule';
+        toastError('Error', message);
+      }
+    },
+    [
+      canDeleteExams,
+      editingExamSet,
+      fetchExamSets,
+      resetScheduleForm,
+      scheduleForm.academicYearId,
+      success,
+      toastError,
+    ],
+  );
 
   const handleClearFilters = () => {
     setSearchTerm('');
@@ -626,7 +849,7 @@ export default function ExamBankPage() {
             <Button
               variant="primary"
               size="sm"
-              onClick={() => setActiveTab('create')}
+              onClick={startNewExam}
             >
               <Plus className="mr-2 h-4 w-4" />
               New Exam
@@ -675,10 +898,26 @@ export default function ExamBankPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <Layers className="h-5 w-5" />
-                    Exam Details
+                    {editingExam ? 'Edit Exam Details' : 'Exam Details'}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {editingExam && (
+                    <div className="flex flex-col gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-blue-900">
+                          Editing {editingExam.title}
+                        </p>
+                        <p className="text-xs text-blue-700">
+                          Update the exam bank entry, then save your changes.
+                        </p>
+                      </div>
+                      <Button variant="secondary" size="sm" onClick={startNewExam}>
+                        Cancel Edit
+                      </Button>
+                    </div>
+                  )}
+
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-1.5">
                       <label className="text-sm font-medium text-gray-700">
@@ -825,18 +1064,22 @@ export default function ExamBankPage() {
 
                   <div className="flex items-center justify-between rounded-lg bg-gray-50 p-4">
                     <div className="text-sm text-gray-600">
-                      <p className="font-medium text-gray-800">Ready to save?</p>
+                      <p className="font-medium text-gray-800">
+                        {editingExam ? 'Ready to update?' : 'Ready to save?'}
+                      </p>
                       <p>
-                        Provide a file or typed content, then save to the exam bank.
+                        {editingExam
+                          ? 'Keep the current file or upload a replacement before saving.'
+                          : 'Provide a file or typed content, then save to the exam bank.'}
                       </p>
                     </div>
                     <Button
                       variant="primary"
-                      onClick={handleCreateExam}
+                      onClick={handleSaveExam}
                       loading={isSavingExam || isUploadingFile}
                     >
                       <CheckCircle className="mr-2 h-4 w-4" />
-                      Save Exam
+                      {editingExam ? 'Update Exam' : 'Save Exam'}
                     </Button>
                   </div>
                 </CardContent>
@@ -846,10 +1089,27 @@ export default function ExamBankPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <Upload className="h-5 w-5" />
-                    Upload Exam File
+                    {editingExam ? 'Replace Exam File' : 'Upload Exam File'}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
+                  {editingExam?.fileUrl && !file && (
+                    <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
+                      <p className="font-medium text-gray-900">
+                        Current file: {editingExam.fileName || 'Attached exam file'}
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mt-2"
+                        onClick={() => window.open(editingExam.fileUrl || '', '_blank')}
+                      >
+                        <FileText className="mr-2 h-4 w-4" />
+                        Open Current File
+                      </Button>
+                    </div>
+                  )}
+
                   <div
                     className={cn(
                       'flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-6 text-center transition-colors',
@@ -1096,6 +1356,15 @@ export default function ExamBankPage() {
                                 <FileText className="h-4 w-4" />
                               </Button>
                             )}
+                            {canUpdateExams && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => startEditingExam(exam)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            )}
                             {canCreateExams && (
                               <Button
                                 variant="secondary"
@@ -1103,6 +1372,15 @@ export default function ExamBankPage() {
                                 onClick={() => openScheduleModal(exam)}
                               >
                                 Set Exam
+                              </Button>
+                            )}
+                            {canDeleteExams && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteExam(exam)}
+                              >
+                                <Trash2 className="h-4 w-4 text-red-600" />
                               </Button>
                             )}
                           </div>
@@ -1156,6 +1434,9 @@ export default function ExamBankPage() {
                           <TableHead>Date</TableHead>
                           <TableHead>Term / Year</TableHead>
                           <TableHead>Type</TableHead>
+                          {(canUpdateExams || canDeleteExams) && (
+                            <TableHead className="text-right">Actions</TableHead>
+                          )}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1184,6 +1465,30 @@ export default function ExamBankPage() {
                                 {EXAM_TYPE_BADGES[set.examType].label}
                               </Badge>
                             </TableCell>
+                            {(canUpdateExams || canDeleteExams) && (
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-2">
+                                  {canUpdateExams && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => startEditingSchedule(set)}
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                  {canDeleteExams && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleDeleteSchedule(set)}
+                                    >
+                                      <Trash2 className="h-4 w-4 text-red-600" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </TableCell>
+                            )}
                           </TableRow>
                         ))}
                       </TableBody>
@@ -1196,9 +1501,16 @@ export default function ExamBankPage() {
         )}
       </Tabs>
 
-      <Modal open={scheduleModalOpen} onClose={() => setScheduleModalOpen(false)} size="lg">
+      <Modal
+        open={scheduleModalOpen}
+        onClose={() => {
+          setScheduleModalOpen(false);
+          resetScheduleForm(scheduleForm.academicYearId);
+        }}
+        size="lg"
+      >
         <ModalHeader>
-          <ModalTitle>Set Exam</ModalTitle>
+          <ModalTitle>{editingExamSet ? 'Edit Exam Schedule' : 'Set Exam'}</ModalTitle>
         </ModalHeader>
         <ModalBody>
           <div className="space-y-4">
@@ -1224,14 +1536,16 @@ export default function ExamBankPage() {
               </div>
             )}
 
-            {scheduleExam && (
+            {selectedScheduleExam && (
               <div className="rounded-lg border border-gray-200 p-4">
-                <p className="text-sm font-medium text-gray-900">{scheduleExam.title}</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {selectedScheduleExam.title}
+                </p>
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                  <Badge variant={EXAM_TYPE_BADGES[scheduleExam.type].variant}>
-                    {EXAM_TYPE_BADGES[scheduleExam.type].label}
+                  <Badge variant={EXAM_TYPE_BADGES[selectedScheduleExam.type].variant}>
+                    {EXAM_TYPE_BADGES[selectedScheduleExam.type].label}
                   </Badge>
-                  <span>{scheduleExam.learningAreaName || 'No subject'}</span>
+                  <span>{selectedScheduleExam.learningAreaName || 'No subject'}</span>
                 </div>
               </div>
             )}
@@ -1331,11 +1645,17 @@ export default function ExamBankPage() {
           </div>
         </ModalBody>
         <ModalFooter>
-          <Button variant="secondary" onClick={() => setScheduleModalOpen(false)}>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setScheduleModalOpen(false);
+              resetScheduleForm(scheduleForm.academicYearId);
+            }}
+          >
             Cancel
           </Button>
           <Button variant="primary" onClick={handleScheduleExam} loading={isScheduling}>
-            Save Schedule
+            {editingExamSet ? 'Update Schedule' : 'Save Schedule'}
           </Button>
         </ModalFooter>
       </Modal>

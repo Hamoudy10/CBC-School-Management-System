@@ -76,23 +76,3 @@ export type {
   BulkAssignmentInput,
 } from './validators/staff.schema';
 
-// ============================================================
-// Service Functions
-// ============================================================
-export {
-  // Staff CRUD
-  listStaff,
-  getStaffById,
-  getStaffDetail,
-  createStaff,
-  updateStaff,
-  deactivateStaff,
-  // Leave management
-  createLeave,
-  updateLeaveStatus,
-  listLeaves,
-  // Subject assignments
-  createAssignment,
-  listAssignments,
-  deleteAssignment,
-} from './services/staff.service';

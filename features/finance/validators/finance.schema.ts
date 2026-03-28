@@ -114,6 +114,43 @@ export const createPaymentSchema = z.object({
 
 export type CreatePaymentInput = z.infer<typeof createPaymentSchema>;
 
+export const updatePaymentSchema = z
+  .object({
+    amountPaid: positiveAmountField.optional(),
+    paymentMethod: z
+      .enum(["cash", "bank_transfer", "mpesa", "cheque", "other"])
+      .optional(),
+    transactionId: z.string().max(100).optional(),
+    paymentDate: dateField.optional(),
+    notes: z.string().max(500).optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "At least one field must be provided",
+  });
+
+export type UpdatePaymentInput = z.infer<typeof updatePaymentSchema>;
+
+export const refundPaymentSchema = z.object({
+  reason: z.string().min(1, "Reason is required").max(500),
+});
+
+export type RefundPaymentInput = z.infer<typeof refundPaymentSchema>;
+
+export const financeExceptionFiltersSchema = z.object({
+  type: z
+    .enum(["fee_waiver", "payment_refund", "payment_adjustment"])
+    .optional(),
+  studentId: uuidField.optional(),
+  startDate: dateField.optional(),
+  endDate: dateField.optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+export type FinanceExceptionFiltersInput = z.infer<
+  typeof financeExceptionFiltersSchema
+>;
+
 export const paymentFiltersSchema = z.object({
   studentFeeId: uuidField.optional(),
   studentId: uuidField.optional(),

@@ -19,7 +19,7 @@ import {
   createStaff,
   staffListFiltersSchema,
   createStaffSchema,
-} from '@/features/staff';
+} from '@/features/staff/server';
 
 // ============================================================
 // GET Handler - List Staff

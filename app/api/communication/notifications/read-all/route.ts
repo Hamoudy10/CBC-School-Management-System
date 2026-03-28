@@ -1,27 +1,21 @@
 import { NextRequest } from "next/server";
-import { withAuth } from "@/lib/api/withAuth";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { withPermission } from "@/lib/api/withAuth";
 import { errorResponse, successResponse } from "@/lib/api/response";
+import { markAllNotificationsAsRead } from "@/features/communication";
 
-export const PUT = withAuth(async (_req: NextRequest, user: any) => {
-  try {
-    const supabase = await createSupabaseServerClient();
-    const { error } = await supabase
-      .from("notifications")
-      .update({
-        read_status: "read",
-        read_at: new Date().toISOString(),
-      })
-      .eq("user_id", user.id)
-      .eq("school_id", user.school_id)
-      .eq("read_status", "unread");
+export const PUT = withPermission(
+  { module: "communication", action: "view" },
+  async (_req: NextRequest, { user }) => {
+    try {
+      const result = await markAllNotificationsAsRead(user.id, user.schoolId!);
 
-    if (error) {
-      return errorResponse(error.message, 400);
+      if (!result.success) {
+        return errorResponse(result.message, 400);
+      }
+
+      return successResponse({ allRead: true, message: result.message });
+    } catch (error: any) {
+      return errorResponse(error.message, 500);
     }
-
-    return successResponse({ allRead: true });
-  } catch (error: any) {
-    return errorResponse(error.message, 500);
-  }
-});
+  },
+);

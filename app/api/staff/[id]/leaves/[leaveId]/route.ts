@@ -18,7 +18,7 @@ import {
   listLeaves,
   updateLeaveStatus,
   updateLeaveStatusSchema,
-} from '@/features/staff';
+} from '@/features/staff/server';
 
 // ============================================================
 // GET Handler - Get Single Leave Request

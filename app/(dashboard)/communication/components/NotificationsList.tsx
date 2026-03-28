@@ -27,10 +27,10 @@ export function NotificationsList() {
       setLoading(true);
       setError(null);
       const res = await fetch('/api/communication/notifications');
+      const json = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error('Failed to fetch notifications');
+        throw new Error(json?.error || 'Failed to fetch notifications');
       }
-      const json = await res.json();
       setNotifications(json.data || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load notifications');
@@ -45,9 +45,13 @@ export function NotificationsList() {
 
   const markAsRead = async (id: string) => {
     try {
-      await fetch(`/api/communication/notifications/${id}/read`, {
+      const res = await fetch(`/api/communication/notifications/${id}/read`, {
         method: 'PUT',
       });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error || 'Failed to mark notification as read');
+      }
       setNotifications((prev) =>
         prev.map((n) =>
           (n.notification_id || n.id) === id

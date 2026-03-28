@@ -43,7 +43,7 @@ For each module, follow this order:
 | Academics | Reviewed | Major fixes implemented | Curriculum CRUD and management UI added |
 | Assessments | Reviewed | Major fixes implemented | Entry workflow and service layer restored |
 | Attendance | Reviewed | Major fixes implemented | CRUD and summary routes restored |
-| Exams | Previously implemented | Needs review pass | Exam bank exists |
+| Exams | Reviewed | Major fixes implemented | Bank and schedule management aligned |
 | Reports | Reviewed | Major fixes implemented | Listing, generation, and detail flow corrected |
 | Communication | Reviewed | Major fixes implemented | Live dashboard routes aligned with schema |
 | Timetable | Reviewed | Major fixes implemented | Dashboard/API/service contract restored |
@@ -713,6 +713,66 @@ Compliance/Audit was reviewed last in the current pass because the visible modul
 1. Consolidate the stale discipline service layer so there is one canonical implementation behind the repaired routes.
 2. Add a dedicated parent-consent management UI for school staff and guardians.
 3. Review `Exams` next, since it is the main remaining module still marked as needing a fresh review pass.
+
+---
+
+## 12. Exams Module
+
+### Review Summary
+Exams was reviewed after Compliance/Audit because it was the last major module still marked as needing a fresh review pass, even though a basic exam bank implementation already existed.
+
+### Initial Findings
+- The module only exposed list/create routes for exam-bank items and scheduled exams, so update/delete maintenance flows were missing.
+- The dashboard could create exams and schedules, but there was no working way to correct or remove mistakes once records existed.
+- Scheduled exam writes did not enforce teacher-subject assignments, which meant teacher-scoped users could schedule exams outside their assigned class/subject combinations.
+- API failures surfaced as generic dashboard errors, so duplicate schedules and scheduled-exam delete conflicts were hard to diagnose from the UI.
+
+### Implemented Changes
+
+#### Backend
+- Added shared exam helpers in:
+  - `app/api/exams/_lib.ts`
+- Updated exam-bank collection route:
+  - `app/api/exams/route.ts`
+  - reused shared normalization/context helpers
+- Added exam-bank item route:
+  - `app/api/exams/[id]/route.ts`
+  - supports detail, update, and delete flows
+  - restricts teacher-scoped edits to exams they created
+  - returns friendly conflict messaging when a scheduled exam blocks deletion
+- Updated exam schedule collection route:
+  - `app/api/exams/sets/route.ts`
+  - reused shared normalization/context helpers
+  - enforces teacher-subject assignment checks on scheduling
+  - returns a clear duplicate-schedule conflict response
+- Added exam schedule item route:
+  - `app/api/exams/sets/[id]/route.ts`
+  - supports detail, update, and delete flows
+  - enforces assignment checks on schedule updates
+
+#### Frontend
+- Updated `app/(dashboard)/exams/page.tsx`
+  - create form now supports edit mode for existing exam-bank entries
+  - existing attached files can be preserved and reopened during edits
+  - exam-bank table now exposes edit and delete actions
+  - schedule list now exposes edit and delete actions
+  - schedule modal now supports both create and edit flows
+  - API error handling now surfaces backend validation/conflict messages directly
+
+### Validation
+- Targeted ESLint passed for the modified exam dashboard and API files.
+- `npm.cmd run type-check` passed.
+
+### Remaining Gaps
+- The exam bank still has no version history or revision comparison for updated papers.
+- Schedule management is now editable, but the schedule view still lacks filters, export, or calendar-style presentation.
+- Exam files and typed content can be reviewed, but there is still no dedicated print/PDF generation flow for bank entries.
+- Teachers can still browse the school exam bank broadly; if ownership- or assignment-scoped visibility is desired, that needs a deliberate product decision.
+
+### Next Recommended Exams Work
+1. Add schedule filters/export and a calendar-style exam timetable view.
+2. Add exam versioning plus audit-friendly file replacement history.
+3. Decide whether teacher-facing exam-bank visibility should remain school-wide or become owner/assignment scoped.
 
 ---
 

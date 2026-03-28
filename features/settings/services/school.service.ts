@@ -1,7 +1,11 @@
 // features/settings/services/school.service.ts
 // School profile and settings management
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  createSupabaseAdminClient,
+  createSupabaseServerClient,
+} from "@/lib/supabase/server";
+import { ensureStorageBucket, STORAGE_BUCKET } from "@/lib/supabase/storage";
 import type { SchoolProfile, SchoolSettings } from "../types";
 import type {
   UpdateSchoolProfileInput,
@@ -10,6 +14,7 @@ import type {
 
 type SettingsPayload = SchoolSettings["settings"];
 type SettingType = "string" | "number" | "boolean" | "json";
+type GradingSystem = SettingsPayload["academic"]["grading_system"];
 
 type SchoolSettingRow = {
   school_id: string;
@@ -51,7 +56,9 @@ const DEFAULT_SETTINGS_PAYLOAD: SettingsPayload = {
 };
 
 function cloneSettingsPayload(): SettingsPayload {
-  return JSON.parse(JSON.stringify(DEFAULT_SETTINGS_PAYLOAD)) as SettingsPayload;
+  return JSON.parse(
+    JSON.stringify(DEFAULT_SETTINGS_PAYLOAD),
+  ) as SettingsPayload;
 }
 
 function inferSettingType(value: unknown): SettingType {
@@ -106,28 +113,34 @@ function flattenSettingsPayload(
 ): SchoolSettingRow[] {
   const rows: SchoolSettingRow[] = [];
 
-  (Object.entries(settings) as [keyof SettingsPayload, Record<string, unknown>][])
-    .forEach(([category, values]) => {
-      Object.entries(values).forEach(([key, value]) => {
-        rows.push({
-          school_id: schoolId,
-          setting_key: `${category}.${key}`,
-          setting_value: serializeSettingValue(value),
-          setting_type: inferSettingType(value),
-          category,
-        });
+  (
+    Object.entries(settings) as [
+      keyof SettingsPayload,
+      Record<string, unknown>,
+    ][]
+  ).forEach(([category, values]) => {
+    Object.entries(values).forEach(([key, value]) => {
+      rows.push({
+        school_id: schoolId,
+        setting_key: `${category}.${key}`,
+        setting_value: serializeSettingValue(value),
+        setting_type: inferSettingType(value),
+        category,
       });
     });
+  });
 
   return rows;
 }
 
-function buildSettingsFromRows(rows: Array<{
-  setting_key: string;
-  setting_value: string;
-  setting_type?: string | null;
-  category: string;
-}>): SettingsPayload {
+function buildSettingsFromRows(
+  rows: Array<{
+    setting_key: string;
+    setting_value: string;
+    setting_type?: string | null;
+    category: string;
+  }>,
+): SettingsPayload {
   const settings = cloneSettingsPayload();
 
   rows.forEach((row) => {
@@ -143,27 +156,57 @@ function buildSettingsFromRows(rows: Array<{
     }
 
     const fallback = (settings[category] as Record<string, unknown>)[key];
-    const type = (row.setting_type as SettingType | null) ?? inferSettingType(fallback);
+    const type =
+      (row.setting_type as SettingType | null) ?? inferSettingType(fallback);
 
-    (settings[category] as Record<string, unknown>)[key] = deserializeSettingValue(
-      row.setting_value,
-      type,
-      fallback,
-    );
+    (settings[category] as Record<string, unknown>)[key] =
+      deserializeSettingValue(row.setting_value, type, fallback);
   });
 
-  return settings;
+  return normalizeSettingsPayload(settings);
 }
 
 function mergeSettingsPayload(
   current: SettingsPayload,
   input: UpdateSettingsInput,
 ): SettingsPayload {
-  return {
-    academic: { ...current.academic, ...input.academic },
+  return normalizeSettingsPayload({
+    academic: {
+      ...current.academic,
+      ...input.academic,
+      grading_system: normalizeGradingSystem(
+        input.academic?.grading_system ?? current.academic.grading_system,
+      ),
+    },
     finance: { ...current.finance, ...input.finance },
     communication: { ...current.communication, ...input.communication },
     general: { ...current.general, ...input.general },
+  });
+}
+
+function normalizeGradingSystem(value: unknown): GradingSystem {
+  if (value === "cbc_4_point") {
+    return "cbc_4point";
+  }
+
+  if (
+    value === "cbc_4point" ||
+    value === "percentage" ||
+    value === "letter_grade"
+  ) {
+    return value;
+  }
+
+  return DEFAULT_SETTINGS_PAYLOAD.academic.grading_system;
+}
+
+function normalizeSettingsPayload(settings: SettingsPayload): SettingsPayload {
+  return {
+    ...settings,
+    academic: {
+      ...settings.academic,
+      grading_system: normalizeGradingSystem(settings.academic.grading_system),
+    },
   };
 }
 
@@ -210,8 +253,7 @@ export async function updateSchoolProfile(
     }
   });
 
-  const { error } = await (supabase
-    .from("schools") as any)
+  const { error } = await (supabase.from("schools") as any)
     .update(updateData)
     .eq("school_id", schoolId);
 
@@ -229,7 +271,7 @@ export async function updateSchoolProfile(
 export async function getSchoolSettings(
   schoolId: string,
 ): Promise<{ success: boolean; data?: SchoolSettings; message?: string }> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("school_settings")
     .select("setting_key, setting_value, setting_type, category")
@@ -269,7 +311,7 @@ export async function updateSchoolSettings(
   schoolId: string,
   input: UpdateSettingsInput,
 ): Promise<{ success: boolean; message: string }> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await createSupabaseAdminClient();
   const current = await getSchoolSettings(schoolId);
   if (!current.success || !current.data) {
     return { success: false, message: "Failed to fetch current settings" };
@@ -297,12 +339,20 @@ export async function uploadSchoolLogo(
   schoolId: string,
   file: File,
 ): Promise<{ success: boolean; url?: string; message: string }> {
-  const supabase = await createSupabaseServerClient();
+  const storageSetup = await ensureStorageBucket();
+  if (!storageSetup.success) {
+    return {
+      success: false,
+      message: `Storage setup failed: ${storageSetup.message}. Please ensure the "${STORAGE_BUCKET}" bucket exists.`,
+    };
+  }
+
+  const supabase = storageSetup.client;
   const fileExt = file.name.split(".").pop();
   const fileName = `${schoolId}/logo.${fileExt}`;
 
   const { error: uploadError } = await supabase.storage
-    .from("school-assets")
+    .from(STORAGE_BUCKET)
     .upload(fileName, file, {
       cacheControl: "3600",
       upsert: true,
@@ -313,11 +363,11 @@ export async function uploadSchoolLogo(
   }
 
   const { data: urlData } = supabase.storage
-    .from("school-assets")
+    .from(STORAGE_BUCKET)
     .getPublicUrl(fileName);
 
-  await (supabase
-    .from("schools") as any)
+  const serverClient = await createSupabaseServerClient();
+  await (serverClient.from("schools") as any)
     .update({
       logo_url: urlData.publicUrl,
       updated_at: new Date().toISOString(),

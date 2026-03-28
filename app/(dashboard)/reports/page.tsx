@@ -1,31 +1,37 @@
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
-  PageHeader,
-  Card,
-  CardHeader,
-  CardContent,
-  CardTitle,
   Badge,
+  Button,
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  PageHeader,
+  Select,
   Table,
-  TableHeader,
-  TableRow,
-  TableHead,
   TableBody,
   TableCell,
-  Button,
-  Select,
-  CardFooter,
-  buttonVariants,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui";
-import { BookOpen, FileText, Download, Plus } from "lucide-react";
-import { formatDate, getInitials } from "@/lib/utils";
+import { Download, Eye, FileText, Plus, Printer } from "lucide-react";
+import { hasPermission } from "@/lib/auth/permissions";
+import { cn, formatDate, getInitials } from "@/lib/utils";
+import type { RoleName } from "@/types/roles";
 
 type RoleRelation = { name: string } | { name: string }[] | null;
-type ReportLevel = NonNullable<ReportCard["overall_level"]>;
+type PerformanceLevel =
+  | "below_expectation"
+  | "approaching"
+  | "meeting"
+  | "exceeding"
+  | null;
 
-interface ReportCard {
+interface ReportRow {
   report_id: string;
   student_id: string;
   class_id: string;
@@ -33,54 +39,19 @@ interface ReportCard {
   academic_year_id: string;
   report_type: "term" | "yearly";
   overall_average: number | null;
-  overall_level: "below_expectation" | "approaching" | "meeting" | "exceeding" | null;
-  class_teacher_remarks: string | null;
-  principal_remarks: string | null;
-  analytics_json: any | null;
-  pdf_url: string | null;
-  is_published: boolean;
-  published_at: string | null;
-  generated_at: string;
-  generated_by: string | null;
-  students: {
-    first_name: string;
-    last_name: string;
-    admission_number: string;
-    photo_url: string | null;
-  } | null;
-  classes: {
-    name: string;
-    stream: string | null;
-  } | null;
-  terms: {
-    name: "Term 1" | "Term 2" | "Term 3";
-  } | null;
-}
-
-interface ReportCardRow {
-  report_id: string;
-  student_id: string;
-  class_id: string;
-  term_id: string;
-  academic_year_id: string;
-  report_type: "term" | "yearly";
-  overall_average: number | null;
-  overall_level: ReportCard["overall_level"];
+  overall_level: PerformanceLevel;
   is_published: boolean;
   generated_at: string;
-  pdf_url: string | null;
   students:
     | {
         first_name: string;
         last_name: string;
         admission_number: string;
-        photo_url: string | null;
       }
     | {
         first_name: string;
         last_name: string;
         admission_number: string;
-        photo_url: string | null;
       }[]
     | null;
   classes:
@@ -103,133 +74,238 @@ interface ReportCardRow {
     | null;
 }
 
-interface AcademicYear {
-  academic_year_id: string;
-  year: string;
-  is_active: boolean;
-}
-
-interface Term {
-  term_id: string;
-  name: "Term 1" | "Term 2" | "Term 3";
-  is_active: boolean;
-}
-
 function firstRelation<T>(value: T | T[] | null | undefined): T | null {
   if (Array.isArray(value)) {
     return value[0] ?? null;
   }
+
   return value ?? null;
 }
 
 function getRoleName(value: RoleRelation): string {
-  const role = firstRelation(value);
-  return role?.name ?? "student";
+  return firstRelation(value)?.name ?? "student";
 }
 
-function isReportLevel(value: ReportCard["overall_level"]): value is ReportLevel {
-  return (
-    value === "below_expectation" ||
-    value === "approaching" ||
-    value === "meeting" ||
-    value === "exceeding"
+function titleCaseLevel(level: PerformanceLevel) {
+  return level ? level.replace(/_/g, " ") : "Not Assessed";
+}
+
+function getLevelBadgeVariant(level: PerformanceLevel) {
+  switch (level) {
+    case "exceeding":
+      return "success";
+    case "meeting":
+      return "primary";
+    case "approaching":
+      return "warning";
+    case "below_expectation":
+      return "danger";
+    default:
+      return "default";
+  }
+}
+
+function getStatusBadgeVariant(isPublished: boolean) {
+  return isPublished ? "success" : "warning";
+}
+
+function buildReportsQueryString(filters: Record<string, string>) {
+  return new URLSearchParams(
+    Object.fromEntries(
+      Object.entries(filters).filter(([, value]) => value.length > 0),
+    ),
+  ).toString();
+}
+
+function getLinkButtonClasses(
+  variant: "primary" | "secondary" | "ghost" = "secondary",
+  size: "sm" | "md" = "md",
+) {
+  return cn(
+    "inline-flex items-center justify-center gap-2 font-medium transition-all",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+    "disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]",
+    size === "sm" ? "h-8 px-3 text-sm rounded-md" : "h-10 px-4 text-sm rounded-lg",
+    variant === "primary" &&
+      "bg-primary-600 text-white hover:bg-primary-700 focus-visible:ring-primary-500",
+    variant === "secondary" &&
+      "bg-secondary-100 text-secondary-700 hover:bg-secondary-200 focus-visible:ring-secondary-500",
+    variant === "ghost" &&
+      "text-secondary-600 bg-transparent hover:bg-secondary-100 hover:text-secondary-900 focus-visible:ring-secondary-500",
   );
 }
 
 export default async function ReportsPage({
   searchParams,
-}: { 
-  searchParams: { 
-    term?: string; 
-    class?: string; 
-    student?: string; 
+}: {
+  searchParams: {
+    term?: string;
+    class?: string;
+    student?: string;
     status?: string;
+    reportType?: string;
     page?: string;
-  }
+  };
 }) {
   const supabase = await createSupabaseServerClient();
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
 
-  // 1. Verify session and user role
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
+  if (!authUser) {
     redirect("/login");
   }
 
   const { data: user, error: userError } = await supabase
     .from("users")
     .select("user_id, school_id, roles ( name )")
-    .eq("user_id", session.user.id)
-    .maybeSingle(); // Use maybeSingle to prevent 406 if user not found
+    .eq("user_id", authUser.id)
+    .maybeSingle();
 
-  if (userError || !user || !user.school_id || !user.roles) {
-    console.error("User data, school_id, or roles not found:", userError);
+  if (userError || !user?.school_id) {
     redirect("/login");
   }
 
-  const roleName = getRoleName(user.roles as RoleRelation);
+  const roleName = getRoleName(user.roles as RoleRelation) as RoleName;
   const schoolId = user.school_id;
   const userId = user.user_id;
-
-  const isAdmin = ["super_admin", "school_admin", "principal", "deputy_principal"].includes(roleName);
-  const isTeacher = ["teacher", "class_teacher", "subject_teacher"].includes(roleName);
   const isParent = roleName === "parent";
   const isStudent = roleName === "student";
+  const canViewReports = hasPermission(roleName, "reports", "view");
+  const canGenerateReports = hasPermission(roleName, "reports", "create");
+  const canExportReports = hasPermission(roleName, "reports", "export");
 
-  // Check if role is allowed to view reports page
-  if (!(isAdmin || isTeacher || isParent || isStudent)) {
-    redirect("/dashboard"); // Redirect unauthorized roles
+  if (!canViewReports) {
+    redirect("/dashboard");
   }
 
-  // Fetch active academic year and term
-  const { data: activeAcademicYear, error: yearError } = await supabase
+  const { data: activeAcademicYear } = await supabase
     .from("academic_years")
     .select("academic_year_id, year, is_active")
     .eq("school_id", schoolId)
     .eq("is_active", true)
     .maybeSingle();
 
-  if (yearError || !activeAcademicYear) {
-    console.warn("No active academic year found:", yearError);
-    // Handle gracefully: show a message or redirect if critical
+  if (!activeAcademicYear) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen">
-        <h1 className="text-2xl font-bold">No Active Academic Year Configured</h1>
-        <p className="text-gray-600">Please contact your school administrator to set up the academic year.</p>
+      <div className="flex min-h-screen flex-col items-center justify-center">
+        <h1 className="text-2xl font-bold">
+          No Active Academic Year Configured
+        </h1>
+        <p className="text-gray-600">
+          Please contact your school administrator to set up the academic year.
+        </p>
       </div>
     );
   }
 
-  const { data: activeTerm, error: termError } = await supabase
+  const { data: terms } = await supabase
     .from("terms")
     .select("term_id, name, is_active")
     .eq("school_id", schoolId)
     .eq("academic_year_id", activeAcademicYear.academic_year_id)
-    .eq("is_active", true)
-    .maybeSingle();
+    .order("start_date", { ascending: true });
 
-  if (termError || !activeTerm) {
-    console.warn("No active term found:", termError);
-    // Handle gracefully: show a message or redirect if critical
-     return (
-      <div className="flex flex-col items-center justify-center min-h-screen">
-        <h1 className="text-2xl font-bold">No Active Term Configured</h1>
-        <p className="text-gray-600">Please contact your school administrator to set up the current term.</p>
-      </div>
-    );
+  const { data: classes } = await supabase
+    .from("classes")
+    .select("class_id, name, stream")
+    .eq("school_id", schoolId)
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+
+  let studentOptions: Array<{
+    student_id: string;
+    first_name: string;
+    last_name: string;
+    admission_number: string;
+  }> = [];
+
+  if (isParent) {
+    const { data: guardianLinks } = await supabase
+      .from("student_guardians")
+      .select(
+        `
+        student_id,
+        students (
+          student_id,
+          first_name,
+          last_name,
+          admission_number
+        )
+      `,
+      )
+      .eq("guardian_user_id", userId);
+
+    studentOptions = (guardianLinks ?? [])
+      .map((row: any) => firstRelation(row.students))
+      .filter(Boolean);
+  } else if (isStudent) {
+    const { data: studentRecord } = await supabase
+      .from("students")
+      .select("student_id, first_name, last_name, admission_number")
+      .eq("user_id", userId)
+      .eq("school_id", schoolId)
+      .maybeSingle();
+
+    studentOptions = studentRecord ? [studentRecord] : [];
+  } else {
+    const { data: schoolStudents } = await supabase
+      .from("students")
+      .select("student_id, first_name, last_name, admission_number")
+      .eq("school_id", schoolId)
+      .order("first_name", { ascending: true });
+
+    studentOptions = schoolStudents ?? [];
   }
 
-  // Query parameters for filtering
-  const selectedTermId = searchParams.term || activeTerm?.term_id;
-  const selectedClassId = searchParams.class;
-  const selectedStudentId = searchParams.student;
-  const selectedStatus = searchParams.status;
+  const activeTerm = (terms ?? []).find((term) => term.is_active);
+  const selectedTermId = searchParams.term || activeTerm?.term_id || "";
+  const selectedClassId = searchParams.class || "";
+  const selectedStudentId = searchParams.student || "";
+  const selectedStatus = searchParams.status || "";
+  const selectedReportType = searchParams.reportType || "";
   const currentPage = Number(searchParams.page) || 1;
-  const itemsPerPage = 10; // Assuming 10 items per page for now
-  const offset = (currentPage - 1) * itemsPerPage;
+  const pageSize = 12;
+  const offset = (currentPage - 1) * pageSize;
+
+  const applyFilters = (query: any) => {
+    query = query
+      .eq("school_id", schoolId)
+      .eq("academic_year_id", activeAcademicYear.academic_year_id);
+
+    if (selectedTermId) {
+      query = query.eq("term_id", selectedTermId);
+    }
+    if (selectedClassId) {
+      query = query.eq("class_id", selectedClassId);
+    }
+    if (selectedStudentId) {
+      query = query.eq("student_id", selectedStudentId);
+    }
+    if (selectedStatus) {
+      query = query.eq("is_published", selectedStatus === "published");
+    }
+    if (selectedReportType) {
+      query = query.eq("report_type", selectedReportType);
+    }
+
+    if (isParent) {
+      const childIds = studentOptions.map((student) => student.student_id);
+      query = query.in("student_id", childIds.length > 0 ? childIds : ["__none__"]);
+    } else if (isStudent) {
+      query = query.eq(
+        "student_id",
+        studentOptions[0]?.student_id ?? "__none__",
+      );
+    }
+
+    return query;
+  };
 
   let reportQuery = supabase
     .from("report_cards")
-    .select(`
+    .select(
+      `
       report_id,
       student_id,
       class_id,
@@ -240,205 +316,200 @@ export default async function ReportsPage({
       overall_level,
       is_published,
       generated_at,
-      pdf_url,
-      students ( first_name, last_name, admission_number, photo_url ),
+      students ( first_name, last_name, admission_number ),
       classes ( name, stream ),
       terms ( name )
-    `, { count: "exact" })
-    .eq("school_id", schoolId)
-    .eq("academic_year_id", activeAcademicYear.academic_year_id)
+    `,
+      { count: "exact" },
+    )
     .order("generated_at", { ascending: false })
-    .range(offset, offset + itemsPerPage - 1);
+    .range(offset, offset + pageSize - 1);
+  reportQuery = applyFilters(reportQuery);
 
-  if (selectedTermId) {
-    reportQuery = reportQuery.eq("term_id", selectedTermId);
-  }
-  if (selectedClassId) {
-    reportQuery = reportQuery.eq("class_id", selectedClassId);
-  }
-  if (selectedStatus) {
-    reportQuery = reportQuery.eq("is_published", selectedStatus === "published");
-  }
+  let statsQuery = supabase
+    .from("report_cards")
+    .select("is_published, overall_average, overall_level");
+  statsQuery = applyFilters(statsQuery);
 
-  if (isParent) {
-    const { data: guardianLinks, error: guardianError } = await supabase
-      .from("student_guardians")
-      .select("student_id")
-      .eq("guardian_user_id", userId);
-
-    if (guardianError) {
-      console.error("Error fetching guardian links:", guardianError);
-      return <p>Error loading reports.</p>;
-    }
-    const childrenIds = guardianLinks?.map(link => link.student_id) || [];
-    reportQuery = reportQuery.in("student_id", childrenIds);
-  } else if (isStudent) {
-    const { data: studentRecord, error: studentError } = await supabase
-      .from("students")
-      .select("student_id")
-      .eq("user_id", userId)
-      .eq("school_id", schoolId)
-      .maybeSingle();
-
-    if (studentError || !studentRecord?.student_id) {
-      return <p>Error loading student reports.</p>;
-    }
-
-    reportQuery = reportQuery.eq("student_id", studentRecord.student_id);
-  } else if (selectedStudentId) {
-    reportQuery = reportQuery.eq("student_id", selectedStudentId);
-  }
-
-  const { data: reportCardsRaw, count, error: reportError } = await reportQuery;
+  const [{ data: reportCardsRaw, count, error: reportError }, { data: statsRows }] =
+    await Promise.all([reportQuery, statsQuery]);
 
   if (reportError) {
     console.error("Error fetching report cards:", reportError);
     return <p>Error loading report cards.</p>;
   }
 
-  const reportCards: ReportCard[] =
-    (reportCardsRaw as ReportCardRow[] | null)?.map((report) => ({
-      report_id: report.report_id,
-      student_id: report.student_id,
-      class_id: report.class_id,
-      term_id: report.term_id,
-      academic_year_id: report.academic_year_id,
-      report_type: report.report_type,
-      overall_average: report.overall_average,
-      overall_level: report.overall_level,
-      class_teacher_remarks: null,
-      principal_remarks: null,
-      analytics_json: null,
-      pdf_url: report.pdf_url,
-      is_published: report.is_published,
-      published_at: null,
-      generated_at: report.generated_at,
-      generated_by: null,
-      students: firstRelation(report.students),
-      classes: firstRelation(report.classes),
-      terms: firstRelation(report.terms),
-    })) ?? [];
-
-  const totalPages = count ? Math.ceil(count / itemsPerPage) : 0;
-
-  // Aggregate stats
+  const reportCards = (reportCardsRaw as ReportRow[] | null) ?? [];
   const totalReports = count || 0;
-  const publishedReports = reportCards.filter((rc) => rc.is_published).length;
+  const publishedReports =
+    statsRows?.filter((row: any) => row.is_published).length ?? 0;
   const pendingReports = totalReports - publishedReports;
-  const reportsWithScores = reportCards.filter((report) => report.overall_average !== null);
+  const averagePerformanceRows =
+    statsRows?.filter((row: any) => row.overall_average !== null) ?? [];
   const averagePerformance =
-    reportsWithScores.length > 0
-      ? reportsWithScores.reduce((sum, report) => sum + (report.overall_average ?? 0), 0) /
-        reportsWithScores.length
+    averagePerformanceRows.length > 0
+      ? averagePerformanceRows.reduce(
+          (sum: number, row: any) => sum + Number(row.overall_average ?? 0),
+          0,
+        ) / averagePerformanceRows.length
       : null;
 
-  const performanceLevels: Record<NonNullable<ReportCard["overall_level"]>, number> = {
-    exceeding: 0,
-    meeting: 0,
-    approaching: 0,
-    below_expectation: 0,
+  const totalPages = count ? Math.ceil(count / pageSize) : 0;
+  const currentFilters: Record<string, string> = {
+    ...(selectedTermId ? { term: selectedTermId } : {}),
+    ...(selectedClassId ? { class: selectedClassId } : {}),
+    ...(selectedStudentId ? { student: selectedStudentId } : {}),
+    ...(selectedStatus ? { status: selectedStatus } : {}),
+    ...(selectedReportType ? { reportType: selectedReportType } : {}),
   };
-
-  reportCards.forEach((rc) => {
-    if (isReportLevel(rc.overall_level)) {
-      performanceLevels[rc.overall_level]++;
-    }
-  });
-
-  const getLevelBadgeVariant = (level: ReportCard["overall_level"]) => {
-    switch (level) {
-      case "exceeding": return "success";
-      case "meeting": return "primary";
-      case "approaching": return "warning";
-      case "below_expectation": return "danger";
-      default: return "default";
-    }
-  };
+  const exportQuery = buildReportsQueryString(currentFilters);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Report Cards"
-        description="Manage and view student report cards."
+        description="Review, print, and download generated report cards."
         icon={<FileText className="h-6 w-6" />}
       >
-        {isAdmin && (
-          <Link
-            href="/reports/generate"
-            className={buttonVariants({ variant: "primary", size: "md" })}
-          >
-            <Plus className="h-4 w-4" />
-            Generate Reports
-          </Link>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {canExportReports ? (
+            <a
+              href={`/api/reports/export${exportQuery ? `?${exportQuery}` : ""}`}
+              className={getLinkButtonClasses("secondary", "md")}
+            >
+              <Download className="h-4 w-4" />
+              Export CSV
+            </a>
+          ) : null}
+          {canGenerateReports ? (
+            <Link
+              href="/reports/generate"
+              className={getLinkButtonClasses("primary", "md")}
+            >
+              <Plus className="h-4 w-4" />
+              Generate Reports
+            </Link>
+          ) : null}
+        </div>
       </PageHeader>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
-          <CardContent className="flex flex-col items-center justify-center p-4">
-            <CardTitle className="text-lg font-semibold">Total Reports</CardTitle>
-            <p className="text-3xl font-bold">{totalReports}</p>
+          <CardContent className="p-4">
+            <p className="text-sm text-gray-500">Total Reports</p>
+            <p className="mt-1 text-3xl font-bold text-gray-900">
+              {totalReports}
+            </p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="flex flex-col items-center justify-center p-4">
-            <CardTitle className="text-lg font-semibold">Published</CardTitle>
-            <p className="text-3xl font-bold text-green-600">{publishedReports}</p>
+          <CardContent className="p-4">
+            <p className="text-sm text-gray-500">Published</p>
+            <p className="mt-1 text-3xl font-bold text-green-600">
+              {publishedReports}
+            </p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="flex flex-col items-center justify-center p-4">
-            <CardTitle className="text-lg font-semibold">Pending</CardTitle>
-            <p className="text-3xl font-bold text-yellow-600">{pendingReports}</p>
+          <CardContent className="p-4">
+            <p className="text-sm text-gray-500">Draft</p>
+            <p className="mt-1 text-3xl font-bold text-amber-600">
+              {pendingReports}
+            </p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="flex flex-col items-center justify-center p-4">
-            <CardTitle className="text-lg font-semibold">Avg. Performance</CardTitle>
-            <p className="text-3xl font-bold">
-              {averagePerformance !== null ? averagePerformance.toFixed(2) : "N/A"}
+          <CardContent className="p-4">
+            <p className="text-sm text-gray-500">Average Performance</p>
+            <p className="mt-1 text-3xl font-bold text-gray-900">
+              {averagePerformance !== null
+                ? averagePerformance.toFixed(2)
+                : "N/A"}
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Performance Distribution */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {Object.entries(performanceLevels).map(([level, count]) => (
-          <Card key={level}>
-            <CardContent className="flex flex-col items-center justify-center p-4">
-              <CardTitle className="text-sm font-semibold capitalize">{level.replace(/_/g, " ")}</CardTitle>
-              <p className="text-2xl font-bold"><Badge variant={getLevelBadgeVariant(level as ReportCard["overall_level"])}>{count}</Badge></p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Filters (simplified for now, full implementation would involve Client Components) */}
-      <div className="rounded-lg bg-white p-4 shadow">
-        <h3 className="text-lg font-semibold mb-3">Filters</h3>
-        <form method="GET" className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-4">
-          {selectedClassId ? <input type="hidden" name="class" value={selectedClassId} /> : null}
-          {selectedStudentId ? <input type="hidden" name="student" value={selectedStudentId} /> : null}
-          {selectedStatus ? <input type="hidden" name="status" value={selectedStatus} /> : null}
-          <label className="block">
-            <span className="text-gray-700">Term:</span>
-            <Select name="term" defaultValue={selectedTermId || ""}>
-              <option value="">All Terms</option>
-              {activeTerm ? <option value={activeTerm.term_id}>{activeTerm.name}</option> : null}
-            </Select>
-          </label>
-          <div className="flex items-end">
-            <Button type="submit" variant="secondary">Apply Filters</Button>
-          </div>
-        </form>
-      </div>
-
-      {/* Report Cards Table */}
       <Card>
         <CardHeader>
-          <CardTitle>All Report Cards</CardTitle>
+          <CardTitle>Filters</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form method="GET" className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <label className="block">
+              <span className="mb-1 block text-sm text-gray-700">Term</span>
+              <Select name="term" defaultValue={selectedTermId}>
+                <option value="">All Terms</option>
+                {(terms ?? []).map((term) => (
+                  <option key={term.term_id} value={term.term_id}>
+                    {term.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-sm text-gray-700">Class</span>
+              <Select name="class" defaultValue={selectedClassId}>
+                <option value="">All Classes</option>
+                {(classes ?? []).map((classItem) => (
+                  <option key={classItem.class_id} value={classItem.class_id}>
+                    {classItem.name}
+                    {classItem.stream ? ` ${classItem.stream}` : ""}
+                  </option>
+                ))}
+              </Select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-sm text-gray-700">Student</span>
+              <Select name="student" defaultValue={selectedStudentId}>
+                <option value="">All Students</option>
+                {studentOptions.map((student) => (
+                  <option key={student.student_id} value={student.student_id}>
+                    {student.first_name} {student.last_name} ·{" "}
+                    {student.admission_number}
+                  </option>
+                ))}
+              </Select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-sm text-gray-700">Status</span>
+              <Select name="status" defaultValue={selectedStatus}>
+                <option value="">All Statuses</option>
+                <option value="published">Published</option>
+                <option value="draft">Draft</option>
+              </Select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-sm text-gray-700">Report Type</span>
+              <Select name="reportType" defaultValue={selectedReportType}>
+                <option value="">All Types</option>
+                <option value="term">Term</option>
+                <option value="yearly">Yearly</option>
+              </Select>
+            </label>
+
+            <div className="flex items-end gap-2 xl:col-span-5">
+              <Button type="submit" variant="secondary">
+                Apply Filters
+              </Button>
+              <Link
+                href="/reports"
+                className={getLinkButtonClasses("ghost", "md")}
+              >
+                Reset
+              </Link>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Generated Report Cards</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
@@ -447,67 +518,98 @@ export default async function ReportsPage({
                 <TableHead>Student</TableHead>
                 <TableHead>Class</TableHead>
                 <TableHead>Term</TableHead>
-                <TableHead>Avg. Score</TableHead>
-                <TableHead>Performance Level</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Average</TableHead>
+                <TableHead>Performance</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Generated Date</TableHead>
+                <TableHead>Generated</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {reportCards.length > 0 ? (
-                reportCards.map((report) => (
-                  <TableRow key={report.report_id}>
-                    <TableCell className="flex items-center space-x-2">
-                      <img
-                        src={report.students?.photo_url || `/api/placeholder/avatar?name=${getInitials(report.students?.first_name || "N A")}`}
-                        alt={report.students?.first_name || "Student"}
-                        className="h-8 w-8 rounded-full object-cover"
-                      />
-                      <div>
-                        <p className="font-medium">{report.students?.first_name} {report.students?.last_name}</p>
-                        <p className="text-sm text-gray-500">{report.students?.admission_number}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>{report.classes?.name} {report.classes?.stream}</TableCell>
-                    <TableCell>{report.terms?.name}</TableCell>
-                    <TableCell>
-                      {report.overall_average !== null ? report.overall_average.toFixed(2) : "N/A"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getLevelBadgeVariant(report.overall_level)}>
-                        {report.overall_level?.replace(/_/g, " ") || "N/A"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={report.is_published ? "success" : "warning"}>
-                        {report.is_published ? "Published" : "Pending"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{formatDate(report.generated_at)}</TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Link
-                        href={`/reports/${report.report_id}`}
-                        className={buttonVariants({ variant: "ghost", size: "sm" })}
-                      >
-                        <BookOpen className="mr-1 h-4 w-4" /> View
-                      </Link>
-                      {report.pdf_url && (
-                        <a
-                          href={report.pdf_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={buttonVariants({ variant: "ghost", size: "sm" })}
-                        >
-                          <Download className="mr-1 h-4 w-4" /> PDF
-                        </a>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
+                reportCards.map((report) => {
+                  const student = firstRelation(report.students);
+                  const classItem = firstRelation(report.classes);
+                  const term = firstRelation(report.terms);
+                  const studentName = `${student?.first_name ?? ""} ${student?.last_name ?? ""}`.trim();
+
+                  return (
+                    <TableRow key={report.report_id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700">
+                            {getInitials(studentName || "N A")}
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900">
+                              {studentName || "Student"}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {student?.admission_number ?? "No admission number"}
+                            </p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {classItem?.name}
+                        {classItem?.stream ? ` ${classItem.stream}` : ""}
+                      </TableCell>
+                      <TableCell>{term?.name ?? "N/A"}</TableCell>
+                      <TableCell className="capitalize">
+                        {report.report_type}
+                      </TableCell>
+                      <TableCell>
+                        {report.overall_average !== null
+                          ? Number(report.overall_average).toFixed(2)
+                          : "N/A"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getLevelBadgeVariant(report.overall_level)}>
+                          {titleCaseLevel(report.overall_level)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusBadgeVariant(report.is_published)}>
+                          {report.is_published ? "Published" : "Draft"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{formatDate(report.generated_at)}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Link
+                            href={`/reports/${report.report_id}`}
+                            className={getLinkButtonClasses("ghost", "sm")}
+                          >
+                            <Eye className="mr-1 h-4 w-4" />
+                            View
+                          </Link>
+                          <a
+                            href={`/api/reports/${report.report_id}/pdf?format=html`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={getLinkButtonClasses("ghost", "sm")}
+                          >
+                            <Printer className="mr-1 h-4 w-4" />
+                            Print
+                          </a>
+                          <a
+                            href={`/api/reports/${report.report_id}/pdf`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={getLinkButtonClasses("ghost", "sm")}
+                          >
+                            <Download className="mr-1 h-4 w-4" />
+                            PDF
+                          </a>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-gray-500 py-4">
+                  <TableCell colSpan={9} className="py-8 text-center text-gray-500">
                     No report cards found for the selected filters.
                   </TableCell>
                 </TableRow>
@@ -515,33 +617,26 @@ export default async function ReportsPage({
             </TableBody>
           </Table>
         </CardContent>
-        {/* Pagination */}
         {totalPages > 1 && (
-          <CardFooter className="flex justify-between items-center">
+          <CardFooter className="flex items-center justify-between">
             <Link
-              aria-disabled={currentPage === 1}
-              className={buttonVariants({ variant: "secondary", size: "md" })}
-              href={`/reports?${new URLSearchParams({
-                ...(selectedTermId ? { term: selectedTermId } : {}),
-                ...(selectedClassId ? { class: selectedClassId } : {}),
-                ...(selectedStudentId ? { student: selectedStudentId } : {}),
-                ...(selectedStatus ? { status: selectedStatus } : {}),
+              href={`/reports?${buildReportsQueryString({
+                ...currentFilters,
                 page: String(Math.max(1, currentPage - 1)),
-              }).toString()}`}
+              })}`}
+              className={getLinkButtonClasses("secondary", "md")}
             >
               Previous
             </Link>
-            <span>Page {currentPage} of {totalPages}</span>
+            <span className="text-sm text-gray-500">
+              Page {currentPage} of {totalPages}
+            </span>
             <Link
-              aria-disabled={currentPage === totalPages}
-              className={buttonVariants({ variant: "secondary", size: "md" })}
-              href={`/reports?${new URLSearchParams({
-                ...(selectedTermId ? { term: selectedTermId } : {}),
-                ...(selectedClassId ? { class: selectedClassId } : {}),
-                ...(selectedStudentId ? { student: selectedStudentId } : {}),
-                ...(selectedStatus ? { status: selectedStatus } : {}),
+              href={`/reports?${buildReportsQueryString({
+                ...currentFilters,
                 page: String(Math.min(totalPages, currentPage + 1)),
-              }).toString()}`}
+              })}`}
+              className={getLinkButtonClasses("secondary", "md")}
             >
               Next
             </Link>

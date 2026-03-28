@@ -15,6 +15,8 @@ import {
   ArrowLeft,
   AlertTriangle,
 } from 'lucide-react';
+import { hasPermission } from '@/lib/auth/permissions';
+import type { RoleName } from '@/types/roles';
 import ReportGenerationClient from './ReportGenerationClient';
 
 function firstRelation<T>(value: T | T[] | null | undefined): T | null {
@@ -45,12 +47,13 @@ export default async function GenerateReportsPage() {
 
   if (!user || !(user as any).school_id) {redirect('/login');}
 
-  const roleName = ((user as any).roles as Record<string, string>)?.name ?? 'student';
+  const roleName =
+    ((firstRelation((user as any).roles as any)?.name as RoleName | undefined) ??
+      'student');
   const schoolId = (user as any).school_id;
 
-  // 3. Admin-only access
-  const allowedRoles = ['super_admin', 'school_admin', 'principal', 'deputy_principal'];
-  if (!allowedRoles.includes(roleName)) {redirect('/dashboard');}
+  // 3. Only roles with report-generation permission can access this page
+  if (!hasPermission(roleName, 'reports', 'create')) {redirect('/dashboard');}
 
   // 4. Get active academic year
   const { data: activeYear } = await supabase

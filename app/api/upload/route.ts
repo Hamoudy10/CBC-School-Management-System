@@ -9,10 +9,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/lib/api/withAuth";
 import { errorResponse } from "@/lib/api/response";
-import { createSupabaseAdminClient } from "@/lib/supabase/server";
+import { ensureStorageBucket, STORAGE_BUCKET } from "@/lib/supabase/storage";
 
-const ALLOWED_FOLDERS = new Set(["students", "staff", "users", "exams", "uploads"]);
-const STORAGE_BUCKET = "school-assets";
+const ALLOWED_FOLDERS = new Set([
+  "students",
+  "staff",
+  "teachers",
+  "users",
+  "exams",
+  "uploads",
+]);
 
 export const POST = withAuth(async (request: NextRequest, user) => {
   try {
@@ -35,9 +41,18 @@ export const POST = withAuth(async (request: NextRequest, user) => {
 
     const fileExt = file.name.split(".").pop() || "bin";
     const safeExt = fileExt.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10) || "bin";
-    const fileName = `${schoolId}/${folder}/${crypto.randomUUID()}.${safeExt}`;
+    const normalizedFolder = folder === "teachers" ? "staff" : folder;
+    const fileName = `${schoolId}/${normalizedFolder}/${crypto.randomUUID()}.${safeExt}`;
 
-    const adminClient = await createSupabaseAdminClient();
+    const storageSetup = await ensureStorageBucket();
+    if (!storageSetup.success) {
+      return errorResponse(
+        `Storage setup failed: ${storageSetup.message}. Please ensure the "${STORAGE_BUCKET}" bucket is available.`,
+        500,
+      );
+    }
+
+    const { client: adminClient } = storageSetup;
     const { error: uploadError } = await adminClient.storage
       .from(STORAGE_BUCKET)
       .upload(fileName, file, {
@@ -47,7 +62,12 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       });
 
     if (uploadError) {
-      return errorResponse(uploadError.message, 500);
+      return errorResponse(
+        /bucket/i.test(uploadError.message)
+          ? `Upload failed because the "${STORAGE_BUCKET}" storage bucket is unavailable.`
+          : uploadError.message,
+        500,
+      );
     }
 
     const { data: urlData } = adminClient.storage

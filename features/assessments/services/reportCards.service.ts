@@ -29,6 +29,14 @@ import {
 import { calculateStudentTrends } from "./analytics.service";
 import { getStudentAttendanceSummary } from "./attendance.helper";
 
+function firstRelation<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
+}
+
 // ============================================================
 // LIST REPORT CARDS
 // ============================================================
@@ -115,34 +123,41 @@ export async function listReportCards(
     throw new Error(`Failed to list report cards: ${error.message}`);
   }
 
-  const items: ReportCard[] = (data || []).map((row: any) => ({
-    reportId: row.report_id,
-    schoolId: row.school_id,
-    studentId: row.student_id,
-    studentName: row.students
-      ? `${row.students.first_name} ${row.students.last_name}`
-      : null,
-    studentAdmissionNo: row.students?.admission_number || null,
-    classId: row.class_id,
-    className: row.classes?.name || null,
-    academicYearId: row.academic_year_id,
-    academicYear: row.academic_years?.year || null,
-    termId: row.term_id,
-    termName: row.terms?.name || null,
-    reportType: row.report_type,
-    overallAverage: row.overall_average
-      ? parseFloat(row.overall_average)
-      : null,
-    overallLevel: row.overall_level as PerformanceLevelLabel | null,
-    classTeacherRemarks: row.class_teacher_remarks,
-    principalRemarks: row.principal_remarks,
-    analyticsJson: row.analytics_json,
-    pdfUrl: row.pdf_url,
-    isPublished: row.is_published,
-    publishedAt: row.published_at,
-    generatedAt: row.generated_at,
-    generatedBy: row.generated_by,
-  }));
+  const items: ReportCard[] = (data || []).map((row: any) => {
+    const student = firstRelation(row.students);
+    const classRecord = firstRelation(row.classes);
+    const academicYear = firstRelation(row.academic_years);
+    const term = firstRelation(row.terms);
+
+    return {
+      reportId: row.report_id,
+      schoolId: row.school_id,
+      studentId: row.student_id,
+      studentName: student
+        ? `${student.first_name} ${student.last_name}`.trim()
+        : null,
+      studentAdmissionNo: student?.admission_number || null,
+      classId: row.class_id,
+      className: classRecord?.name || null,
+      academicYearId: row.academic_year_id,
+      academicYear: academicYear?.year || null,
+      termId: row.term_id,
+      termName: term?.name || null,
+      reportType: row.report_type,
+      overallAverage: row.overall_average
+        ? parseFloat(row.overall_average)
+        : null,
+      overallLevel: row.overall_level as PerformanceLevelLabel | null,
+      classTeacherRemarks: row.class_teacher_remarks,
+      principalRemarks: row.principal_remarks,
+      analyticsJson: row.analytics_json,
+      pdfUrl: row.pdf_url,
+      isPublished: row.is_published,
+      publishedAt: row.published_at,
+      generatedAt: row.generated_at,
+      generatedBy: row.generated_by,
+    };
+  });
 
   const total = count || 0;
 
@@ -197,20 +212,25 @@ export async function getReportCardById(
     return null;
   }
 
+  const student = firstRelation(data.students);
+  const classRecord = firstRelation(data.classes);
+  const academicYear = firstRelation(data.academic_years);
+  const term = firstRelation(data.terms);
+
   return {
     reportId: data.report_id,
     schoolId: data.school_id,
     studentId: data.student_id,
-    studentName: data.students
-      ? `${data.students.first_name} ${data.students.last_name}`
+    studentName: student
+      ? `${student.first_name} ${student.last_name}`.trim()
       : null,
-    studentAdmissionNo: data.students?.admission_number || null,
+    studentAdmissionNo: student?.admission_number || null,
     classId: data.class_id,
-    className: data.classes?.name || null,
+    className: classRecord?.name || null,
     academicYearId: data.academic_year_id,
-    academicYear: data.academic_years?.year || null,
+    academicYear: academicYear?.year || null,
     termId: data.term_id,
-    termName: data.terms?.name || null,
+    termName: term?.name || null,
     reportType: data.report_type,
     overallAverage: data.overall_average
       ? parseFloat(data.overall_average)
@@ -450,6 +470,52 @@ export async function updateReportCardRemarks(
   }
 
   return { success: true, message: "Remarks updated successfully." };
+}
+
+// ============================================================
+// PUBLISH SINGLE REPORT CARD
+// ============================================================
+export async function publishReportCard(
+  reportId: string,
+  currentUser: AuthUser,
+): Promise<{ success: boolean; message: string }> {
+  const supabase = await createSupabaseServerClient();
+
+  let query = supabase
+    .from("report_cards")
+    .update({
+      is_published: true,
+      published_at: new Date().toISOString(),
+    })
+    .eq("report_id", reportId)
+    .eq("is_published", false)
+    .select("report_id")
+    .maybeSingle();
+
+  if (currentUser.role !== "super_admin") {
+    query = query.eq("school_id", currentUser.schoolId!);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return {
+      success: false,
+      message: `Publish failed: ${error.message}`,
+    };
+  }
+
+  if (!data) {
+    return {
+      success: false,
+      message: "Report card not found or is already published.",
+    };
+  }
+
+  return {
+    success: true,
+    message: "Report card published successfully.",
+  };
 }
 
 // ============================================================

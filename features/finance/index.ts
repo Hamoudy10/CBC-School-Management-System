@@ -10,6 +10,10 @@ export type {
   FeeStructure,
   StudentFee,
   Payment,
+  PaymentReceiptDetails,
+  FinanceExceptionType,
+  FinanceExceptionRecord,
+  FinanceExceptionSummary,
   FinanceDashboardMetrics,
   FeeCollectionByCategory,
   FeeCollectionByTerm,
@@ -21,9 +25,11 @@ export type {
   CreateStudentFeePayload,
   BulkAssignFeesPayload,
   CreatePaymentPayload,
+  UpdatePaymentPayload,
   FeeStructureFilters,
   StudentFeeFilters,
   PaymentFilters,
+  FinanceExceptionFilters,
   DashboardFilters,
 } from "./types";
 
@@ -36,11 +42,17 @@ export {
   bulkAssignFeesSchema,
   studentFeeFiltersSchema,
   createPaymentSchema,
+  updatePaymentSchema,
+  refundPaymentSchema,
+  financeExceptionFiltersSchema,
   paymentFiltersSchema,
   dashboardFiltersSchema,
   studentStatementSchema,
   waiveFeeSchema,
 } from "./validators/finance.schema";
+
+// Services — Exceptions
+export { listFinanceExceptions } from "./services/exceptions.service";
 
 // Services — Fee Structures
 export {
@@ -66,7 +78,10 @@ export {
 export {
   listPayments,
   getPaymentById,
+  getPaymentReceiptDetails,
   createPayment,
+  updatePayment,
+  refundPayment,
   getPaymentsForStudentFee,
   getTotalPaymentsToday,
   generateReceiptNumber,

@@ -313,7 +313,7 @@ export function StaffForm({
   const handlePhotoUpload = async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('folder', 'teachers');
+    formData.append('folder', 'staff');
 
     const response = await fetch('/api/upload', {
       method: 'POST',

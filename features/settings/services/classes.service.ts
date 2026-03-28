@@ -9,6 +9,57 @@ import type {
 } from "../validators/settings.schema";
 import { getSchoolSettings } from "./school.service";
 
+async function ensureGradeExists(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  schoolId: string,
+  gradeLevel: number,
+) {
+  const { data: existingGrade, error: existingGradeError } = await supabase
+    .from("grades")
+    .select("grade_id")
+    .eq("school_id", schoolId)
+    .eq("level_order", gradeLevel)
+    .maybeSingle();
+
+  if (existingGradeError) {
+    return { success: false as const, message: existingGradeError.message };
+  }
+
+  if (existingGrade) {
+    return { success: true as const, gradeId: existingGrade.grade_id as string };
+  }
+
+  const { data: createdGrade, error: createGradeError } = await (supabase
+    .from("grades") as any)
+    .insert({
+      school_id: schoolId,
+      name: `Grade ${gradeLevel}`,
+      level_order: gradeLevel,
+    })
+    .select("grade_id")
+    .single();
+
+  if (!createGradeError && createdGrade?.grade_id) {
+    return { success: true as const, gradeId: createdGrade.grade_id as string };
+  }
+
+  const { data: retriedGrade, error: retriedGradeError } = await supabase
+    .from("grades")
+    .select("grade_id")
+    .eq("school_id", schoolId)
+    .eq("level_order", gradeLevel)
+    .maybeSingle();
+
+  if (retriedGradeError || !retriedGrade) {
+    return {
+      success: false as const,
+      message: createGradeError?.message || retriedGradeError?.message || "Failed to create grade",
+    };
+  }
+
+  return { success: true as const, gradeId: retriedGrade.grade_id as string };
+}
+
 export async function getClasses(
   schoolId: string,
   filters?: {
@@ -134,17 +185,15 @@ export async function createClass(
     };
   }
 
-  const { data: grade } = await supabase
-    .from("grades")
-    .select("grade_id")
-    .eq("school_id", schoolId)
-    .eq("level_order", input.grade_level)
-    .maybeSingle();
-
-  if (!grade) {
+  const gradeResult = await ensureGradeExists(
+    supabase,
+    schoolId,
+    input.grade_level,
+  );
+  if (!gradeResult.success) {
     return {
       success: false,
-      message: `Grade ${input.grade_level} does not exist`,
+      message: gradeResult.message,
     };
   }
 
@@ -186,7 +235,7 @@ export async function createClass(
     .from("classes") as any)
     .insert({
       name: input.name,
-      grade_id: (grade as any).grade_id,
+      grade_id: gradeResult.gradeId,
       stream: input.stream || null,
       capacity: input.capacity,
       class_teacher_id: input.class_teacher_id || null,

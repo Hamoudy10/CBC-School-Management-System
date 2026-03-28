@@ -5,7 +5,10 @@
 // Handles fee assignment, status calculation
 // ============================================================
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  createSupabaseAdminClient,
+  createSupabaseServerClient,
+} from "@/lib/supabase/server";
 import type { AuthUser } from "@/types/auth";
 import type { StudentFee, FeeStatus } from "../types";
 import type {
@@ -15,6 +18,10 @@ import type {
 } from "../validators/finance.schema";
 import type { PaginatedResponse } from "@/features/users/types";
 
+function canBypassSelfApprovalBoundary(currentUser: AuthUser) {
+  return ["super_admin", "school_admin", "principal"].includes(currentUser.role);
+}
+
 // ============================================================
 // CALCULATE FEE STATUS
 // ============================================================
@@ -23,13 +30,19 @@ export function calculateFeeStatus(
   amountPaid: number,
   dueDate: string | null,
 ): FeeStatus {
-  if (amountPaid >= amountDue) return "paid";
-  if (amountPaid > 0) return "partial";
+  if (amountPaid >= amountDue) {
+    return "paid";
+  }
+  if (amountPaid > 0) {
+    return "partial";
+  }
 
   if (dueDate) {
     const today = new Date();
     const due = new Date(dueDate);
-    if (today > due) return "overdue";
+    if (today > due) {
+      return "overdue";
+    }
   }
 
   return "pending";
@@ -227,7 +240,9 @@ export async function getStudentFeeById(
 
   const { data, error } = await query.single();
 
-  if (error || !data) return null;
+  if (error || !data) {
+    return null;
+  }
 
   return {
     id: data.id,
@@ -434,27 +449,129 @@ export async function waiveFee(
   reason: string,
   currentUser: AuthUser,
 ): Promise<{ success: boolean; message: string }> {
-  const supabase: any = await createSupabaseServerClient();
+  const supabase: any = await createSupabaseAdminClient();
 
-  let query = supabase
+  let lookupQuery = supabase
+    .from("student_fees")
+    .select(
+      `
+      id,
+      school_id,
+      student_id,
+      fee_structure_id,
+      amount_due,
+      amount_paid,
+      balance,
+      due_date,
+      status,
+      academic_year_id,
+      term_id,
+      created_by
+    `,
+    )
+    .eq("id", studentFeeId);
+
+  if (currentUser.role !== "super_admin") {
+    if (!currentUser.schoolId) {
+      return { success: false, message: "No school context found." };
+    }
+    lookupQuery = lookupQuery.eq("school_id", currentUser.schoolId);
+  }
+
+  const { data: existingFee, error: lookupError } = await lookupQuery.maybeSingle();
+
+  if (lookupError) {
+    return { success: false, message: `Waiver failed: ${lookupError.message}` };
+  }
+
+  if (!existingFee) {
+    return { success: false, message: "Student fee record not found." };
+  }
+
+  const currentAmountDue = Number(existingFee.amount_due || 0);
+  const currentAmountPaid = Number(existingFee.amount_paid || 0);
+  const currentBalance = Number(existingFee.balance || 0);
+
+  if ((existingFee.status as FeeStatus) === "waived") {
+    return { success: false, message: "This fee has already been waived." };
+  }
+
+  if (currentBalance <= 0) {
+    return {
+      success: false,
+      message: "Only fees with an outstanding balance can be waived.",
+    };
+  }
+
+  if (
+    existingFee.created_by === currentUser.id &&
+    !canBypassSelfApprovalBoundary(currentUser)
+  ) {
+    return {
+      success: false,
+      message:
+        "A different approver must authorize waivers for fee assignments you created.",
+    };
+  }
+
+  const updatedAmountDue = currentAmountPaid;
+  const waivedAmount = Math.max(0, currentAmountDue - currentAmountPaid);
+
+  let updateQuery = supabase
     .from("student_fees")
     .update({
+      amount_due: updatedAmountDue,
       status: "waived",
-      // Store waiver reason in notes or a separate audit
     })
     .eq("id", studentFeeId);
 
   if (currentUser.role !== "super_admin") {
-    query = query.eq("school_id", currentUser.schoolId!);
+    updateQuery = updateQuery.eq("school_id", currentUser.schoolId!);
   }
 
-  const { error } = await query;
+  const { error: updateError } = await updateQuery;
 
-  if (error) {
-    return { success: false, message: `Waiver failed: ${error.message}` };
+  if (updateError) {
+    return { success: false, message: `Waiver failed: ${updateError.message}` };
   }
 
-  return { success: true, message: "Fee waived successfully." };
+  const { error: auditError } = await supabase.from("audit_logs").insert({
+    school_id: existingFee.school_id,
+    table_name: "student_fees",
+    record_id: existingFee.id,
+    action: "UPDATE",
+    performed_by: currentUser.id,
+    old_data: {
+      status: existingFee.status,
+      amount_due: currentAmountDue,
+      amount_paid: currentAmountPaid,
+      balance: currentBalance,
+      due_date: existingFee.due_date,
+    },
+    new_data: {
+      status: "waived",
+      amount_due: updatedAmountDue,
+      amount_paid: currentAmountPaid,
+      balance: 0,
+      due_date: existingFee.due_date,
+    },
+    details: {
+      type: "fee_waiver",
+      reason,
+      waived_amount: waivedAmount,
+      student_fee_id: existingFee.id,
+      student_id: existingFee.student_id,
+      fee_structure_id: existingFee.fee_structure_id,
+      academic_year_id: existingFee.academic_year_id,
+      term_id: existingFee.term_id,
+    },
+  });
+
+  if (auditError) {
+    console.error("Failed to audit fee waiver:", auditError);
+  }
+
+  return { success: true, message: "Fee waiver approved successfully." };
 }
 
 // ============================================================

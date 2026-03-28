@@ -81,7 +81,7 @@ export interface SchoolSettings {
   school_id: string;
   settings: {
     academic: {
-      grading_system: "cbc_4point";
+      grading_system: "cbc_4point" | "percentage" | "letter_grade";
       allow_teacher_report_comments: boolean;
       require_principal_approval: boolean;
       attendance_threshold_warning: number;

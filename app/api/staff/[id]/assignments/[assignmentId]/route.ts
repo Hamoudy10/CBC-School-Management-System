@@ -18,7 +18,7 @@ import {
 import {
   listAssignments,
   deleteAssignment,
-} from '@/features/staff';
+} from '@/features/staff/server';
 
 // ============================================================
 // GET Handler - Get Single Assignment

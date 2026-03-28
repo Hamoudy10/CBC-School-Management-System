@@ -314,15 +314,32 @@ export async function markAllMessagesAsRead(
 }
 
 export async function deleteMessage(
-  recipientRecordId: string,
+  recipientRecordIdOrMessageId: string,
   userId: string,
   schoolId: string,
 ): Promise<{ success: boolean; message: string }> {
+  const { data: recipientRecord, error: lookupError } = await supabase
+    .from("message_recipients")
+    .select("id")
+    .eq("recipient_id", userId)
+    .eq("school_id", schoolId)
+    .eq("deleted", false)
+    .or(`id.eq.${recipientRecordIdOrMessageId},message_id.eq.${recipientRecordIdOrMessageId}`)
+    .maybeSingle();
+
+  if (lookupError) {
+    return { success: false, message: lookupError.message };
+  }
+
+  if (!recipientRecord?.id) {
+    return { success: false, message: "Message not found" };
+  }
+
   // Soft delete - just hide from recipient
   const { error } = await supabase
     .from("message_recipients")
     .update({ deleted: true })
-    .eq("id", recipientRecordId)
+    .eq("id", recipientRecord.id)
     .eq("recipient_id", userId)
     .eq("school_id", schoolId);
 

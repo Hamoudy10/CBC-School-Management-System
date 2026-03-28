@@ -11,6 +11,7 @@ import {
   UpdateStudentInput,
   CreateGuardianInput,
   LinkGuardianInput,
+  UpdateGuardianInput,
   TransferStudentInput,
   PromoteStudentsInput,
   StudentFilters,
@@ -102,7 +103,7 @@ export class StudentsService {
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') return null;
+      if (error.code === 'PGRST116') {return null;}
       throw new StudentError(error.message, 'FETCH_ERROR', 500);
     }
 
@@ -520,21 +521,21 @@ export class StudentsService {
       updated_by: user.id,
     };
 
-    if (input.firstName !== undefined) updateData.first_name = input.firstName;
-    if (input.lastName !== undefined) updateData.last_name = input.lastName;
-    if (input.middleName !== undefined) updateData.middle_name = input.middleName;
-    if (input.dateOfBirth !== undefined) updateData.date_of_birth = input.dateOfBirth;
-    if (input.gender !== undefined) updateData.gender = input.gender;
-    if (input.currentClassId !== undefined) updateData.current_class_id = input.currentClassId;
-    if (input.status !== undefined) updateData.status = input.status;
-    if (input.photoUrl !== undefined) updateData.photo_url = input.photoUrl;
+    if (input.firstName !== undefined) {updateData.first_name = input.firstName;}
+    if (input.lastName !== undefined) {updateData.last_name = input.lastName;}
+    if (input.middleName !== undefined) {updateData.middle_name = input.middleName;}
+    if (input.dateOfBirth !== undefined) {updateData.date_of_birth = input.dateOfBirth;}
+    if (input.gender !== undefined) {updateData.gender = input.gender;}
+    if (input.currentClassId !== undefined) {updateData.current_class_id = input.currentClassId;}
+    if (input.status !== undefined) {updateData.status = input.status;}
+    if (input.photoUrl !== undefined) {updateData.photo_url = input.photoUrl;}
     if (input.birthCertificateNo !== undefined)
-      updateData.birth_certificate_no = input.birthCertificateNo;
-    if (input.nemisNumber !== undefined) updateData.nemis_number = input.nemisNumber;
-    if (input.hasSpecialNeeds !== undefined) updateData.has_special_needs = input.hasSpecialNeeds;
+      {updateData.birth_certificate_no = input.birthCertificateNo;}
+    if (input.nemisNumber !== undefined) {updateData.nemis_number = input.nemisNumber;}
+    if (input.hasSpecialNeeds !== undefined) {updateData.has_special_needs = input.hasSpecialNeeds;}
     if (input.specialNeedsDetails !== undefined)
-      updateData.special_needs_details = input.specialNeedsDetails;
-    if (input.medicalInfo !== undefined) updateData.medical_info = input.medicalInfo;
+      {updateData.special_needs_details = input.specialNeedsDetails;}
+    if (input.medicalInfo !== undefined) {updateData.medical_info = input.medicalInfo;}
 
     const { error } = await (supabase.from('students') as any)
       .update(updateData)
@@ -824,6 +825,98 @@ export class StudentsService {
   }
 
   /**
+   * Update guardian link and guardian contact details
+   */
+  static async updateGuardian(
+    studentId: string,
+    guardianUserId: string,
+    input: UpdateGuardianInput,
+    user: AuthUser
+  ): Promise<StudentGuardian> {
+    const supabase = await createSupabaseServerClient();
+
+    const { data: existingLink, error: linkError } = await supabase
+      .from('student_guardians')
+      .select('id, school_id, guardian_user_id')
+      .eq('student_id', studentId)
+      .eq('guardian_user_id', guardianUserId)
+      .maybeSingle();
+
+    if (linkError) {
+      throw new StudentError(linkError.message, 'FETCH_ERROR', 500);
+    }
+
+    if (!existingLink) {
+      throw new StudentError('Guardian link not found', 'NOT_FOUND', 404);
+    }
+
+    if (input.isPrimaryContact) {
+      await supabase
+        .from('student_guardians')
+        .update({
+          is_primary_contact: false,
+          is_primary: false,
+        } as any)
+        .eq('student_id', studentId)
+        .neq('guardian_user_id', guardianUserId);
+    }
+
+    const userUpdate: Record<string, unknown> = {};
+    if (input.firstName !== undefined) {userUpdate.first_name = input.firstName;}
+    if (input.lastName !== undefined) {userUpdate.last_name = input.lastName;}
+    if (input.email !== undefined) {userUpdate.email = input.email || null;}
+    if (input.phone !== undefined) {userUpdate.phone = input.phone || null;}
+    if (Object.keys(userUpdate).length > 0) {
+      userUpdate.updated_by = user.id;
+
+      const { error: guardianUserError } = await (supabase.from('users') as any)
+        .update(userUpdate)
+        .eq('user_id', guardianUserId);
+
+      if (guardianUserError) {
+        throw new StudentError(guardianUserError.message, 'UPDATE_ERROR', 500);
+      }
+    }
+
+    const linkUpdate: Record<string, unknown> = {};
+    if (input.relationship !== undefined) {linkUpdate.relationship = input.relationship;}
+    if (input.isPrimaryContact !== undefined) {
+      linkUpdate.is_primary_contact = input.isPrimaryContact;
+      linkUpdate.is_primary = input.isPrimaryContact;
+    }
+    if (input.canPickup !== undefined) {linkUpdate.can_pickup = input.canPickup;}
+
+    if (Object.keys(linkUpdate).length > 0) {
+      const { error: updateError } = await (supabase.from('student_guardians') as any)
+        .update(linkUpdate)
+        .eq('student_id', studentId)
+        .eq('guardian_user_id', guardianUserId);
+
+      if (updateError) {
+        throw new StudentError(updateError.message, 'UPDATE_ERROR', 500);
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('student_guardians')
+      .select(
+        `
+        *,
+        guardian:users(user_id, first_name, last_name, email, phone)
+      `
+      )
+      .eq('student_id', studentId)
+      .eq('guardian_user_id', guardianUserId)
+      .single();
+
+    if (error) {
+      throw new StudentError(error.message, 'FETCH_ERROR', 500);
+    }
+
+    return this.mapToGuardian(data);
+  }
+
+  /**
    * Get student's guardians
    */
   static async getStudentGuardians(
@@ -1017,9 +1110,9 @@ export class StudentsService {
     const overallAverage = aggregates.length > 0 ? totalScores / aggregates.length : 0;
 
     let overallLevel: StudentPerformanceSummary['overallLevel'] = 'below_expectation';
-    if (overallAverage >= 3.5) overallLevel = 'exceeding';
-    else if (overallAverage >= 2.5) overallLevel = 'meeting';
-    else if (overallAverage >= 1.5) overallLevel = 'approaching';
+    if (overallAverage >= 3.5) {overallLevel = 'exceeding';}
+    else if (overallAverage >= 2.5) {overallLevel = 'meeting';}
+    else if (overallAverage >= 1.5) {overallLevel = 'approaching';}
 
     return {
       studentId,
@@ -1125,7 +1218,7 @@ export class StudentsService {
         .select('amount_due, amount_paid')
         .eq('student_id', studentId);
 
-      if (!data || data.length === 0) return 0;
+      if (!data || data.length === 0) {return 0;}
 
       return data.reduce(
         (sum, fee) => sum + (Number(fee.amount_due) - Number(fee.amount_paid)),
@@ -1150,7 +1243,7 @@ export class StudentsService {
         .eq('is_active', true)
         .single();
 
-      if (!activeTerm) return null;
+      if (!activeTerm) {return null;}
 
       const { data } = (await supabase
         .from('attendance')
@@ -1158,7 +1251,7 @@ export class StudentsService {
         .eq('student_id', studentId)
         .eq('term_id', activeTerm.term_id)) as { data: any[] | null };
 
-      if (!data || data.length === 0) return null;
+      if (!data || data.length === 0) {return null;}
 
       const present = data.filter(
         (r) => r.status === 'present' || r.status === 'late'
@@ -1250,6 +1343,7 @@ export const studentsService = {
 
   // Guardians
   addGuardian: StudentsService.addGuardian.bind(StudentsService),
+  updateGuardian: StudentsService.updateGuardian.bind(StudentsService),
   removeGuardian: StudentsService.removeGuardian.bind(StudentsService),
   getStudentGuardians: StudentsService.getStudentGuardians.bind(StudentsService),
 

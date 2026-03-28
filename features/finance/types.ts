@@ -123,6 +123,26 @@ export interface Payment {
   createdAt: string;
 }
 
+export interface PaymentReceiptDetails {
+  id: string;
+  studentFeeId: string;
+  studentId?: string;
+  studentName: string;
+  studentAdmissionNo: string;
+  className: string;
+  feeStructureName: string;
+  amountPaid: number;
+  paymentMethod: PaymentMethod;
+  transactionId: string | null;
+  receiptNumber: string;
+  paymentDate: string;
+  notes: string | null;
+  recordedBy: string;
+  recordedByName: string;
+  recordedAt: string;
+  balanceAfterPayment: number;
+}
+
 export interface CreatePaymentPayload {
   studentFeeId: string;
   amountPaid: number;
@@ -131,6 +151,56 @@ export interface CreatePaymentPayload {
   receiptNumber?: string;
   paymentDate?: string;
   notes?: string;
+}
+
+export interface UpdatePaymentPayload {
+  amountPaid?: number;
+  paymentMethod?: PaymentMethod;
+  transactionId?: string;
+  paymentDate?: string;
+  notes?: string;
+}
+
+// ============================================================
+// Finance Exceptions / Audit Visibility
+// ============================================================
+export type FinanceExceptionType =
+  | "fee_waiver"
+  | "payment_refund"
+  | "payment_adjustment";
+
+export interface FinanceExceptionRecord {
+  id: string;
+  type: FinanceExceptionType;
+  action: string;
+  performedAt: string;
+  performedBy: string | null;
+  performedByName?: string | null;
+  reason: string | null;
+  amount: number;
+  previousAmount?: number | null;
+  newAmount?: number | null;
+  amountDelta?: number | null;
+  studentFeeId: string | null;
+  paymentId: string | null;
+  studentId: string | null;
+  studentName?: string | null;
+  studentAdmissionNo?: string | null;
+  feeName?: string | null;
+  invoiceNumber?: string | null;
+  receiptNumber?: string | null;
+  transactionId?: string | null;
+  changedFields?: string[];
+}
+
+export interface FinanceExceptionSummary {
+  totalCount: number;
+  waiverCount: number;
+  refundCount: number;
+  adjustmentCount: number;
+  waivedAmount: number;
+  refundedAmount: number;
+  adjustedAmountDelta: number;
 }
 
 // ============================================================
@@ -224,6 +294,15 @@ export interface PaymentFilters {
   studentFeeId?: string;
   studentId?: string;
   paymentMethod?: PaymentMethod;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface FinanceExceptionFilters {
+  type?: FinanceExceptionType;
+  studentId?: string;
   startDate?: string;
   endDate?: string;
   page?: number;

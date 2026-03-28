@@ -1,46 +1,21 @@
 import { NextRequest } from "next/server";
-import { withAuth } from "@/lib/api/withAuth";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { withPermission } from "@/lib/api/withAuth";
 import { errorResponse, successResponse } from "@/lib/api/response";
+import { getUnreadCounts } from "@/features/communication";
 
-export const GET = withAuth(async (_req: NextRequest, user: any) => {
-  try {
-    const supabase = await createSupabaseServerClient();
+export const GET = withPermission(
+  { module: "communication", action: "view" },
+  async (_req: NextRequest, { user }) => {
+    try {
+      const result = await getUnreadCounts(user.id, user.schoolId!);
 
-    const [{ count: messageCount, error: messageError }, { count: notificationCount, error: notificationError }] =
-      await Promise.all([
-        supabase
-          .from("messages")
-          .select("id", { count: "exact", head: true })
-          .eq("school_id", user.school_id)
-          .eq("receiver_id", user.id)
-          .eq("is_archived", false)
-          .eq("read_status", "unread"),
-        supabase
-          .from("notifications")
-          .select("id", { count: "exact", head: true })
-          .eq("school_id", user.school_id)
-          .eq("user_id", user.id)
-          .eq("read_status", "unread"),
-      ]);
+      if (!result.success || !result.data) {
+        return errorResponse(result.message || "Failed to load unread counts", 500);
+      }
 
-    if (messageError) {
-      return errorResponse(messageError.message, 500);
+      return successResponse(result.data);
+    } catch (error: any) {
+      return errorResponse(error.message, 500);
     }
-
-    if (notificationError) {
-      return errorResponse(notificationError.message, 500);
-    }
-
-    const messages = messageCount ?? 0;
-    const notifications = notificationCount ?? 0;
-
-    return successResponse({
-      messages,
-      notifications,
-      total: messages + notifications,
-    });
-  } catch (error: any) {
-    return errorResponse(error.message, 500);
-  }
-});
+  },
+);

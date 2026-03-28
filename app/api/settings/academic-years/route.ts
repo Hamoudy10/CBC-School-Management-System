@@ -26,7 +26,7 @@ export const GET = withAuth(async (req: NextRequest, user) => {
 });
 
 export const POST = withPermission(
-  { module: "settings", action: "create" },
+  { module: "settings", action: "edit" },
   async (req: NextRequest, user) => {
     try {
       const body = await req.json();

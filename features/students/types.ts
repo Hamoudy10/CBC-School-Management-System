@@ -181,6 +181,16 @@ export interface LinkGuardianInput {
   canPickup?: boolean;
 }
 
+export interface UpdateGuardianInput {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  relationship?: GuardianRelationship;
+  isPrimaryContact?: boolean;
+  canPickup?: boolean;
+}
+
 // ─── Transfer/Promotion DTOs ─────────────────────────────────
 export interface TransferStudentInput {
   studentId: string;

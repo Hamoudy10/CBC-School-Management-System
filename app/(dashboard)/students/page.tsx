@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils';
 import { useReferenceData } from '@/hooks/useReferenceData';
 import { StudentFilters } from './components/StudentFilters';
 import { StudentTable } from './components/StudentTable';
+import BulkActionsModal from './components/BulkActionsModal';
 import {
   StudentWithDetails,
   StudentFilters as StudentFiltersType,
@@ -133,7 +134,7 @@ function StatCard({ title, value, icon, color, subtitle, onClick }: StatCardProp
 export default function StudentsPage() {
   const router = useRouter();
   const { user, loading, checkPermission } = useAuth();
-  const { success, error: toastError, info } = useToast();
+  const { success, error: toastError } = useToast();
 
   // â”€â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [filters, setFilters] = useState<StudentFiltersType>({});
@@ -147,6 +148,8 @@ export default function StudentsPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showExportModal, setShowExportModal] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [showBulkActionsModal, setShowBulkActionsModal] = useState(false);
+  const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
   const shouldFetch = Boolean(user);
   const emptyStudents = useMemo<PaginatedStudents>(
     () => ({
@@ -388,6 +391,53 @@ export default function StudentsPage() {
     setPage(1);
   };
 
+  const handleBulkAction = async (payload: {
+    action: 'promote' | 'transfer' | 'status';
+    targetClassId?: string;
+    status?: EnrollmentStatus;
+  }) => {
+    setIsBulkSubmitting(true);
+
+    try {
+      const response = await fetch('/api/students/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          studentIds: selectedIds,
+          action: payload.action,
+          targetClassId: payload.targetClassId,
+          status: payload.status,
+        }),
+      });
+
+      const json = await response.json();
+
+      if (!response.ok) {
+        throw new Error(json?.error || json?.message || 'Bulk student action failed');
+      }
+
+      const processedCount = Number(json?.data?.processedCount ?? 0);
+      const skippedCount = Number(json?.data?.skippedCount ?? 0);
+      const failedCount = Number(json?.data?.failedCount ?? 0);
+
+      success(
+        'Bulk Action Complete',
+        `${processedCount} updated, ${skippedCount} skipped, ${failedCount} failed.`,
+      );
+
+      setSelectedIds([]);
+      setShowBulkActionsModal(false);
+      await Promise.all([mutateStudents(), mutateStats()]);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Bulk student action failed. Please try again.';
+      toastError('Bulk Action Failed', message);
+    } finally {
+      setIsBulkSubmitting(false);
+    }
+  };
+
   const error = studentsErrorMessage;
   const isLoading = isStudentsBusy || isRefreshing;
   if (loading) {
@@ -556,10 +606,7 @@ export default function StudentsPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => {
-                  // Handle bulk action
-                  info('Bulk Actions', 'Bulk operations coming soon.');
-                }}
+                onClick={() => setShowBulkActionsModal(true)}
               >
                 Bulk Actions
               </Button>
@@ -597,6 +644,19 @@ export default function StudentsPage() {
           />
         </Suspense>
       ) : null}
+
+      <BulkActionsModal
+        open={showBulkActionsModal}
+        onClose={() => {
+          if (!isBulkSubmitting) {
+            setShowBulkActionsModal(false);
+          }
+        }}
+        onSubmit={handleBulkAction}
+        isSubmitting={isBulkSubmitting}
+        selectedCount={selectedIds.length}
+        classes={classes}
+      />
     </div>
   );
 }

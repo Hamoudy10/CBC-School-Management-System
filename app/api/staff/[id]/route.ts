@@ -22,7 +22,7 @@ import {
   updateStaff,
   deactivateStaff,
   updateStaffSchema,
-} from '@/features/staff';
+} from '@/features/staff/server';
 
 // ============================================================
 // GET Handler - Get Single Staff Member

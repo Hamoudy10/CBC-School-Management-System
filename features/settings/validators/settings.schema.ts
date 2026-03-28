@@ -3,6 +3,21 @@
 
 import { z } from "zod";
 
+const gradingSystemSchema = z.union([
+  z.enum(["cbc_4point", "percentage", "letter_grade"]),
+  z.literal("cbc_4_point"),
+]);
+
+const schoolDaySchema = z.enum([
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+]);
+
 export const updateSchoolProfileSchema = z.object({
   name: z
     .string()
@@ -10,24 +25,25 @@ export const updateSchoolProfileSchema = z.object({
     .max(200)
     .optional(),
   type: z.enum(["primary", "secondary", "mixed", "academy"]).optional(),
-  address: z.string().max(500).optional(),
-  county: z.string().max(100).optional(),
-  sub_county: z.string().max(100).optional(),
-  contact_email: z.string().email("Invalid email").optional(),
+  address: z.string().max(500).optional().or(z.literal("")),
+  county: z.string().max(100).optional().or(z.literal("")),
+  sub_county: z.string().max(100).optional().or(z.literal("")),
+  contact_email: z.string().email("Invalid email").optional().or(z.literal("")),
   contact_phone: z
     .string()
     .regex(/^\+?[\d\s-]{10,15}$/, "Invalid phone number")
-    .optional(),
+    .optional()
+    .or(z.literal("")),
   secondary_phone: z
     .string()
     .regex(/^\+?[\d\s-]{10,15}$/)
     .optional()
     .or(z.literal("")),
   website: z.string().url("Invalid URL").optional().or(z.literal("")),
-  motto: z.string().max(200).optional(),
-  mission: z.string().max(1000).optional(),
-  vision: z.string().max(1000).optional(),
-  registration_number: z.string().max(50).optional(),
+  motto: z.string().max(200).optional().or(z.literal("")),
+  mission: z.string().max(1000).optional().or(z.literal("")),
+  vision: z.string().max(1000).optional().or(z.literal("")),
+  registration_number: z.string().max(50).optional().or(z.literal("")),
   established_year: z
     .number()
     .int()
@@ -49,7 +65,10 @@ export const createAcademicYearSchema = z
 
 export const updateAcademicYearSchema = z
   .object({
-    year: z.string().regex(/^\d{4}$/, "Year must be 4-digit format").optional(),
+    year: z
+      .string()
+      .regex(/^\d{4}$/, "Year must be 4-digit format")
+      .optional(),
     start_date: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD")
@@ -61,9 +80,7 @@ export const updateAcademicYearSchema = z
   })
   .refine(
     (data) =>
-      !data.start_date ||
-      !data.end_date ||
-      data.start_date < data.end_date,
+      !data.start_date || !data.end_date || data.start_date < data.end_date,
     {
       message: "End date must be after start date",
       path: ["end_date"],
@@ -85,14 +102,18 @@ export const createTermSchema = z
 export const updateTermSchema = z
   .object({
     name: z.enum(["Term 1", "Term 2", "Term 3"]).optional(),
-    start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    start_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    end_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
   })
   .refine(
     (data) =>
-      !data.start_date ||
-      !data.end_date ||
-      data.start_date < data.end_date,
+      !data.start_date || !data.end_date || data.start_date < data.end_date,
     {
       message: "End date must be after start date",
       path: ["end_date"],
@@ -123,6 +144,7 @@ export const updateClassSchema = z.object({
 export const updateSettingsSchema = z.object({
   academic: z
     .object({
+      grading_system: gradingSystemSchema.optional(),
       allow_teacher_report_comments: z.boolean().optional(),
       require_principal_approval: z.boolean().optional(),
       attendance_threshold_warning: z.number().min(50).max(100).optional(),
@@ -131,8 +153,11 @@ export const updateSettingsSchema = z.object({
     .optional(),
   finance: z
     .object({
+      currency: z.string().min(1).max(10).optional(),
+      currency_symbol: z.string().min(1).max(10).optional(),
       payment_reminder_days: z
         .array(z.number().int().min(1).max(90))
+        .min(1)
         .optional(),
       allow_partial_payments: z.boolean().optional(),
       generate_receipts: z.boolean().optional(),
@@ -150,9 +175,11 @@ export const updateSettingsSchema = z.object({
     .optional(),
   general: z
     .object({
-      timezone: z.string().optional(),
-      date_format: z.string().optional(),
-      school_days: z.array(z.string()).optional(),
+      timezone: z.string().min(1).max(100).optional(),
+      date_format: z
+        .enum(["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"])
+        .optional(),
+      school_days: z.array(schoolDaySchema).min(1).max(7).optional(),
       term_dates_visible_to_parents: z.boolean().optional(),
       show_student_rankings: z.boolean().optional(),
     })

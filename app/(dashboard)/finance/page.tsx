@@ -1,5 +1,5 @@
 // app/(dashboard)/finance/page.tsx
-'use client';
+"use client";
 
 import React, {
   useState,
@@ -7,8 +7,8 @@ import React, {
   useCallback,
   useDeferredValue,
   useMemo,
-} from 'react';
-import { useRouter } from 'next/navigation';
+} from "react";
+import { useRouter } from "next/navigation";
 import {
   DollarSign,
   TrendingUp,
@@ -34,17 +34,17 @@ import {
   Calendar,
   Search,
   X,
-} from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { Button } from '@/components/ui/Button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
-import { Spinner } from '@/components/ui/Spinner';
-import { Alert } from '@/components/ui/Alert';
-import { Tabs, TabsList, TabTrigger, TabContent } from '@/components/ui/Tabs';
+} from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Button } from "@/components/ui/Button";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Spinner } from "@/components/ui/Spinner";
+import { Alert } from "@/components/ui/Alert";
+import { Tabs, TabsList, TabTrigger, TabContent } from "@/components/ui/Tabs";
 import {
   Table,
   TableHeader,
@@ -52,9 +52,9 @@ import {
   TableHead,
   TableRow,
   TableCell,
-} from '@/components/ui/Table';
-import { useToast } from '@/components/ui/Toast';
-import { cn, formatCurrency, formatDate } from '@/lib/utils';
+} from "@/components/ui/Table";
+import { useToast } from "@/components/ui/Toast";
+import { cn, formatCurrency, formatDate } from "@/lib/utils";
 
 // ─── Types ───────────────────────────────────────────────────
 interface FinanceStats {
@@ -115,7 +115,7 @@ interface StudentBalance {
   totalDue: number;
   totalPaid: number;
   balance: number;
-  status: 'paid' | 'partial' | 'pending' | 'overdue';
+  status: "paid" | "partial" | "pending" | "overdue";
   lastPaymentDate: string | null;
 }
 
@@ -143,11 +143,11 @@ const PAYMENT_METHOD_ICONS: Record<string, React.ReactNode> = {
 };
 
 const PAYMENT_METHOD_COLORS: Record<string, string> = {
-  mpesa: 'bg-green-100 text-green-700',
-  cash: 'bg-blue-100 text-blue-700',
-  bank_transfer: 'bg-purple-100 text-purple-700',
-  cheque: 'bg-amber-100 text-amber-700',
-  other: 'bg-gray-100 text-gray-700',
+  mpesa: "bg-green-100 text-green-700",
+  cash: "bg-blue-100 text-blue-700",
+  bank_transfer: "bg-purple-100 text-purple-700",
+  cheque: "bg-amber-100 text-amber-700",
+  other: "bg-gray-100 text-gray-700",
 };
 
 // ─── Stat Card Component ─────────────────────────────────────
@@ -156,35 +156,69 @@ interface StatCardProps {
   value: string | number;
   subtitle?: string;
   icon: React.ReactNode;
-  color: 'blue' | 'green' | 'amber' | 'red' | 'purple' | 'indigo';
+  color: "blue" | "green" | "amber" | "red" | "purple" | "indigo";
   trend?: { value: number; isPositive: boolean };
   onClick?: () => void;
 }
 
 const colorConfig = {
-  blue: { bg: 'bg-blue-50', icon: 'bg-blue-100 text-blue-600', accent: 'text-blue-600' },
-  green: { bg: 'bg-green-50', icon: 'bg-green-100 text-green-600', accent: 'text-green-600' },
-  amber: { bg: 'bg-amber-50', icon: 'bg-amber-100 text-amber-600', accent: 'text-amber-600' },
-  red: { bg: 'bg-red-50', icon: 'bg-red-100 text-red-600', accent: 'text-red-600' },
-  purple: { bg: 'bg-purple-50', icon: 'bg-purple-100 text-purple-600', accent: 'text-purple-600' },
-  indigo: { bg: 'bg-indigo-50', icon: 'bg-indigo-100 text-indigo-600', accent: 'text-indigo-600' },
+  blue: {
+    bg: "bg-blue-50",
+    icon: "bg-blue-100 text-blue-600",
+    accent: "text-blue-600",
+  },
+  green: {
+    bg: "bg-green-50",
+    icon: "bg-green-100 text-green-600",
+    accent: "text-green-600",
+  },
+  amber: {
+    bg: "bg-amber-50",
+    icon: "bg-amber-100 text-amber-600",
+    accent: "text-amber-600",
+  },
+  red: {
+    bg: "bg-red-50",
+    icon: "bg-red-100 text-red-600",
+    accent: "text-red-600",
+  },
+  purple: {
+    bg: "bg-purple-50",
+    icon: "bg-purple-100 text-purple-600",
+    accent: "text-purple-600",
+  },
+  indigo: {
+    bg: "bg-indigo-50",
+    icon: "bg-indigo-100 text-indigo-600",
+    accent: "text-indigo-600",
+  },
 };
 
-function StatCard({ title, value, subtitle, icon, color, trend, onClick }: StatCardProps) {
+function StatCard({
+  title,
+  value,
+  subtitle,
+  icon,
+  color,
+  trend,
+  onClick,
+}: StatCardProps) {
   const colors = colorConfig[color];
 
   return (
     <Card
       className={cn(
-        'transition-all duration-200',
-        onClick && 'cursor-pointer hover:shadow-md hover:scale-[1.02]'
+        "transition-all duration-200",
+        onClick && "cursor-pointer hover:shadow-md hover:scale-[1.02]",
       )}
       onClick={onClick}
     >
       <CardContent className="p-5">
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-gray-500 truncate">{title}</p>
+            <p className="text-sm font-medium text-gray-500 truncate">
+              {title}
+            </p>
             <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p>
             {subtitle && (
               <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p>
@@ -198,8 +232,8 @@ function StatCard({ title, value, subtitle, icon, color, trend, onClick }: StatC
                 )}
                 <span
                   className={cn(
-                    'text-sm font-medium',
-                    trend.isPositive ? 'text-green-600' : 'text-red-600'
+                    "text-sm font-medium",
+                    trend.isPositive ? "text-green-600" : "text-red-600",
                   )}
                 >
                   {trend.value}%
@@ -208,7 +242,7 @@ function StatCard({ title, value, subtitle, icon, color, trend, onClick }: StatC
               </div>
             )}
           </div>
-          <div className={cn('rounded-xl p-3 flex-shrink-0', colors.icon)}>
+          <div className={cn("rounded-xl p-3 flex-shrink-0", colors.icon)}>
             {icon}
           </div>
         </div>
@@ -252,13 +286,19 @@ function CollectionProgressBar({
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="font-medium text-gray-700">Collection Rate</span>
-              <span className="font-bold text-gray-900">{rate.toFixed(1)}%</span>
+              <span className="font-bold text-gray-900">
+                {rate.toFixed(1)}%
+              </span>
             </div>
             <div className="h-4 w-full overflow-hidden rounded-full bg-gray-100">
               <div
                 className={cn(
-                  'h-full rounded-full transition-all duration-1000 ease-out',
-                  rate >= 80 ? 'bg-green-500' : rate >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                  "h-full rounded-full transition-all duration-1000 ease-out",
+                  rate >= 80
+                    ? "bg-green-500"
+                    : rate >= 50
+                      ? "bg-amber-500"
+                      : "bg-red-500",
                 )}
                 style={{ width: `${Math.min(rate, 100)}%` }}
               />
@@ -291,16 +331,16 @@ function CollectionProgressBar({
 function PaymentMethodChart({
   data,
 }: {
-  data: FinanceStats['paymentMethodBreakdown'];
+  data: FinanceStats["paymentMethodBreakdown"];
 }) {
   const total = data.reduce((sum, d) => sum + d.amount, 0);
 
   const methodLabels: Record<string, string> = {
-    mpesa: 'M-Pesa',
-    cash: 'Cash',
-    bank_transfer: 'Bank Transfer',
-    cheque: 'Cheque',
-    other: 'Other',
+    mpesa: "M-Pesa",
+    cash: "Cash",
+    bank_transfer: "Bank Transfer",
+    cheque: "Cheque",
+    other: "Other",
   };
 
   return (
@@ -316,11 +356,14 @@ function PaymentMethodChart({
                 <div className="flex items-center gap-2">
                   <div
                     className={cn(
-                      'flex h-8 w-8 items-center justify-center rounded-lg',
-                      PAYMENT_METHOD_COLORS[item.method] || 'bg-gray-100 text-gray-700'
+                      "flex h-8 w-8 items-center justify-center rounded-lg",
+                      PAYMENT_METHOD_COLORS[item.method] ||
+                        "bg-gray-100 text-gray-700",
                     )}
                   >
-                    {PAYMENT_METHOD_ICONS[item.method] || <CreditCard className="h-4 w-4" />}
+                    {PAYMENT_METHOD_ICONS[item.method] || (
+                      <CreditCard className="h-4 w-4" />
+                    )}
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-900">
@@ -343,12 +386,12 @@ function PaymentMethodChart({
               <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
                 <div
                   className={cn(
-                    'h-full rounded-full transition-all duration-500',
-                    item.method === 'mpesa' && 'bg-green-500',
-                    item.method === 'cash' && 'bg-blue-500',
-                    item.method === 'bank_transfer' && 'bg-purple-500',
-                    item.method === 'cheque' && 'bg-amber-500',
-                    item.method === 'other' && 'bg-gray-500'
+                    "h-full rounded-full transition-all duration-500",
+                    item.method === "mpesa" && "bg-green-500",
+                    item.method === "cash" && "bg-blue-500",
+                    item.method === "bank_transfer" && "bg-purple-500",
+                    item.method === "cheque" && "bg-amber-500",
+                    item.method === "other" && "bg-gray-500",
                   )}
                   style={{ width: `${(item.amount / total) * 100}%` }}
                 />
@@ -372,7 +415,7 @@ function PaymentMethodChart({
 function GradeCollectionChart({
   data,
 }: {
-  data: FinanceStats['gradeBreakdown'];
+  data: FinanceStats["gradeBreakdown"];
 }) {
   return (
     <Card>
@@ -387,12 +430,12 @@ function GradeCollectionChart({
                 <span className="font-medium text-gray-700">{item.grade}</span>
                 <span
                   className={cn(
-                    'font-semibold',
+                    "font-semibold",
                     item.rate >= 80
-                      ? 'text-green-600'
+                      ? "text-green-600"
                       : item.rate >= 50
-                        ? 'text-amber-600'
-                        : 'text-red-600'
+                        ? "text-amber-600"
+                        : "text-red-600",
                   )}
                 >
                   {item.rate.toFixed(0)}%
@@ -401,12 +444,12 @@ function GradeCollectionChart({
               <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
                 <div
                   className={cn(
-                    'h-full rounded-full transition-all duration-500',
+                    "h-full rounded-full transition-all duration-500",
                     item.rate >= 80
-                      ? 'bg-green-500'
+                      ? "bg-green-500"
                       : item.rate >= 50
-                        ? 'bg-amber-500'
-                        : 'bg-red-500'
+                        ? "bg-amber-500"
+                        : "bg-red-500",
                   )}
                   style={{ width: `${Math.min(item.rate, 100)}%` }}
                 />
@@ -490,14 +533,14 @@ function RecentPaymentsTable({
                     <TableCell>
                       <div
                         className={cn(
-                          'inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium',
+                          "inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium",
                           PAYMENT_METHOD_COLORS[payment.paymentMethod] ||
-                            'bg-gray-100 text-gray-700'
+                            "bg-gray-100 text-gray-700",
                         )}
                       >
                         {PAYMENT_METHOD_ICONS[payment.paymentMethod]}
                         <span className="capitalize">
-                          {payment.paymentMethod.replace('_', ' ')}
+                          {payment.paymentMethod.replace("_", " ")}
                         </span>
                       </div>
                     </TableCell>
@@ -540,19 +583,21 @@ function StudentsWithBalanceTable({
   searchTerm,
   onSearchChange,
   onViewStudent,
+  onViewLedger,
 }: {
   students: StudentBalance[];
   isLoading: boolean;
   searchTerm: string;
   onSearchChange: (value: string) => void;
   onViewStudent: (studentId: string) => void;
+  onViewLedger: (studentId: string) => void;
 }) {
-  const getStatusBadge = (status: StudentBalance['status']) => {
+  const getStatusBadge = (status: StudentBalance["status"]) => {
     const config = {
-      paid: { label: 'Paid', variant: 'success' as const },
-      partial: { label: 'Partial', variant: 'warning' as const },
-      pending: { label: 'Pending', variant: 'default' as const },
-      overdue: { label: 'Overdue', variant: 'error' as const },
+      paid: { label: "Paid", variant: "success" as const },
+      partial: { label: "Partial", variant: "warning" as const },
+      pending: { label: "Pending", variant: "default" as const },
+      overdue: { label: "Overdue", variant: "error" as const },
     };
     const { label, variant } = config[status];
     return <Badge variant={variant}>{label}</Badge>;
@@ -573,7 +618,7 @@ function StudentsWithBalanceTable({
             />
             {searchTerm && (
               <button
-                onClick={() => onSearchChange('')}
+                onClick={() => onSearchChange("")}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
               >
                 <X className="h-4 w-4" />
@@ -599,6 +644,7 @@ function StudentsWithBalanceTable({
                   <TableHead className="text-right">Balance</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Last Payment</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -634,8 +680,8 @@ function StudentsWithBalanceTable({
                     </TableCell>
                     <TableCell
                       className={cn(
-                        'text-right font-semibold',
-                        student.balance > 0 ? 'text-red-600' : 'text-green-600'
+                        "text-right font-semibold",
+                        student.balance > 0 ? "text-red-600" : "text-green-600",
                       )}
                     >
                       {formatCurrency(student.balance)}
@@ -644,7 +690,20 @@ function StudentsWithBalanceTable({
                     <TableCell className="text-gray-500">
                       {student.lastPaymentDate
                         ? formatDate(student.lastPaymentDate)
-                        : '—'}
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onViewLedger(student.studentId);
+                        }}
+                      >
+                        Ledger
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -655,12 +714,12 @@ function StudentsWithBalanceTable({
           <div className="flex flex-col items-center justify-center py-12">
             <CheckCircle className="h-12 w-12 text-green-300" />
             <h3 className="mt-4 text-lg font-semibold text-gray-900">
-              {searchTerm ? 'No Results' : 'All Paid Up!'}
+              {searchTerm ? "No Results" : "All Paid Up!"}
             </h3>
             <p className="mt-1 text-sm text-gray-500">
               {searchTerm
-                ? 'No students match your search.'
-                : 'All students have cleared their balances.'}
+                ? "No students match your search."
+                : "All students have cleared their balances."}
             </p>
           </div>
         )}
@@ -718,9 +777,9 @@ function FeeStructuresTable({
                     </TableCell>
                     <TableCell>
                       <div className="text-sm">
-                        <p>{structure.gradeName || 'All Grades'}</p>
+                        <p>{structure.gradeName || "All Grades"}</p>
                         <p className="text-xs text-gray-500">
-                          {structure.termName || 'Full Year'}
+                          {structure.termName || "Full Year"}
                         </p>
                       </div>
                     </TableCell>
@@ -736,12 +795,12 @@ function FeeStructuresTable({
                     <TableCell className="text-center">
                       <span
                         className={cn(
-                          'text-sm font-medium',
+                          "text-sm font-medium",
                           structure.collectionRate >= 80
-                            ? 'text-green-600'
+                            ? "text-green-600"
                             : structure.collectionRate >= 50
-                              ? 'text-amber-600'
-                              : 'text-red-600'
+                              ? "text-amber-600"
+                              : "text-red-600",
                         )}
                       >
                         {structure.collectionRate.toFixed(0)}%
@@ -749,9 +808,9 @@ function FeeStructuresTable({
                     </TableCell>
                     <TableCell>
                       <Badge
-                        variant={structure.isActive ? 'success' : 'default'}
+                        variant={structure.isActive ? "success" : "default"}
                       >
-                        {structure.isActive ? 'Active' : 'Inactive'}
+                        {structure.isActive ? "Active" : "Inactive"}
                       </Badge>
                     </TableCell>
                   </TableRow>
@@ -768,7 +827,12 @@ function FeeStructuresTable({
             <p className="mt-1 text-sm text-gray-500">
               Create fee structures to start collecting payments.
             </p>
-            <Button variant="primary" size="sm" className="mt-4" onClick={onManage}>
+            <Button
+              variant="primary"
+              size="sm"
+              className="mt-4"
+              onClick={onManage}
+            >
               <Plus className="mr-2 h-4 w-4" />
               Create Fee Structure
             </Button>
@@ -788,7 +852,9 @@ export default function FinancePage() {
   // ─── State ─────────────────────────────────────────────────
   const [stats, setStats] = useState<FinanceStats | null>(null);
   const [recentPayments, setRecentPayments] = useState<RecentPayment[]>([]);
-  const [studentsWithBalance, setStudentsWithBalance] = useState<StudentBalance[]>([]);
+  const [studentsWithBalance, setStudentsWithBalance] = useState<
+    StudentBalance[]
+  >([]);
   const [feeStructures, setFeeStructures] = useState<FeeStructure[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -799,21 +865,24 @@ export default function FinancePage() {
   const [hasLoadedBalances, setHasLoadedBalances] = useState(false);
   const [hasLoadedStructures, setHasLoadedStructures] = useState(false);
 
-  const [activeTab, setActiveTab] = useState('overview');
-  const [balanceSearchTerm, setBalanceSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState("overview");
+  const [balanceSearchTerm, setBalanceSearchTerm] = useState("");
   const deferredBalanceSearchTerm = useDeferredValue(balanceSearchTerm);
 
   // ─── Permissions ───────────────────────────────────────────
-  const canViewFinance = checkPermission('finance', 'view');
+  const canViewFinance = checkPermission("finance", "view");
   const canManageFees =
-    checkPermission('finance', 'create') || checkPermission('finance', 'update');
-  const canRecordPayments = checkPermission('finance', 'create');
+    checkPermission("finance", "create") ||
+    checkPermission("finance", "update");
+  const canRecordPayments = checkPermission("finance", "create");
 
   const availableTabs = useMemo(() => {
-    if (!canViewFinance) {return [];}
-    const tabs = ['overview', 'payments', 'balances'];
+    if (!canViewFinance) {
+      return [];
+    }
+    const tabs = ["overview", "payments", "balances"];
     if (canManageFees) {
-      tabs.push('structures');
+      tabs.push("structures");
     }
     return tabs;
   }, [canViewFinance, canManageFees]);
@@ -824,11 +893,11 @@ export default function FinancePage() {
       setError(null);
 
       const [statsResponse, paymentsResponse] = await Promise.all([
-        fetch('/api/finance/stats', {
-          credentials: 'include',
+        fetch("/api/finance/stats", {
+          credentials: "include",
         }),
-        fetch('/api/finance/recent-payments?limit=10', {
-          credentials: 'include',
+        fetch("/api/finance/recent-payments?limit=10", {
+          credentials: "include",
         }),
       ]);
 
@@ -842,28 +911,33 @@ export default function FinancePage() {
         setRecentPayments(json.data || []);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load data';
+      const message =
+        err instanceof Error ? err.message : "Failed to load data";
       setError(message);
-      toastError('Error', message);
+      toastError("Error", message);
     }
   }, []);
 
   const fetchBalances = useCallback(async () => {
     setIsLoadingBalances(true);
     try {
-      const response = await fetch('/api/finance/balances?hasBalance=true&limit=50', {
-        credentials: 'include',
-      });
+      const response = await fetch(
+        "/api/finance/balances?hasBalance=true&limit=50",
+        {
+          credentials: "include",
+        },
+      );
 
       if (!response.ok) {
-        throw new Error('Failed to load balances');
+        throw new Error("Failed to load balances");
       }
 
       const json = await response.json();
       setStudentsWithBalance(json.data || []);
       setHasLoadedBalances(true);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load balances';
+      const message =
+        err instanceof Error ? err.message : "Failed to load balances";
       setError(message);
     } finally {
       setIsLoadingBalances(false);
@@ -873,12 +947,12 @@ export default function FinancePage() {
   const fetchFeeStructures = useCallback(async () => {
     setIsLoadingStructures(true);
     try {
-      const response = await fetch('/api/fees?limit=20', {
-        credentials: 'include',
+      const response = await fetch("/api/fees?limit=20", {
+        credentials: "include",
       });
 
       if (!response.ok) {
-        throw new Error('Failed to load fee structures');
+        throw new Error("Failed to load fee structures");
       }
 
       const json = await response.json();
@@ -886,7 +960,7 @@ export default function FinancePage() {
       setHasLoadedStructures(true);
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to load fee structures';
+        err instanceof Error ? err.message : "Failed to load fee structures";
       setError(message);
     } finally {
       setIsLoadingStructures(false);
@@ -906,11 +980,11 @@ export default function FinancePage() {
   }, [fetchOverviewData, canViewFinance]);
 
   useEffect(() => {
-    if (activeTab === 'balances' && !hasLoadedBalances) {
+    if (activeTab === "balances" && !hasLoadedBalances) {
       fetchBalances();
     }
 
-    if (activeTab === 'structures' && canManageFees && !hasLoadedStructures) {
+    if (activeTab === "structures" && canManageFees && !hasLoadedStructures) {
       fetchFeeStructures();
     }
   }, [
@@ -923,7 +997,9 @@ export default function FinancePage() {
   ]);
 
   useEffect(() => {
-    if (availableTabs.length === 0) {return;}
+    if (availableTabs.length === 0) {
+      return;
+    }
     if (!availableTabs.includes(activeTab)) {
       setActiveTab(availableTabs[0]);
     }
@@ -940,35 +1016,38 @@ export default function FinancePage() {
       await fetchFeeStructures();
     }
     setIsRefreshing(false);
-    success('Refreshed', 'Finance data has been updated.');
+    success("Refreshed", "Finance data has been updated.");
   };
 
   const handleExport = async () => {
     try {
-      const response = await fetch('/api/finance/export', {
-        credentials: 'include',
+      const response = await fetch("/api/finance/export", {
+        credentials: "include",
       });
 
       if (!response.ok) {
-        throw new Error('Export failed');
+        throw new Error("Export failed");
       }
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      const disposition = response.headers.get('content-disposition');
-      const matchedFileName = disposition?.match(/filename=\"?([^"]+)\"?/i)?.[1];
+      const disposition = response.headers.get("content-disposition");
+      const matchedFileName = disposition?.match(
+        /filename=\"?([^"]+)\"?/i,
+      )?.[1];
       a.download =
-        matchedFileName || `finance-report-${new Date().toISOString().split('T')[0]}.csv`;
+        matchedFileName ||
+        `finance-report-${new Date().toISOString().split("T")[0]}.csv`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      success('Export Complete', 'Finance report has been downloaded.');
+      success("Export Complete", "Finance report has been downloaded.");
     } catch (err) {
-      toastError('Export Failed', 'Failed to export finance data.');
+      toastError("Export Failed", "Failed to export finance data.");
     }
   };
 
@@ -981,7 +1060,7 @@ export default function FinancePage() {
             .includes(deferredBalanceSearchTerm.toLowerCase()) ||
           s.admissionNumber
             .toLowerCase()
-            .includes(deferredBalanceSearchTerm.toLowerCase())
+            .includes(deferredBalanceSearchTerm.toLowerCase()),
       )
     : studentsWithBalance;
 
@@ -1047,7 +1126,7 @@ export default function FinancePage() {
             disabled={isRefreshing}
           >
             <RefreshCw
-              className={cn('mr-2 h-4 w-4', isRefreshing && 'animate-spin')}
+              className={cn("mr-2 h-4 w-4", isRefreshing && "animate-spin")}
             />
             Refresh
           </Button>
@@ -1061,7 +1140,7 @@ export default function FinancePage() {
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => router.push('/finance/fee-structures')}
+              onClick={() => router.push("/finance/fee-structures")}
             >
               <FileText className="mr-2 h-4 w-4" />
               Fee Structures
@@ -1072,7 +1151,7 @@ export default function FinancePage() {
             <Button
               variant="primary"
               size="sm"
-              onClick={() => router.push('/finance/payments/new')}
+              onClick={() => router.push("/finance/payments/new")}
             >
               <Plus className="mr-2 h-4 w-4" />
               Record Payment
@@ -1112,7 +1191,10 @@ export default function FinancePage() {
             subtitle={`${stats.collectionRate.toFixed(1)}% collection rate`}
             icon={<CheckCircle className="h-5 w-5" />}
             color="green"
-            trend={{ value: stats.collectionRate, isPositive: stats.collectionRate >= 50 }}
+            trend={{
+              value: stats.collectionRate,
+              isPositive: stats.collectionRate >= 50,
+            }}
           />
           <StatCard
             title="Outstanding Balance"
@@ -1120,7 +1202,7 @@ export default function FinancePage() {
             subtitle={`${stats.studentsWithBalance} students`}
             icon={<AlertCircle className="h-5 w-5" />}
             color="red"
-            onClick={() => setActiveTab('balances')}
+            onClick={() => setActiveTab("balances")}
           />
           <StatCard
             title="Today's Collections"
@@ -1135,29 +1217,30 @@ export default function FinancePage() {
       {/* ── Tabs ────────────────────────────────────────────── */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          {availableTabs.includes('overview') && (
+          {availableTabs.includes("overview") && (
             <TabTrigger value="overview">Overview</TabTrigger>
           )}
-          {availableTabs.includes('payments') && (
+          {availableTabs.includes("payments") && (
             <TabTrigger value="payments">Payments</TabTrigger>
           )}
-          {availableTabs.includes('balances') && (
+          {availableTabs.includes("balances") && (
             <TabTrigger value="balances">
               Balances
-              {(stats?.studentsWithBalance || studentsWithBalance.length) > 0 && (
+              {(stats?.studentsWithBalance || studentsWithBalance.length) >
+                0 && (
                 <Badge variant="error" className="ml-2">
                   {stats?.studentsWithBalance || studentsWithBalance.length}
                 </Badge>
               )}
             </TabTrigger>
           )}
-          {availableTabs.includes('structures') && (
+          {availableTabs.includes("structures") && (
             <TabTrigger value="structures">Fee Structures</TabTrigger>
           )}
         </TabsList>
 
         {/* ── Overview Tab ────────────────────────────────── */}
-        {availableTabs.includes('overview') && (
+        {availableTabs.includes("overview") && (
           <TabContent value="overview" className="mt-6 space-y-6">
             <div className="grid gap-6 lg:grid-cols-3">
               {stats && (
@@ -1167,118 +1250,126 @@ export default function FinancePage() {
                   rate={stats.collectionRate}
                 />
               )}
-              {stats && <PaymentMethodChart data={stats.paymentMethodBreakdown} />}
+              {stats && (
+                <PaymentMethodChart data={stats.paymentMethodBreakdown} />
+              )}
               {stats && <GradeCollectionChart data={stats.gradeBreakdown} />}
             </div>
 
             <RecentPaymentsTable
               payments={recentPayments}
-              onViewAll={() => setActiveTab('payments')}
+              onViewAll={() => setActiveTab("payments")}
             />
           </TabContent>
         )}
 
         {/* ── Payments Tab ────────────────────────────────── */}
-        {availableTabs.includes('payments') && (
+        {availableTabs.includes("payments") && (
           <TabContent value="payments" className="mt-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Payment History</CardTitle>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => router.push('/finance/payments')}
-                >
-                  View All Payments
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => router.push('/finance/mpesa')}
-                >
-                  M-Pesa Tracking
-                </Button>
-                {canRecordPayments && (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-base">Payment History</CardTitle>
+                <div className="flex items-center gap-2">
                   <Button
-                    variant="primary"
+                    variant="secondary"
                     size="sm"
-                    onClick={() => router.push('/finance/payments/new')}
+                    onClick={() => router.push("/finance/payments")}
                   >
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Payment
+                    View All Payments
                   </Button>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              {recentPayments.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Student</TableHead>
-                        <TableHead>Fee Type</TableHead>
-                        <TableHead>Method</TableHead>
-                        <TableHead>Receipt</TableHead>
-                        <TableHead className="text-right">Amount</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Recorded By</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {recentPayments.map((payment) => (
-                        <TableRow key={payment.id}>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">{payment.studentName}</p>
-                              <p className="text-xs text-gray-500">
-                                {payment.admissionNumber}
-                              </p>
-                            </div>
-                          </TableCell>
-                          <TableCell>{payment.feeName}</TableCell>
-                          <TableCell>
-                            <div
-                              className={cn(
-                                'inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium',
-                                PAYMENT_METHOD_COLORS[payment.paymentMethod]
-                              )}
-                            >
-                              {PAYMENT_METHOD_ICONS[payment.paymentMethod]}
-                              <span className="capitalize">
-                                {payment.paymentMethod.replace('_', ' ')}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="font-mono text-xs">
-                            {payment.receiptNumber}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold text-green-600">
-                            {formatCurrency(payment.amount)}
-                          </TableCell>
-                          <TableCell>{formatDate(payment.paymentDate)}</TableCell>
-                          <TableCell className="text-gray-500">
-                            {payment.recordedBy}
-                          </TableCell>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => router.push("/finance/mpesa")}
+                  >
+                    M-Pesa Tracking
+                  </Button>
+                  {canRecordPayments && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => router.push("/finance/payments/new")}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      New Payment
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {recentPayments.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Student</TableHead>
+                          <TableHead>Fee Type</TableHead>
+                          <TableHead>Method</TableHead>
+                          <TableHead>Receipt</TableHead>
+                          <TableHead className="text-right">Amount</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Recorded By</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ) : (
-                <div className="py-12 text-center">
-                  <CreditCard className="mx-auto h-12 w-12 text-gray-300" />
-                  <p className="mt-4 text-gray-500">No payments recorded yet.</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                      </TableHeader>
+                      <TableBody>
+                        {recentPayments.map((payment) => (
+                          <TableRow key={payment.id}>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium">
+                                  {payment.studentName}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {payment.admissionNumber}
+                                </p>
+                              </div>
+                            </TableCell>
+                            <TableCell>{payment.feeName}</TableCell>
+                            <TableCell>
+                              <div
+                                className={cn(
+                                  "inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-medium",
+                                  PAYMENT_METHOD_COLORS[payment.paymentMethod],
+                                )}
+                              >
+                                {PAYMENT_METHOD_ICONS[payment.paymentMethod]}
+                                <span className="capitalize">
+                                  {payment.paymentMethod.replace("_", " ")}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">
+                              {payment.receiptNumber}
+                            </TableCell>
+                            <TableCell className="text-right font-semibold text-green-600">
+                              {formatCurrency(payment.amount)}
+                            </TableCell>
+                            <TableCell>
+                              {formatDate(payment.paymentDate)}
+                            </TableCell>
+                            <TableCell className="text-gray-500">
+                              {payment.recordedBy}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="py-12 text-center">
+                    <CreditCard className="mx-auto h-12 w-12 text-gray-300" />
+                    <p className="mt-4 text-gray-500">
+                      No payments recorded yet.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabContent>
         )}
 
         {/* ── Balances Tab ────────────────────────────────── */}
-        {availableTabs.includes('balances') && (
+        {availableTabs.includes("balances") && (
           <TabContent value="balances" className="mt-6">
             <StudentsWithBalanceTable
               students={filteredStudents}
@@ -1286,26 +1377,30 @@ export default function FinancePage() {
               searchTerm={balanceSearchTerm}
               onSearchChange={setBalanceSearchTerm}
               onViewStudent={(id) => router.push(`/students/${id}`)}
+              onViewLedger={(id) => router.push(`/finance/ledger/${id}`)}
             />
           </TabContent>
         )}
 
         {/* ── Fee Structures Tab ──────────────────────────── */}
-        {availableTabs.includes('structures') && (
+        {availableTabs.includes("structures") && (
           <TabContent value="structures" className="mt-6">
             {isLoadingStructures && !hasLoadedStructures ? (
               <div className="rounded-2xl border border-slate-200 bg-white p-6">
                 <div className="animate-pulse space-y-4">
                   <div className="h-10 w-64 rounded-xl bg-slate-100" />
                   {Array.from({ length: 5 }).map((_, index) => (
-                    <div key={index} className="h-14 rounded-2xl bg-slate-100" />
+                    <div
+                      key={index}
+                      className="h-14 rounded-2xl bg-slate-100"
+                    />
                   ))}
                 </div>
               </div>
             ) : (
               <FeeStructuresTable
                 structures={feeStructures}
-                onManage={() => router.push('/finance/fee-structures')}
+                onManage={() => router.push("/finance/fee-structures")}
               />
             )}
           </TabContent>

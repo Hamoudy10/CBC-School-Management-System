@@ -102,6 +102,7 @@ export {
   generateReportCard,
   generateClassReportCards,
   updateReportCardRemarks,
+  publishReportCard,
   publishReportCards,
   unpublishReportCard,
   updateReportCardPdfUrl,

@@ -2,7 +2,7 @@
 // GET system configuration, PUT update settings
 
 import { NextRequest } from "next/server";
-import { withAuth, withPermission } from "@/lib/api/withAuth";
+import { withPermission } from "@/lib/api/withAuth";
 import { validateBody } from "@/lib/api/validation";
 import { apiSuccess, apiError } from "@/lib/api/response";
 import { updateSettingsSchema } from "@/features/settings";
@@ -12,19 +12,22 @@ import {
 } from "@/features/settings/services/school.service";
 import { getSystemConfig } from "@/features/settings/services/classes.service";
 
-export const GET = withAuth(async (req: NextRequest, user) => {
-  try {
-    const result = await getSystemConfig(user.school_id);
+export const GET = withPermission(
+  { module: "settings", action: "view" },
+  async (req: NextRequest, user) => {
+    try {
+      const result = await getSystemConfig(user.school_id);
 
-    if (!result.success) {
-      return apiError(result.message || "Failed to load config", 500);
+      if (!result.success) {
+        return apiError(result.message || "Failed to load config", 500);
+      }
+
+      return apiSuccess(result.data);
+    } catch (error) {
+      return apiError("Internal server error", 500);
     }
-
-    return apiSuccess(result.data);
-  } catch (error) {
-    return apiError("Internal server error", 500);
-  }
-});
+  },
+);
 
 export const PUT = withPermission(
   { module: "settings", action: "edit" },
