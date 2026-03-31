@@ -27,6 +27,14 @@ function canBypassSelfApprovalBoundary(currentUser: AuthUser) {
   return ["super_admin", "school_admin", "principal"].includes(currentUser.role);
 }
 
+function getSingleRelation<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
+}
+
 // ============================================================
 // GENERATE RECEIPT NUMBER
 // ============================================================
@@ -556,9 +564,9 @@ export async function getPaymentReceiptDetails(
   }
 
   const payment = data as any;
-  const studentFee = payment.student_fees as any;
-  const student = studentFee?.students as any;
-  const classInfo = student?.classes as any;
+  const studentFee = getSingleRelation(payment.student_fees as any);
+  const student = getSingleRelation(studentFee?.students as any);
+  const classInfo = getSingleRelation(student?.classes as any);
 
   const { data: relatedPayments } = await supabase
     .from("payments")
@@ -620,7 +628,7 @@ export async function createPayment(
   // Verify student fee exists
   const { data: studentFee, error: feeError } = await supabase
     .from("student_fees")
-    .select("id, amount_due, amount_paid, school_id, balance")
+    .select("id, amount_due, amount_paid, school_id, balance, status")
     .eq("id", payload.studentFeeId)
     .single();
 
@@ -628,19 +636,48 @@ export async function createPayment(
     return { success: false, message: "Student fee record not found." };
   }
 
+  const schoolId = (studentFee as any).school_id as string;
+
   // School scoping
   if (
     currentUser.role !== "super_admin" &&
-    (studentFee as any).school_id !== currentUser.schoolId
+    schoolId !== currentUser.schoolId
   ) {
     return { success: false, message: "Access denied." };
   }
 
-  // Check for overpayment
-  if (payload.amountPaid > parseFloat((studentFee as any).balance)) {
+  if ((studentFee as any).status === "waived") {
     return {
       success: false,
-      message: `Amount exceeds balance. Current balance: ${(studentFee as any).balance}`,
+      message: "Payments cannot be recorded against a waived fee.",
+    };
+  }
+
+  const { data: siblingPayments, error: siblingPaymentsError } = await supabase
+    .from("payments")
+    .select("amount_paid")
+    .eq("student_fee_id", payload.studentFeeId)
+    .eq("school_id", schoolId);
+
+  if (siblingPaymentsError) {
+    return {
+      success: false,
+      message: `Unable to verify existing payments: ${siblingPaymentsError.message}`,
+    };
+  }
+
+  const amountDue = Number((studentFee as any).amount_due || 0);
+  const totalPaid = (siblingPayments || []).reduce(
+    (sum: number, payment: any) => sum + Number(payment.amount_paid || 0),
+    0,
+  );
+  const currentBalance = Math.max(amountDue - totalPaid, 0);
+
+  // Check for overpayment
+  if (payload.amountPaid > currentBalance) {
+    return {
+      success: false,
+      message: `Amount exceeds balance. Current balance: ${currentBalance}`,
     };
   }
 
@@ -649,6 +686,7 @@ export async function createPayment(
     const { data: existing } = await supabase
       .from("payments")
       .select("id")
+      .eq("school_id", schoolId)
       .eq("transaction_id", payload.transactionId)
       .maybeSingle();
 
@@ -663,12 +701,12 @@ export async function createPayment(
   // Generate receipt number if not provided
   const receiptNumber =
     payload.receiptNumber ||
-    (await generateReceiptNumber((studentFee as any).school_id));
+    (await generateReceiptNumber(schoolId));
 
   const { data, error } = await supabase
     .from("payments")
     .insert({
-      school_id: (studentFee as any).school_id,
+      school_id: schoolId,
       student_fee_id: payload.studentFeeId,
       amount_paid: payload.amountPaid,
       payment_method: payload.paymentMethod,
@@ -689,7 +727,11 @@ export async function createPayment(
     };
   }
 
-  // Note: student_fees.amount_paid and status are updated via DB trigger
+  try {
+    await recalculateStudentFeeBalance(supabase, payload.studentFeeId, schoolId);
+  } catch (recalculationError) {
+    console.error("Failed to refresh student fee after payment:", recalculationError);
+  }
 
   return {
     success: true,
@@ -791,6 +833,7 @@ export async function updatePayment(
     const { data: existingTransaction } = await supabase
       .from("payments")
       .select("id")
+      .eq("school_id", schoolId)
       .eq("transaction_id", nextTransactionId)
       .neq("id", paymentId)
       .maybeSingle();

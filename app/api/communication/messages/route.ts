@@ -5,7 +5,6 @@ import {
   paginatedResponse,
   successResponse,
 } from "@/lib/api/response";
-import { validateSearchParams } from "@/lib/api/validation";
 import {
   getInbox,
   getSentMessages,
@@ -26,9 +25,20 @@ export const GET = withPermission(
   { module: "communication", action: "view" },
   async (req: NextRequest, { user }) => {
   try {
-    const params = validateSearchParams(req, messageFilterSchema);
+    const rawFilters = {
+      category: req.nextUrl.searchParams.get("category") ?? undefined,
+      priority: req.nextUrl.searchParams.get("priority") ?? undefined,
+      read_status: req.nextUrl.searchParams.get("read_status") ?? undefined,
+      date_from: req.nextUrl.searchParams.get("date_from") ?? undefined,
+      date_to: req.nextUrl.searchParams.get("date_to") ?? undefined,
+      search: req.nextUrl.searchParams.get("search") ?? undefined,
+      page: req.nextUrl.searchParams.get("page") ?? undefined,
+      pageSize: req.nextUrl.searchParams.get("pageSize") ?? undefined,
+    };
+
+    const params = messageFilterSchema.safeParse(rawFilters);
     if (!params.success) {
-      return errorResponse(params.error, 422);
+      return errorResponse("Invalid query parameters", 422);
     }
 
     const filters = params.data;

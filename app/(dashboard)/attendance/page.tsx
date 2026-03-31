@@ -731,7 +731,7 @@ export default function AttendancePage() {
 
   useEffect(() => {
     const loadInitialData = async () => {
-      if (!user || isReferenceLoading) {
+      if (!user) {
         return;
       }
 
@@ -754,7 +754,6 @@ export default function AttendancePage() {
     fetchClassSummaries,
     fetchWeeklyTrend,
     canViewAttendance,
-    isReferenceLoading,
     user,
   ]);
 
@@ -889,7 +888,7 @@ export default function AttendancePage() {
     return null;
   }
 
-  if (isLoading || isReferenceLoading) {
+  if (isLoading) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
         <div className="flex flex-col items-center gap-3">

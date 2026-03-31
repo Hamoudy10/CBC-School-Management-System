@@ -9,6 +9,44 @@ import {
   successResponse,
   toArray,
 } from '@/app/api/students/_utils';
+import { ensureCurrentMandatoryFeesForStudent } from '@/lib/finance/ensureStudentFees';
+import { getCurrentFinanceSnapshot } from '@/lib/finance/currentObligations';
+
+const STUDENT_WRITE_COLUMNS = [
+  'first_name',
+  'last_name',
+  'middle_name',
+  'admission_number',
+  'date_of_birth',
+  'gender',
+  'current_class_id',
+  'enrollment_date',
+  'status',
+  'photo_url',
+  'medical_info',
+  'has_special_needs',
+  'special_needs_details',
+  'birth_certificate_no',
+  'nemis_number',
+  'previous_school',
+] as const;
+
+function toNullIfEmptyString(value: unknown) {
+  if (typeof value !== 'string') {
+    return value ?? null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function pickWritableStudentFields(input: Record<string, unknown>) {
+  return Object.fromEntries(
+    STUDENT_WRITE_COLUMNS
+      .filter((key) => key in input)
+      .map((key) => [key, input[key]]),
+  );
+}
 
 function normalizeUpdateBody(body: Record<string, unknown>) {
   const specialNeedsDetails =
@@ -30,7 +68,7 @@ function normalizeUpdateBody(body: Record<string, unknown>) {
     enrollment_date:
       body.enrollment_date ?? body.enrollmentDate ?? body.admission_date ?? body.admissionDate,
     status: normalizedStatus,
-    photo_url: body.photo_url ?? body.photoUrl ?? null,
+    photo_url: toNullIfEmptyString(body.photo_url ?? body.photoUrl),
     medical_info: body.medical_info ?? body.medicalInfo ?? null,
     has_special_needs:
       body.has_special_needs ?? body.hasSpecialNeeds ?? Boolean(specialNeedsDetails),
@@ -77,7 +115,6 @@ async function loadNormalizedStudentDetails(supabase: any, studentId: string, sc
   const [
     guardianResult,
     attendanceResult,
-    feeResult,
     disciplineResult,
     context,
   ] = await Promise.all([
@@ -87,20 +124,10 @@ async function loadNormalizedStudentDetails(supabase: any, studentId: string, sc
         `
         id,
         student_id,
-        guardian_id,
         guardian_user_id,
         relationship,
         is_primary_contact,
-        is_primary,
-        can_pickup,
         created_at,
-        guardians (
-          guardian_id,
-          first_name,
-          last_name,
-          phone_number,
-          email
-        ),
         guardian:users (
           user_id,
           first_name,
@@ -116,10 +143,6 @@ async function loadNormalizedStudentDetails(supabase: any, studentId: string, sc
       .select('status')
       .eq('student_id', studentId),
     supabase
-      .from('student_fees')
-      .select('amount_due, amount_paid, balance, status')
-      .eq('student_id', studentId),
-    supabase
       .from('disciplinary_records')
       .select('*', { count: 'exact', head: true })
       .eq('student_id', studentId),
@@ -128,19 +151,20 @@ async function loadNormalizedStudentDetails(supabase: any, studentId: string, sc
 
   const guardians = guardianResult.data ?? [];
   const attendanceRecords = attendanceResult.data ?? [];
-  const feeRecords = feeResult.data ?? [];
-  const feeBalance = feeRecords.reduce(
-    (sum: number, fee: { balance?: number | string | null }) => sum + Number(fee.balance ?? 0),
-    0,
-  );
-  const totalDue = feeRecords.reduce(
-    (sum: number, fee: { amount_due?: number | string | null }) => sum + Number(fee.amount_due ?? 0),
-    0,
-  );
-  const totalPaid = feeRecords.reduce(
-    (sum: number, fee: { amount_paid?: number | string | null }) => sum + Number(fee.amount_paid ?? 0),
-    0,
-  );
+  const financeSnapshot = context.academicYear?.academic_year_id
+    ? await getCurrentFinanceSnapshot({
+        supabase,
+        schoolId: student.school_id ?? schoolId,
+        academicYearId: context.academicYear.academic_year_id,
+        termId: context.term?.term_id,
+        studentId,
+        includeInactive: true,
+      })
+    : { students: [] };
+  const financeSummary = financeSnapshot.students[0] ?? null;
+  const feeBalance = financeSummary?.balance ?? 0;
+  const totalDue = financeSummary?.totalDue ?? 0;
+  const totalPaid = financeSummary?.totalPaid ?? 0;
 
   const totalDays = attendanceRecords.length;
   const presentDays = attendanceRecords.filter(
@@ -199,14 +223,7 @@ async function loadNormalizedStudentDetails(supabase: any, studentId: string, sc
       totalDue,
       totalPaid,
       balance: feeBalance,
-      status:
-        feeBalance <= 0
-          ? 'paid'
-          : totalPaid > 0
-            ? 'partial'
-            : feeRecords.some((fee: { status?: string | null }) => fee.status === 'overdue')
-              ? 'overdue'
-              : 'pending',
+      status: financeSummary?.status ?? 'pending',
     },
     disciplineCount: disciplineResult.count ?? 0,
     assessmentSummary,
@@ -247,7 +264,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return errorResponse('Invalid JSON body', 400);
   }
 
-  const updateData = normalizeUpdateBody(body);
+  const updateData = pickWritableStudentFields(normalizeUpdateBody(body));
   const sanitizedUpdate = Object.fromEntries(
     Object.entries(updateData).filter(([, value]) => value !== undefined),
   );
@@ -341,6 +358,25 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           },
           { onConflict: 'student_id,academic_year_id,term_id' },
         );
+    }
+
+    try {
+      const { data: currentClass } = await context.supabase
+        .from('classes')
+        .select('grade_id')
+        .eq('class_id', sanitizedUpdate.current_class_id)
+        .eq('school_id', context.schoolId)
+        .maybeSingle();
+
+      await ensureCurrentMandatoryFeesForStudent(context.supabase, {
+        schoolId: context.schoolId!,
+        studentId: params.id,
+        gradeId: (currentClass as any)?.grade_id ?? null,
+        userId: context.user.id,
+        roleName: context.user.role,
+      });
+    } catch (feeAssignmentError) {
+      console.error('Failed to assign fees after class update:', feeAssignmentError);
     }
   }
 

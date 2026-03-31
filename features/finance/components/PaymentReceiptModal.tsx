@@ -42,6 +42,7 @@ function buildPrintableHtml(markup: string, receiptNumber: string) {
         <meta charset="utf-8" />
         <title>Receipt ${receiptNumber}</title>
         <style>
+          @page { size: auto; margin: 12mm; }
           body { font-family: Arial, sans-serif; padding: 24px; color: #111827; }
           .receipt { max-width: 720px; margin: 0 auto; border: 1px solid #d1d5db; border-radius: 16px; padding: 24px; }
           .header { text-align: center; border-bottom: 1px solid #e5e7eb; padding-bottom: 16px; margin-bottom: 16px; }
@@ -89,9 +90,23 @@ export function PaymentReceiptModal({
       buildPrintableHtml(printable.outerHTML, receipt.receiptNumber),
     );
     printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-    printWindow.close();
+
+    let hasPrinted = false;
+    const startPrint = () => {
+      if (hasPrinted) {
+        return;
+      }
+
+      hasPrinted = true;
+      printWindow.focus();
+      printWindow.print();
+    };
+
+    printWindow.onafterprint = () => {
+      printWindow.close();
+    };
+    printWindow.onload = startPrint;
+    window.setTimeout(startPrint, 250);
   };
 
   if (!receipt) {
@@ -205,7 +220,7 @@ export function PaymentReceiptModal({
         </Button>
         <Button variant="primary" onClick={handlePrint}>
           <Printer className="h-4 w-4" />
-          Print Receipt
+          Print / Save PDF
         </Button>
       </ModalFooter>
     </Modal>

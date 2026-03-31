@@ -1054,13 +1054,17 @@ export default function FinancePage() {
   // Filter students by search
   const filteredStudents = deferredBalanceSearchTerm
     ? studentsWithBalance.filter(
-        (s) =>
-          s.studentName
-            .toLowerCase()
-            .includes(deferredBalanceSearchTerm.toLowerCase()) ||
-          s.admissionNumber
-            .toLowerCase()
-            .includes(deferredBalanceSearchTerm.toLowerCase()),
+        (s) => {
+          const normalizedSearch = deferredBalanceSearchTerm.toLowerCase();
+          return [
+            s.studentName,
+            s.admissionNumber,
+            s.className,
+            s.gradeName,
+          ]
+            .filter(Boolean)
+            .some((value) => value.toLowerCase().includes(normalizedSearch));
+        },
       )
     : studentsWithBalance;
 

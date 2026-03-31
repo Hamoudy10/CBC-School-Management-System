@@ -152,12 +152,16 @@ export default function EditStudentPage() {
 
     try {
       setIsSaving(true);
+      const payload = {
+        ...form,
+        photoUrl: form.photoUrl.trim() || undefined,
+      };
 
       const response = await fetch(`/api/students/${studentId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
 
       const json = await response.json().catch(() => null);

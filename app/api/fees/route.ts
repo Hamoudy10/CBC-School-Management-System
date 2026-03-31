@@ -219,9 +219,26 @@ export const POST = withPermission("finance", "create", async (request, { user }
   const supabase = await createSupabaseServerClient();
   let academicYearId = payload.academicYearId ?? null;
 
+  if (!academicYearId && payload.termId) {
+    const { data: selectedTerm, error: termLookupError } = await supabase
+      .from("terms")
+      .select("academic_year_id")
+      .eq("term_id", payload.termId)
+      .eq("school_id", user.schoolId!)
+      .maybeSingle();
+
+    if (termLookupError) {
+      return errorResponse(`Failed to validate selected term: ${termLookupError.message}`);
+    }
+
+    academicYearId = (selectedTerm as any)?.academic_year_id ?? null;
+  }
+
   if (!academicYearId) {
     const activeYear = await getActiveAcademicYear(user.schoolId!);
-    academicYearId = activeYear.success ? activeYear.data?.id ?? null : null;
+    academicYearId = activeYear.success
+      ? (activeYear.data as any)?.academic_year_id ?? activeYear.data?.id ?? null
+      : null;
   }
 
   if (!academicYearId) {

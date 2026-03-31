@@ -14,6 +14,7 @@ import {
   listStudentFees,
   studentFeeFiltersSchema,
 } from "@/features/finance";
+import { ensureCurrentMandatoryFeesForStudent } from "@/lib/finance/ensureStudentFees";
 
 const createStudentFeeSchema = z.object({
   studentId: z.string().uuid(),
@@ -84,6 +85,50 @@ export const GET = withAuth(async (request: NextRequest, { user }) => {
   }
 
   const filters = validation.data!;
+  const canSelfHealAssignments = [
+    "super_admin",
+    "school_admin",
+    "principal",
+    "deputy_principal",
+    "finance_officer",
+    "bursar",
+  ].includes(user.role);
+
+  if (filters.studentId && user.schoolId && canSelfHealAssignments) {
+    try {
+      const supabase = await createSupabaseServerClient();
+      const { data: student } = await supabase
+        .from("students")
+        .select(
+          `
+          student_id,
+          classes (
+            grade_id
+          )
+        `,
+        )
+        .eq("student_id", filters.studentId)
+        .eq("school_id", user.schoolId)
+        .maybeSingle();
+
+      if (student) {
+        const classInfo = Array.isArray((student as any).classes)
+          ? (student as any).classes[0] ?? null
+          : (student as any).classes ?? null;
+
+        await ensureCurrentMandatoryFeesForStudent(supabase, {
+          schoolId: user.schoolId,
+          studentId: filters.studentId,
+          gradeId: classInfo?.grade_id ?? null,
+          userId: user.id,
+          roleName: user.role,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to ensure student fee assignments:", error);
+    }
+  }
+
   const result = await listStudentFees(filters, user);
   let items = result.data.map(normalizeStudentFee);
 

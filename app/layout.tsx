@@ -5,8 +5,8 @@
 
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
-import { AuthProvider } from "@/components/providers/AuthProvider";
 import { ToastProvider } from "@/components/ui/Toast";
+import { AuthProvider } from "@/components/providers/AuthProvider";
 import { SWRProvider } from "@/components/providers/SWRProvider";
 import "@/styles/globals.css";
 

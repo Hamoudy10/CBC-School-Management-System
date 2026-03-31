@@ -35,18 +35,41 @@ export async function getActiveAcademicYear(
   schoolId: string,
 ): Promise<{ success: boolean; data?: AcademicYear; message?: string }> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
+
+  const { data: activeYear, error: activeYearError } = await supabase
     .from("academic_years")
     .select("*")
     .eq("school_id", schoolId)
     .eq("is_active", true)
-    .single();
+    .order("start_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  if (error) {
-    return { success: false, message: error.message };
+  if (activeYearError) {
+    return { success: false, message: activeYearError.message };
   }
 
-  return { success: true, data: data as AcademicYear };
+  if (activeYear) {
+    return { success: true, data: activeYear as AcademicYear };
+  }
+
+  const { data: latestYear, error: latestYearError } = await supabase
+    .from("academic_years")
+    .select("*")
+    .eq("school_id", schoolId)
+    .order("start_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (latestYearError) {
+    return { success: false, message: latestYearError.message };
+  }
+
+  if (!latestYear) {
+    return { success: false, message: "No academic year found for this school." };
+  }
+
+  return { success: true, data: latestYear as AcademicYear };
 }
 
 export async function createAcademicYear(

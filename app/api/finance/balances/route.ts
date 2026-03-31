@@ -1,8 +1,22 @@
 import { NextRequest } from "next/server";
 import { withAuth } from "@/lib/api/withAuth";
 import { apiSuccess, apiError } from "@/lib/api/response";
+import {
+  getActiveAcademicYear,
+  getActiveTerm,
+} from "@/features/settings/services/academicYear.service";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getActiveAcademicYear } from "@/features/settings/services/academicYear.service";
+import { getCurrentFinanceSnapshot } from "@/lib/finance/currentObligations";
+
+function getAcademicYearId(value: unknown) {
+  const row = value as { academic_year_id?: string; id?: string } | null | undefined;
+  return row?.academic_year_id ?? row?.id;
+}
+
+function getTermId(value: unknown) {
+  const row = value as { term_id?: string; id?: string } | null | undefined;
+  return row?.term_id ?? row?.id;
+}
 
 export const GET = withAuth(async (req: NextRequest, user) => {
   try {
@@ -18,113 +32,59 @@ export const GET = withAuth(async (req: NextRequest, user) => {
       ),
     );
     const hasBalance = searchParams.get("hasBalance");
+    const search = searchParams.get("search")?.trim().toLowerCase() ?? "";
 
     const activeYear = await getActiveAcademicYear(user.school_id);
     const academicYearId = activeYear.success
-      ? activeYear.data?.id
+      ? getAcademicYearId(activeYear.data)
       : undefined;
+    const activeTerm = await getActiveTerm(user.school_id);
+    const termId = activeTerm.success ? getTermId(activeTerm.data) : undefined;
+
+    if (!academicYearId) {
+      return apiSuccess([]);
+    }
 
     const supabase = await createSupabaseServerClient();
-    let query = supabase
-      .from("student_fees")
-      .select(
-        `
-        student_id,
-        amount_due,
-        amount_paid,
-        balance,
-        status,
-        students (
-          first_name,
-          last_name,
-          admission_number,
-          classes (
-            name,
-            grades (
-              name
-            )
-          )
-        )
-      `,
-      )
-      .eq("school_id", user.school_id);
+    const snapshot = await getCurrentFinanceSnapshot({
+      supabase,
+      schoolId: user.school_id,
+      academicYearId,
+      termId,
+    });
 
-    if (academicYearId) {
-      query = query.eq("academic_year_id", academicYearId);
-    }
-
-    if (hasBalance === "true") {
-      query = query.gt("balance", 0);
-    }
-
-    const { data, error } = await query.limit(limit * 10);
-
-    if (error) {
-      return apiError(error.message, 500);
-    }
-
-    const studentMap = new Map<
-      string,
-      {
-        studentId: string;
-        studentName: string;
-        admissionNumber: string;
-        className: string;
-        gradeName: string;
-        totalDue: number;
-        totalPaid: number;
-        balance: number;
-        status: "paid" | "partial" | "pending" | "overdue";
-        lastPaymentDate: string | null;
-      }
-    >();
-
-    for (const row of data || []) {
-      const studentId = (row as any).student_id;
-      const student = (row as any).students as any;
-      const classInfo = student?.classes as any;
-      const existing = studentMap.get(studentId) || {
-        studentId,
-        studentName: student
-          ? `${student.first_name} ${student.last_name}`
-          : "Unknown Student",
-        admissionNumber: student?.admission_number || "",
-        className: classInfo?.name || "",
-        gradeName: classInfo?.grades?.name || "",
-        totalDue: 0,
-        totalPaid: 0,
-        balance: 0,
-        status: "paid" as const,
-        lastPaymentDate: null,
-      };
-
-      existing.totalDue += Number((row as any).amount_due || 0);
-      existing.totalPaid += Number((row as any).amount_paid || 0);
-      existing.balance += Number((row as any).balance || 0);
-
-      const rowStatus = ((row as any).status || "pending") as
-        | "paid"
-        | "partial"
-        | "pending"
-        | "overdue";
-      if (rowStatus === "overdue") {existing.status = "overdue";}
-      else if (rowStatus === "partial" && existing.status !== "overdue") {
-        existing.status = "partial";
-      } else if (
-        rowStatus === "pending" &&
-        existing.status !== "overdue" &&
-        existing.status !== "partial"
-      ) {
-        existing.status = "pending";
-      }
-
-      studentMap.set(studentId, existing);
-    }
-
-    const balances = Array.from(studentMap.values())
+    const balances = snapshot.students
+      .filter((student) => student.totalDue > 0)
       .filter((student) => (hasBalance === "true" ? student.balance > 0 : true))
+      .filter((student) => {
+        if (!search) {
+          return true;
+        }
+
+        return [
+          student.studentName,
+          student.admissionNumber,
+          student.className,
+          student.gradeName,
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(search);
+      })
       .sort((a, b) => b.balance - a.balance)
-      .slice(0, limit);
+      .slice(0, limit)
+      .map((student) => ({
+        studentId: student.studentId,
+        studentName: student.studentName,
+        admissionNumber: student.admissionNumber,
+        className: student.className,
+        gradeName: student.gradeName,
+        totalDue: student.totalDue,
+        totalPaid: student.totalPaid,
+        balance: student.balance,
+        status: student.status,
+        lastPaymentDate: student.lastPaymentDate,
+      }));
 
     return apiSuccess(balances);
   } catch (error: any) {

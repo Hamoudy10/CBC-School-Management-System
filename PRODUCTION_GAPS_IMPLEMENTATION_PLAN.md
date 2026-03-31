@@ -181,6 +181,36 @@ Scope:
 - Replace placeholder leaves/assignments UI.
 - Add reactivation flow and status-history support.
 
+### 11. Performance and Navigation Optimization
+Status: `In Progress`
+
+Scope:
+- Reduce route-to-route loading delay across the dashboard shell.
+- Remove duplicated auth/session initialization in the dashboard path.
+- Restore faster navigation behavior and reduce avoidable client/server round trips.
+
+Implementation Steps:
+- [x] Step 1. Remove duplicate dashboard auth-provider setup while keeping server-side access protection.
+- [x] Step 2. Re-enable efficient route prefetching for main dashboard navigation.
+- [ ] Step 3. Reduce client -> API -> Supabase double-hop loading on the most-used dashboard routes.
+- [x] Step 4. Split the heaviest client pages into smaller lazy/client islands.
+- [x] Step 5. Reduce repeated permission/module computation in shell-level components.
+
+Implementation Notes:
+- This track is focused on perceived loading speed, not feature expansion.
+- Steps will be completed one by one and marked here immediately after implementation.
+- Step 1 completed: `AuthProvider` was removed from the global root layout and scoped to route groups instead.
+- Dashboard routes now use a single server-hydrated auth provider in `app/(dashboard)/layout.tsx`.
+- Auth pages now use their own provider in `app/(auth)/layout.tsx`, preventing unnecessary auth initialization on every app route.
+- Step 2 completed: dashboard sidebar links now use normal Next.js prefetching again instead of forcing cold navigations.
+- The delayed manual `router.prefetch(...)` sidebar workaround was removed so route warming happens through the framework's built-in behavior.
+- Step 3 attempted: the main dashboard was temporarily switched to server-loaded metrics, but that change was rolled back after Supabase server-side connect timeouts caused render failures in this environment.
+- The dashboard currently uses the stable client-side `/api/analytics/school` loading path again while the other navigation improvements remain in place.
+- Step 4 completed: the largest settings tabs were split into lazy-loaded client chunks so the main settings shell no longer hydrates class-management and system-configuration code up front.
+- `ClassesSection` and `SystemConfigSection` now load on demand from dedicated component files instead of being bundled into the base `SettingsClient` payload.
+- Step 5 completed: auth/provider permission results are now memoized by accessible modules and the sidebar filters navigation from cached role data instead of re-running module access checks per item.
+- The remaining open item in this track is a safer way to reduce the dashboard data-loading double hop without introducing unstable server-render auth/network calls.
+
 ## Deferred Cross-Cutting Platform Work
 
 These are important for full production maturity, but they are being deferred until the core operational gaps above are closed:
@@ -209,3 +239,9 @@ These are important for full production maturity, but they are being deferred un
 - Item 6 extended: communication compose now supports user/role/class targeting and the main communication messages route now uses the shared messaging service path.
 - Item 6 extended again: communication inbox mark-all-read and delete actions now run through the communication route surface with explicit permission checks.
 - Recommended next item: continue communication workflow completeness with sent-message archival semantics and further retirement of duplicate legacy message routes.
+- Item 11 started: performance/navigation optimization plan added with duplicate dashboard auth-provider removal as the first implementation step.
+- Item 11 step 1 completed: auth-provider setup moved out of the global root layout and into route groups so dashboard navigation no longer pays for duplicate auth context setup.
+- Item 11 step 2 completed: sidebar navigation now uses built-in Next.js prefetching again, removing the forced cold-load behavior on main dashboard links.
+- Item 11 step 3 rolled back: the server-rendered dashboard preload caused Supabase connect timeouts, so the dashboard was returned to the stable client-fetch path.
+- Item 11 step 4 completed: the largest settings tabs now lazy-load from separate chunks, reducing the amount of client code downloaded and hydrated when opening settings.
+- Item 11 step 5 completed: shell permission checks now reuse cached accessible-module data, reducing repeated navigation computation during dashboard renders.

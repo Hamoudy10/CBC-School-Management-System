@@ -224,7 +224,7 @@ export default function StudentsPage() {
       : 'Failed to fetch students'
     : null;
   const isStudentsLoading = shouldFetch && !studentsResponse && !studentsError;
-  const isStudentsBusy = isStudentsLoading || isStudentsValidating || isReferenceLoading;
+  const isStudentsBusy = isStudentsLoading || isStudentsValidating;
 
   // â”€â”€â”€ Permissions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const canCreate = checkPermission('students', 'create');
@@ -440,6 +440,7 @@ export default function StudentsPage() {
 
   const error = studentsErrorMessage;
   const isLoading = isStudentsBusy || isRefreshing;
+  const isFiltersLoading = isReferenceLoading || isRefreshing;
   if (loading) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
@@ -585,7 +586,7 @@ export default function StudentsPage() {
         onReset={handleResetFilters}
         classes={classes}
         grades={grades}
-        isLoading={isLoading}
+        isLoading={isFiltersLoading}
       />
 
       {/* â”€â”€ Bulk Actions Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}

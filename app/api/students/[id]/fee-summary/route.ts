@@ -5,6 +5,7 @@ import {
   getStudentRequestContext,
   successResponse,
 } from '@/app/api/students/_utils';
+import { getCurrentFinanceSnapshot } from '@/lib/finance/currentObligations';
 
 export async function GET(
   _req: Request,
@@ -30,44 +31,33 @@ export async function GET(
     );
   }
 
-  let query = context.supabase
-    .from('student_fees')
-    .select('amount_due, amount_paid, balance, status')
-    .eq('student_id', params.id)
-    .eq('academic_year_id', activeContext.academicYear.academic_year_id);
-
-  if (activeContext.term?.term_id) {
-    query = query.eq('term_id', activeContext.term.term_id);
+  let financeSummary;
+  try {
+    const snapshot = await getCurrentFinanceSnapshot({
+      supabase: context.supabase,
+      schoolId: context.schoolId!,
+      academicYearId: activeContext.academicYear.academic_year_id,
+      termId: activeContext.term?.term_id,
+      studentId: params.id,
+      includeInactive: true,
+    });
+    financeSummary = snapshot.students[0];
+  } catch (error) {
+    return errorResponse(
+      `Failed to fetch fee summary: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      500,
+    );
   }
-
-  const { data, error } = await query;
-  if (error) {
-    return errorResponse(`Failed to fetch fee summary: ${error.message}`, 500);
-  }
-
-  const fees = data ?? [];
-  const totalDue = fees.reduce((sum: number, fee: any) => sum + Number(fee.amount_due ?? 0), 0);
-  const totalPaid = fees.reduce((sum: number, fee: any) => sum + Number(fee.amount_paid ?? 0), 0);
-  const balance = fees.reduce((sum: number, fee: any) => sum + Number(fee.balance ?? 0), 0);
-
-  const status =
-    balance <= 0
-      ? 'paid'
-      : totalPaid > 0
-        ? 'partial'
-        : fees.some((fee: any) => fee.status === 'overdue')
-          ? 'overdue'
-          : 'pending';
 
   return successResponse(
     {
       studentId: params.id,
       academicYearId: activeContext.academicYear.academic_year_id,
       termId: activeContext.term?.term_id ?? undefined,
-      totalDue,
-      totalPaid,
-      balance,
-      status,
+      totalDue: financeSummary?.totalDue ?? 0,
+      totalPaid: financeSummary?.totalPaid ?? 0,
+      balance: financeSummary?.balance ?? 0,
+      status: financeSummary?.status ?? 'pending',
     },
     'Fee summary retrieved successfully',
   );

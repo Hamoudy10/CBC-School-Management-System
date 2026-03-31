@@ -246,6 +246,24 @@ function StatCard({
   );
 }
 
+function formatRelationshipLabel(relationship?: string | null) {
+  if (!relationship) {
+    return "Guardian";
+  }
+
+  return relationship
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function getPrimaryContactTitle(guardian?: StudentGuardian | null) {
+  if (!guardian?.relationship) {
+    return "Primary Contact";
+  }
+
+  return `Primary ${formatRelationshipLabel(guardian.relationship)}`;
+}
+
 // ─── Guardian Card Component ─────────────────────────────────
 function GuardianCard({
   guardian,
@@ -268,15 +286,15 @@ function GuardianCard({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <h4 className="font-medium text-gray-900">{fullName}</h4>
+          <Badge variant="default" className="text-xs">
+            {formatRelationshipLabel(guardian.relationship)}
+          </Badge>
           {guardian.isPrimaryContact && (
             <Badge variant="primary" className="text-xs">
               Primary
             </Badge>
           )}
         </div>
-        <p className="mt-0.5 text-sm capitalize text-gray-500">
-          {guardian.relationship}
-        </p>
         <div className="mt-2 space-y-1">
           {guardian.guardian?.phone && (
             <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -609,6 +627,10 @@ export default function StudentDetailPage() {
         })),
     [referenceClasses, student?.currentClassId],
   );
+  const primaryContact =
+    student?.guardians?.find((guardian: StudentGuardian) => guardian.isPrimaryContact) ??
+    student?.guardians?.[0] ??
+    null;
 
   // ─── Fetch Student Data ────────────────────────────────────
   const fetchStudent = useCallback(async () => {
@@ -872,7 +894,7 @@ export default function StudentDetailPage() {
 
     try {
       const endpoint = guardianToEdit
-        ? `/api/students/${studentId}/guardians/${guardianToEdit.guardianUserId}`
+        ? `/api/students/${studentId}/guardians/${guardianToEdit.id}`
         : `/api/students/${studentId}/guardians`;
       const method = guardianToEdit ? "PATCH" : "POST";
 
@@ -921,7 +943,7 @@ export default function StudentDetailPage() {
     setIsProcessing(true);
     try {
       const response = await fetch(
-        `/api/students/${studentId}/guardians/${guardianToRemove.guardianUserId}`,
+        `/api/students/${studentId}/guardians/${guardianToRemove.id}`,
         {
           method: "DELETE",
           credentials: "include",
@@ -1313,7 +1335,7 @@ export default function StudentDetailPage() {
             <TabTrigger value="attendance">Attendance</TabTrigger>
           )}
           {canViewFinance && <TabTrigger value="finance">Finance</TabTrigger>}
-          <TabTrigger value="guardians">Guardians</TabTrigger>
+          <TabTrigger value="guardians">Contacts</TabTrigger>
           {canViewDiscipline && (
             <TabTrigger value="discipline">Discipline</TabTrigger>
           )}
@@ -1358,25 +1380,23 @@ export default function StudentDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Primary Guardian */}
+            {/* Primary Contact */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Primary Guardian</CardTitle>
+                <CardTitle className="text-base">
+                  {getPrimaryContactTitle(primaryContact)}
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 {student.guardians && student.guardians.length > 0 ? (
                   <GuardianCard
-                    guardian={
-                      student.guardians.find(
-                        (g: StudentGuardian) => g.isPrimaryContact,
-                      ) || student.guardians[0]
-                    }
+                    guardian={primaryContact!}
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center py-6 text-center">
                     <Users className="h-8 w-8 text-gray-300" />
                     <p className="mt-2 text-sm text-gray-500">
-                      No guardians linked
+                      No contacts linked
                     </p>
                     {canEdit && (
                       <Button
@@ -1385,7 +1405,7 @@ export default function StudentDetailPage() {
                         className="mt-2"
                         onClick={openCreateGuardianModal}
                       >
-                        Add Guardian
+                        Add Contact
                       </Button>
                     )}
                   </div>
@@ -1707,7 +1727,7 @@ export default function StudentDetailPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">
-                Guardians ({student.guardians?.length || 0})
+                Contacts ({student.guardians?.length || 0})
               </CardTitle>
               {canEdit && (
                 <Button
@@ -1716,7 +1736,7 @@ export default function StudentDetailPage() {
                   onClick={openCreateGuardianModal}
                 >
                   <Plus className="h-4 w-4" />
-                  Add Guardian
+                  Add Contact
                 </Button>
               )}
             </CardHeader>
@@ -1737,10 +1757,10 @@ export default function StudentDetailPage() {
                 <div className="flex flex-col items-center justify-center py-12">
                   <Users className="h-12 w-12 text-gray-300" />
                   <h3 className="mt-4 text-lg font-semibold text-gray-900">
-                    No Guardians
+                    No Contacts
                   </h3>
                   <p className="mt-1 text-sm text-gray-500">
-                    No guardians have been linked to this student.
+                    No contacts have been linked to this student yet.
                   </p>
                   {canEdit && (
                     <Button
@@ -1750,7 +1770,7 @@ export default function StudentDetailPage() {
                       onClick={openCreateGuardianModal}
                     >
                       <Plus className="h-4 w-4" />
-                      Add First Guardian
+                      Add First Contact
                     </Button>
                   )}
                 </div>

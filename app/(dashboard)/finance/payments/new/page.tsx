@@ -473,7 +473,58 @@ interface ReceiptModalProps {
 
 function ReceiptModal({ open, onClose, receipt }: ReceiptModalProps) {
   const handlePrint = () => {
-    window.print();
+    if (!receipt) {
+      return;
+    }
+
+    const printable = document.getElementById('receipt-content');
+    if (!printable) {
+      window.print();
+      return;
+    }
+
+    const printWindow = window.open('', '_blank', 'width=900,height=700');
+    if (!printWindow) {
+      window.print();
+      return;
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Receipt ${receipt.receiptNumber}</title>
+          <style>
+            @page { size: auto; margin: 12mm; }
+            body { font-family: Arial, sans-serif; padding: 24px; color: #111827; }
+            .receipt-shell { max-width: 720px; margin: 0 auto; }
+          </style>
+        </head>
+        <body>
+          <div class="receipt-shell">${printable.outerHTML}</div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+
+    let hasPrinted = false;
+    const startPrint = () => {
+      if (hasPrinted) {
+        return;
+      }
+
+      hasPrinted = true;
+      printWindow.focus();
+      printWindow.print();
+    };
+
+    printWindow.onafterprint = () => {
+      printWindow.close();
+    };
+    printWindow.onload = startPrint;
+    window.setTimeout(startPrint, 250);
   };
 
   if (!receipt) {return null;}
@@ -586,7 +637,7 @@ function ReceiptModal({ open, onClose, receipt }: ReceiptModalProps) {
           </Button>
           <Button variant="primary" onClick={handlePrint}>
             <Printer className="mr-2 h-4 w-4" />
-            Print Receipt
+            Print / Save PDF
           </Button>
         </div>
       </ModalFooter>
@@ -733,21 +784,38 @@ export default function NewPaymentPage() {
       }
 
       const result = await response.json();
+      const paymentId = result?.data?.id;
 
-      // Create receipt
+      if (!paymentId) {
+        throw new Error('Payment was recorded but receipt details are missing.');
+      }
+
+      const receiptResponse = await fetch(`/api/payments/${paymentId}`, {
+        credentials: 'include',
+      });
+      const receiptJson = await receiptResponse.json();
+
+      if (!receiptResponse.ok) {
+        throw new Error(
+          receiptJson?.error || receiptJson?.message || 'Failed to load receipt'
+        );
+      }
+
+      const receiptData = receiptJson.data;
+
       setReceipt({
-        receiptNumber: result.data.receiptNumber,
-        studentName: selectedStudent.fullName,
-        admissionNumber: selectedStudent.admissionNumber,
-        className: selectedStudent.className,
-        feeName: selectedFee.feeName,
-        amountPaid: data.amountPaid,
-        paymentMethod: data.paymentMethod,
-        transactionId: data.transactionId || null,
-        paymentDate: data.paymentDate,
-        balance: selectedFee.balance - data.amountPaid,
-        recordedBy: user ? `${user.firstName} ${user.lastName}` : 'System',
-        recordedAt: new Date().toISOString(),
+        receiptNumber: receiptData.receiptNumber,
+        studentName: receiptData.studentName,
+        admissionNumber: receiptData.studentAdmissionNo,
+        className: receiptData.className,
+        feeName: receiptData.feeStructureName,
+        amountPaid: Number(receiptData.amountPaid || 0),
+        paymentMethod: receiptData.paymentMethod,
+        transactionId: receiptData.transactionId || null,
+        paymentDate: receiptData.paymentDate,
+        balance: Number(receiptData.balanceAfterPayment || 0),
+        recordedBy: receiptData.recordedByName || 'System',
+        recordedAt: receiptData.recordedAt,
       });
 
       setShowReceipt(true);

@@ -870,17 +870,19 @@ export default function FeeStructuresPage() {
         );
       }
 
-      // Fetch grades
-      const gradesResponse = await fetch('/api/settings/classes/levels', {
+      // Fetch grades from the shared reference-data endpoint so we get real grade IDs
+      const gradesResponse = await fetch('/api/settings/reference-data', {
         credentials: 'include',
       });
       if (gradesResponse.ok) {
         const json = await gradesResponse.json();
+        const levels = json.data?.levels || json.data || [];
         setGrades(
-          (json.data || []).map((g: any) => ({
+          levels.map((g: any) => ({
             gradeId: g.grade_id || g.gradeId || g.id,
-            name: g.name,
+            name: g.name || g.label,
           }))
+          .filter((grade: GradeOption) => Boolean(grade.gradeId))
         );
       }
 

@@ -7,7 +7,6 @@
 import { Users, UserCheck, Clock, CalendarOff } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { getCurrentUser } from '@/lib/auth/session';
 
 // ============================================================
 // Stats Card Component
@@ -55,12 +54,9 @@ function StatCard({ title, value, icon, color, subtitle }: StatCardProps) {
 // ============================================================
 // Main Component — Fetches Stats from Database
 // ============================================================
-export async function StaffStatsCards() {
-  const user = await getCurrentUser();
-  if (!user) {return null;}
-
+export async function StaffStatsCards({ schoolId }: { schoolId: string }) {
+  if (!schoolId) {return null;}
   const supabase = await createSupabaseServerClient();
-  const schoolId = user.schoolId;
 
   // Fetch all stats in parallel
   const [totalResult, activeResult, onLeaveResult, pendingLeavesResult] =

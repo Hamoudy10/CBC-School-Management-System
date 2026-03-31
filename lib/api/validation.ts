@@ -163,11 +163,26 @@ export function validateUuid(id: string): ValidationResult<string> {
 }
 
 export function validateSearchParams<T>(
-  input: NextRequest | URLSearchParams,
+  input: NextRequest | Request | URL | URLSearchParams,
   schema: ZodSchema<T> | any,
 ): ValidationResult<T> {
-  const searchParams =
-    input instanceof NextRequest ? new URL(input.url).searchParams : input;
+  let searchParams: URLSearchParams;
+
+  if (input instanceof URLSearchParams) {
+    searchParams = input;
+  } else if (input instanceof URL) {
+    searchParams = input.searchParams;
+  } else if (input instanceof NextRequest || typeof (input as Request)?.url === "string") {
+    searchParams = new URL((input as Request).url).searchParams;
+  } else {
+    return {
+      success: false,
+      data: undefined as unknown as T,
+      errors: { query: ["Invalid query parameters"] },
+      error: "Invalid query parameters",
+    };
+  }
+
   const result = validateQuery(searchParams, schema) as ValidationResult<T>;
 
   if (result.success && result.data && typeof result.data === "object") {

@@ -12,15 +12,24 @@ import {
   getUserNotifications,
   notificationFilterSchema,
 } from "@/features/communication";
-import { validateBody, validateSearchParams } from "@/lib/api/validation";
+import { validateBody } from "@/lib/api/validation";
 
 export const GET = withPermission(
   { module: "communication", action: "view" },
   async (req: NextRequest, { user }) => {
     try {
-      const params = validateSearchParams(req, notificationFilterSchema);
+      const rawFilters = {
+        type: req.nextUrl.searchParams.get("type") ?? undefined,
+        read_status: req.nextUrl.searchParams.get("read_status") ?? undefined,
+        date_from: req.nextUrl.searchParams.get("date_from") ?? undefined,
+        date_to: req.nextUrl.searchParams.get("date_to") ?? undefined,
+        page: req.nextUrl.searchParams.get("page") ?? undefined,
+        pageSize: req.nextUrl.searchParams.get("pageSize") ?? undefined,
+      };
+
+      const params = notificationFilterSchema.safeParse(rawFilters);
       if (!params.success) {
-        return errorResponse(params.error, 422);
+        return errorResponse("Invalid query parameters", 422);
       }
 
       const { page, pageSize, ...filters } = params.data;

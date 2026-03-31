@@ -525,16 +525,23 @@ export default function NewStudentPage() {
     setIsSubmitting(true);
 
     try {
+      const payload = {
+        ...data,
+        photoUrl: data.photoUrl?.trim() || undefined,
+      };
+
       const response = await fetch('/api/students', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to create student');
+        const error = await response.json().catch(() => null);
+        throw new Error(
+          error?.errors?.[0]?.message || error?.message || 'Failed to create student',
+        );
       }
 
       const result = await response.json();

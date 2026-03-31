@@ -156,7 +156,7 @@ export const staffListFiltersSchema = z.object({
   contractType: contractTypeSchema.optional(),
   schoolId: z.string().uuid().optional(),
   page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  pageSize: z.coerce.number().int().min(1).max(200).default(20),
   sortBy: z
     .enum([
       'first_name',

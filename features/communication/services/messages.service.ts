@@ -23,7 +23,6 @@ export async function sendMessage(
       subject: input.subject,
       body: input.body,
       priority: input.priority || "normal",
-      category: input.category || "general",
       school_id: schoolId,
     })
     .select("id")
@@ -178,7 +177,6 @@ export async function getInbox(
         subject,
         body,
         priority,
-        category,
         created_at,
         sender:users!sender_id(first_name, last_name)
       )

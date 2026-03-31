@@ -1,6 +1,6 @@
 // features/students/services/students.service.ts
 
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
 import { AuthUser } from '@/types/auth';
 import {
   Student,
@@ -93,7 +93,6 @@ export class StudentsService {
           guardian_user_id,
           relationship,
           is_primary_contact,
-          can_pickup,
           created_at,
           guardian:users(user_id, first_name, last_name, email, phone)
         )
@@ -683,83 +682,63 @@ export class StudentsService {
   ): Promise<StudentGuardian> {
     const supabase = await createSupabaseServerClient();
 
-    let guardianUserId = input.guardianUserId;
+    let guardianUserId = input.guardianUserId?.trim() || undefined;
 
-    // If no existing user ID, create new user
-    if (!guardianUserId && input.email) {
-      // Check if user with email exists
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('user_id')
-        .eq('email', input.email)
-        .single();
-
-      if (existingUser) {
-        guardianUserId = existingUser.user_id;
-      } else {
-        // Get parent role
-        const { data: parentRole } = (await supabase
-          .from('roles')
-          .select('role_id')
-          .eq('name', 'parent')
-          .single()) as { data: any | null };
-
-        if (!parentRole) {
-          throw new StudentError('Parent role not found', 'ROLE_ERROR', 500);
-        }
-
-        // Note: In production, you'd use Supabase Auth to create the user
-        // For now, we'll create a user record
-        const { data: newUser, error: userError } = (await supabase
-          .from('users')
-          .insert({
-            user_id: crypto.randomUUID(), // Would come from auth.users
-            school_id: user.schoolId!,
-            role_id: parentRole.role_id,
-            email: input.email!,
-            first_name: input.firstName!,
-            last_name: input.lastName!,
-            phone: input.phone,
-            status: 'active',
-            created_by: user.id,
-          })
-          .select('user_id')
-          .single()) as { data: any; error: any };
-
-        if (userError) {
-          throw new StudentError(userError.message, 'CREATE_USER_ERROR', 500);
-        }
-
-        guardianUserId = newUser.user_id;
-      }
-    }
-
-    if (!guardianUserId) {
-      throw new StudentError(
-        'Guardian user ID or email required',
-        'INVALID_INPUT',
-        400
-      );
-    }
-
-    // Get student's school_id
-    const { data: student } = (await supabase
+    const { data: student, error: studentError } = (await supabase
       .from('students')
       .select('school_id')
       .eq('student_id', studentId)
-      .single()) as { data: any | null };
+      .single()) as { data: any | null; error: any };
+
+    if (studentError) {
+      throw new StudentError(studentError.message, 'FETCH_ERROR', 500);
+    }
 
     if (!student) {
       throw new StudentNotFoundError(studentId);
     }
 
-    // Check if link already exists
-    const { data: existingLink } = await supabase
+    if (!guardianUserId) {
+      if (!input.firstName?.trim() || !input.lastName?.trim() || !input.email?.trim()) {
+        throw new StudentError(
+          'First name, last name, and email are required for a contact',
+          'INVALID_INPUT',
+          400
+        );
+      }
+
+      guardianUserId = await this.ensureParentUser(
+        {
+          schoolId: student.school_id,
+          firstName: input.firstName.trim(),
+          lastName: input.lastName.trim(),
+          email: input.email.trim().toLowerCase(),
+          phone: input.phone?.trim() || null,
+        },
+        user
+      );
+    }
+
+    if (!guardianUserId) {
+      throw new StudentError(
+        'A guardian account or contact details are required',
+        'INVALID_INPUT',
+        400
+      );
+    }
+
+    let existingLinkQuery = supabase
       .from('student_guardians')
       .select('id')
-      .eq('student_id', studentId)
-      .eq('guardian_user_id', guardianUserId)
-      .single();
+      .eq('student_id', studentId);
+
+    existingLinkQuery = existingLinkQuery.eq('guardian_user_id', guardianUserId);
+
+    const { data: existingLink, error: existingLinkError } = await existingLinkQuery.maybeSingle();
+
+    if (existingLinkError) {
+      throw new StudentError(existingLinkError.message, 'FETCH_ERROR', 500);
+    }
 
     if (existingLink) {
       throw new StudentError(
@@ -769,32 +748,24 @@ export class StudentsService {
       );
     }
 
-    // If setting as primary, unset other primaries
     if (input.isPrimaryContact) {
       await supabase
         .from('student_guardians')
-        .update({ is_primary_contact: false })
+        .update({ is_primary_contact: false } as any)
         .eq('student_id', studentId);
     }
 
-    // Create link
-    const { data, error } = (await supabase
-      .from('student_guardians')
+    const { data, error } = await (supabase
+      .from('student_guardians') as any)
       .insert({
         school_id: student.school_id,
         student_id: studentId,
         guardian_user_id: guardianUserId,
         relationship: input.relationship,
         is_primary_contact: input.isPrimaryContact ?? false,
-        can_pickup: input.canPickup ?? true,
       })
-      .select(
-        `
-        *,
-        guardian:users(user_id, first_name, last_name, email, phone)
-      `
-      )
-      .single()) as { data: any; error: any };
+      .select(this.getGuardianLinkSelect())
+      .single();
 
     if (error) {
       throw new StudentError(error.message, 'LINK_ERROR', 500);
@@ -808,16 +779,25 @@ export class StudentsService {
    */
   static async removeGuardian(
     studentId: string,
-    guardianUserId: string,
+    guardianIdentifier: string,
     user: AuthUser
   ): Promise<void> {
     const supabase = await createSupabaseServerClient();
 
+    const existingLink = await this.getGuardianLinkByIdentifier(
+      supabase,
+      studentId,
+      guardianIdentifier
+    );
+
+    if (!existingLink) {
+      throw new StudentError('Guardian link not found', 'NOT_FOUND', 404);
+    }
+
     const { error } = await supabase
       .from('student_guardians')
       .delete()
-      .eq('student_id', studentId)
-      .eq('guardian_user_id', guardianUserId);
+      .eq('id', existingLink.id);
 
     if (error) {
       throw new StudentError(error.message, 'UNLINK_ERROR', 500);
@@ -829,22 +809,17 @@ export class StudentsService {
    */
   static async updateGuardian(
     studentId: string,
-    guardianUserId: string,
+    guardianIdentifier: string,
     input: UpdateGuardianInput,
     user: AuthUser
   ): Promise<StudentGuardian> {
     const supabase = await createSupabaseServerClient();
 
-    const { data: existingLink, error: linkError } = await supabase
-      .from('student_guardians')
-      .select('id, school_id, guardian_user_id')
-      .eq('student_id', studentId)
-      .eq('guardian_user_id', guardianUserId)
-      .maybeSingle();
-
-    if (linkError) {
-      throw new StudentError(linkError.message, 'FETCH_ERROR', 500);
-    }
+    const existingLink = await this.getGuardianLinkByIdentifier(
+      supabase,
+      studentId,
+      guardianIdentifier
+    );
 
     if (!existingLink) {
       throw new StudentError('Guardian link not found', 'NOT_FOUND', 404);
@@ -853,12 +828,9 @@ export class StudentsService {
     if (input.isPrimaryContact) {
       await supabase
         .from('student_guardians')
-        .update({
-          is_primary_contact: false,
-          is_primary: false,
-        } as any)
+        .update({ is_primary_contact: false } as any)
         .eq('student_id', studentId)
-        .neq('guardian_user_id', guardianUserId);
+        .neq('id', existingLink.id);
     }
 
     const userUpdate: Record<string, unknown> = {};
@@ -871,7 +843,7 @@ export class StudentsService {
 
       const { error: guardianUserError } = await (supabase.from('users') as any)
         .update(userUpdate)
-        .eq('user_id', guardianUserId);
+        .eq('user_id', existingLink.guardian_user_id);
 
       if (guardianUserError) {
         throw new StudentError(guardianUserError.message, 'UPDATE_ERROR', 500);
@@ -882,31 +854,22 @@ export class StudentsService {
     if (input.relationship !== undefined) {linkUpdate.relationship = input.relationship;}
     if (input.isPrimaryContact !== undefined) {
       linkUpdate.is_primary_contact = input.isPrimaryContact;
-      linkUpdate.is_primary = input.isPrimaryContact;
     }
-    if (input.canPickup !== undefined) {linkUpdate.can_pickup = input.canPickup;}
 
     if (Object.keys(linkUpdate).length > 0) {
       const { error: updateError } = await (supabase.from('student_guardians') as any)
         .update(linkUpdate)
-        .eq('student_id', studentId)
-        .eq('guardian_user_id', guardianUserId);
+        .eq('id', existingLink.id);
 
       if (updateError) {
         throw new StudentError(updateError.message, 'UPDATE_ERROR', 500);
       }
     }
 
-    const { data, error } = await supabase
-      .from('student_guardians')
-      .select(
-        `
-        *,
-        guardian:users(user_id, first_name, last_name, email, phone)
-      `
-      )
-      .eq('student_id', studentId)
-      .eq('guardian_user_id', guardianUserId)
+    const { data, error } = await (supabase
+      .from('student_guardians') as any)
+      .select(this.getGuardianLinkSelect())
+      .eq('id', existingLink.id)
       .single();
 
     if (error) {
@@ -925,14 +888,9 @@ export class StudentsService {
   ): Promise<StudentGuardian[]> {
     const supabase = await createSupabaseServerClient();
 
-    const { data, error } = await supabase
-      .from('student_guardians')
-      .select(
-        `
-        *,
-        guardian:users(user_id, first_name, last_name, email, phone)
-      `
-      )
+    const { data, error } = await (supabase
+      .from('student_guardians') as any)
+      .select(this.getGuardianLinkSelect())
       .eq('student_id', studentId)
       .order('is_primary_contact', { ascending: false });
 
@@ -1301,22 +1259,151 @@ export class StudentsService {
     };
   }
 
+  private static getGuardianLinkSelect(): string {
+    return `
+      id,
+      student_id,
+      guardian_user_id,
+      relationship,
+      is_primary_contact,
+      created_at,
+      guardian:users(user_id, first_name, last_name, email, phone)
+    `;
+  }
+
+  private static async getGuardianLinkByIdentifier(
+    supabase: any,
+    studentId: string,
+    guardianIdentifier: string
+  ): Promise<any | null> {
+    const { data, error } = await (supabase.from('student_guardians') as any)
+      .select('id, school_id, guardian_user_id')
+      .eq('student_id', studentId)
+      .or(`id.eq.${guardianIdentifier},guardian_user_id.eq.${guardianIdentifier}`)
+      .maybeSingle();
+
+    if (error) {
+      throw new StudentError(error.message, 'FETCH_ERROR', 500);
+    }
+
+    return data ?? null;
+  }
+
+  private static async ensureParentUser(
+    input: {
+      schoolId: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+      phone: string | null;
+    },
+    user: AuthUser
+  ): Promise<string> {
+    const supabase = await createSupabaseServerClient();
+
+    const { data: existingUser, error: existingUserError } = await supabase
+      .from('users')
+      .select('user_id')
+      .eq('email', input.email)
+      .maybeSingle();
+
+    if (existingUserError) {
+      throw new StudentError(existingUserError.message, 'FETCH_ERROR', 500);
+    }
+
+    if (existingUser?.user_id) {
+      return existingUser.user_id;
+    }
+
+    const { data: parentRole, error: parentRoleError } = await supabase
+      .from('roles')
+      .select('role_id')
+      .eq('name', 'parent')
+      .maybeSingle();
+
+    if (parentRoleError) {
+      throw new StudentError(parentRoleError.message, 'FETCH_ERROR', 500);
+    }
+
+    if (!parentRole?.role_id) {
+      throw new StudentError('Parent role not found', 'ROLE_ERROR', 500);
+    }
+
+    const adminClient = await createSupabaseAdminClient();
+    const tempPassword = this.generateTemporaryPassword();
+    const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
+      email: input.email,
+      password: tempPassword,
+      email_confirm: true,
+      user_metadata: {
+        first_name: input.firstName,
+        last_name: input.lastName,
+      },
+    });
+
+    if (authError || !authData.user) {
+      throw new StudentError(
+        authError?.message || 'Failed to create parent account',
+        'CREATE_USER_ERROR',
+        500
+      );
+    }
+
+    const { error: insertError } = await (adminClient.from('users') as any).insert({
+      user_id: authData.user.id,
+      school_id: input.schoolId,
+      role_id: parentRole.role_id,
+      email: input.email,
+      first_name: input.firstName,
+      last_name: input.lastName,
+      phone: input.phone,
+      status: 'active',
+      email_verified: true,
+      created_by: user.id,
+    });
+
+    if (insertError) {
+      await adminClient.auth.admin.deleteUser(authData.user.id);
+      throw new StudentError(insertError.message, 'CREATE_USER_ERROR', 500);
+    }
+
+    await (adminClient.from('user_profiles') as any).insert({
+      user_id: authData.user.id,
+      school_id: input.schoolId,
+    });
+
+    return authData.user.id;
+  }
+
+  private static generateTemporaryPassword(): string {
+    return `Tmp${crypto.randomUUID()}!Aa1`;
+  }
+
   private static mapToGuardian(row: any): StudentGuardian {
+    const guardianUser = Array.isArray(row.guardian)
+      ? row.guardian[0] ?? null
+      : row.guardian ?? null;
+    const source = guardianUser;
+    const sourceId =
+      guardianUser?.user_id ??
+      row.guardian_user_id ??
+      row.id;
+
     return {
       id: row.id,
       studentId: row.student_id,
-      guardianUserId: row.guardian_user_id,
-      relationship: row.relationship,
-      isPrimaryContact: row.is_primary_contact,
-      canPickup: row.can_pickup,
+      guardianUserId: row.guardian_user_id ?? sourceId,
+      relationship: row.relationship ?? 'guardian',
+      isPrimaryContact: Boolean(row.is_primary_contact ?? row.is_primary),
+      canPickup: true,
       createdAt: row.created_at,
-      guardian: row.guardian
+      guardian: source
         ? {
-            userId: row.guardian.user_id,
-            firstName: row.guardian.first_name,
-            lastName: row.guardian.last_name,
-            email: row.guardian.email,
-            phone: row.guardian.phone,
+            userId: sourceId,
+            firstName: source.first_name,
+            lastName: source.last_name,
+            email: source.email,
+            phone: source.phone ?? null,
           }
         : null,
     };

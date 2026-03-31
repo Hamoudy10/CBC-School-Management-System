@@ -1,7 +1,9 @@
 // @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
 import { getCurrentAcademicContext, normalizeStudent } from '@/app/api/students/_utils';
+import { ensureCurrentMandatoryFeesForStudent } from '@/lib/finance/ensureStudentFees';
+import { getCurrentFinanceSnapshot } from '@/lib/finance/currentObligations';
 import { z } from 'zod';
 
 // ─── Response Helpers ─────────────────────────────────────────────────────────
@@ -13,6 +15,25 @@ function successResponse(data: unknown, message: string, status: number = 200) {
 function errorResponse(message: string, status: number = 400) {
   return NextResponse.json({ success: false, message, data: null }, { status });
 }
+
+const STUDENT_WRITE_COLUMNS = [
+  'first_name',
+  'last_name',
+  'middle_name',
+  'admission_number',
+  'date_of_birth',
+  'gender',
+  'current_class_id',
+  'enrollment_date',
+  'status',
+  'photo_url',
+  'medical_info',
+  'has_special_needs',
+  'special_needs_details',
+  'birth_certificate_no',
+  'nemis_number',
+  'previous_school',
+] as const;
 
 // ─── Validation Schemas ───────────────────────────────────────────────────────
 
@@ -121,6 +142,109 @@ const createStudentSchema = z.object({
     .default([]),
 });
 
+function toNullIfEmptyString(value: unknown) {
+  if (typeof value !== 'string') {
+    return value ?? null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function pickWritableStudentFields(input: Record<string, unknown>) {
+  return Object.fromEntries(
+    STUDENT_WRITE_COLUMNS
+      .filter((key) => key in input)
+      .map((key) => [key, input[key]]),
+  );
+}
+
+function generateTemporaryPassword() {
+  return `Tmp${crypto.randomUUID()}!Aa1`;
+}
+
+async function ensureParentUser(
+  schoolId: string,
+  guardian: {
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone_number?: string | null;
+  },
+  createdByUserId: string,
+) {
+  const supabase = await createSupabaseServerClient();
+
+  const normalizedEmail = guardian.email.trim().toLowerCase();
+  const { data: existingUser, error: existingUserError } = await supabase
+    .from('users')
+    .select('user_id')
+    .eq('email', normalizedEmail)
+    .maybeSingle();
+
+  if (existingUserError) {
+    throw new Error(existingUserError.message);
+  }
+
+  if (existingUser?.user_id) {
+    return existingUser.user_id;
+  }
+
+  const { data: parentRole, error: parentRoleError } = await supabase
+    .from('roles')
+    .select('role_id')
+    .eq('name', 'parent')
+    .maybeSingle();
+
+  if (parentRoleError) {
+    throw new Error(parentRoleError.message);
+  }
+
+  if (!parentRole?.role_id) {
+    throw new Error('Parent role not found');
+  }
+
+  const adminClient = await createSupabaseAdminClient();
+  const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
+    email: normalizedEmail,
+    password: generateTemporaryPassword(),
+    email_confirm: true,
+    user_metadata: {
+      first_name: guardian.first_name,
+      last_name: guardian.last_name,
+    },
+  });
+
+  if (authError || !authData.user) {
+    throw new Error(authError?.message || 'Failed to create parent account');
+  }
+
+  const { error: insertError } = await (adminClient.from('users') as any).insert({
+    user_id: authData.user.id,
+    school_id: schoolId,
+    role_id: parentRole.role_id,
+    email: normalizedEmail,
+    first_name: guardian.first_name,
+    last_name: guardian.last_name,
+    phone: guardian.phone_number ?? null,
+    status: 'active',
+    email_verified: true,
+    created_by: createdByUserId,
+  });
+
+  if (insertError) {
+    await adminClient.auth.admin.deleteUser(authData.user.id);
+    throw new Error(insertError.message);
+  }
+
+  await (adminClient.from('user_profiles') as any).insert({
+    user_id: authData.user.id,
+    school_id: schoolId,
+  });
+
+  return authData.user.id;
+}
+
 function normalizeCreateStudentBody(body: Record<string, unknown>) {
   const guardiansInput = Array.isArray(body.guardians) ? body.guardians : [];
   const normalizedGuardians = guardiansInput
@@ -170,7 +294,7 @@ function normalizeCreateStudentBody(body: Record<string, unknown>) {
     enrollment_date:
       body.enrollment_date ?? body.enrollmentDate ?? body.admission_date ?? body.admissionDate ?? null,
     status: body.status ?? 'active',
-    photo_url: body.photo_url ?? body.photoUrl ?? null,
+    photo_url: toNullIfEmptyString(body.photo_url ?? body.photoUrl),
     medical_info: body.medical_info ?? body.medicalInfo ?? null,
     has_special_needs:
       body.has_special_needs ?? body.hasSpecialNeeds ?? Boolean(specialNeedsDetails),
@@ -461,6 +585,36 @@ export async function GET(req: NextRequest) {
     gradeMap = new Map((grades ?? []).map((grade) => [grade.grade_id, grade.name]));
   }
 
+  let financeSummaryMap = new Map<string, { balance: number }>();
+  const studentIds = (students ?? []).map((student) => student.student_id).filter(Boolean);
+
+  if (studentIds.length > 0) {
+    try {
+      const activeContext = await getCurrentAcademicContext(supabase, schoolId);
+      const academicYearId = activeContext.academicYear?.academic_year_id;
+
+      if (academicYearId) {
+        const financeSnapshot = await getCurrentFinanceSnapshot({
+          supabase,
+          schoolId,
+          academicYearId,
+          termId: activeContext.term?.term_id,
+          studentIds,
+          includeInactive: true,
+        });
+
+        financeSummaryMap = new Map(
+          financeSnapshot.students.map((studentSummary) => [
+            studentSummary.studentId,
+            { balance: studentSummary.balance },
+          ]),
+        );
+      }
+    } catch (financeError) {
+      console.error('Failed to calculate student fee balances:', financeError);
+    }
+  }
+
   const transformedStudents = (students ?? []).map((student) => {
     const currentClass = student.classes
       ? {
@@ -510,7 +664,7 @@ export async function GET(req: NextRequest) {
       age: Number.isFinite(age) ? age : 0,
       currentClass,
       guardians: [],
-      feeBalance: 0,
+      feeBalance: financeSummaryMap.get(student.student_id)?.balance ?? 0,
       attendanceRate: null,
     };
   });
@@ -549,8 +703,9 @@ export async function POST(req: NextRequest) {
   const auth = await authenticateAndAuthorize(supabase, writeRoles);
   if ('error' in auth && auth.error) {return auth.error;}
 
-  const { schoolId, user } = auth as {
+  const { schoolId, roleName, user } = auth as {
     schoolId: string;
+    roleName: string;
     user: { user_id: string; school_id: string };
   };
 
@@ -581,6 +736,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { guardians, admission_number, ...studentData } = parsed.data;
+  const writableStudentData = pickWritableStudentFields(studentData);
   let generatedAdmissionNumber = admission_number;
 
   if (!generatedAdmissionNumber) {
@@ -610,28 +766,28 @@ export async function POST(req: NextRequest) {
   }
 
   // 4. If NEMIS number is provided, check for duplicates
-  if (studentData.nemis_number) {
+  if (writableStudentData.nemis_number) {
     const { data: existingNemis } = await supabase
       .from('students')
       .select('student_id')
       .eq('school_id', schoolId)
-      .eq('nemis_number', studentData.nemis_number)
+      .eq('nemis_number', writableStudentData.nemis_number)
       .maybeSingle();
 
     if (existingNemis) {
       return errorResponse(
-        `A student with NEMIS number "${studentData.nemis_number}" already exists`,
+        `A student with NEMIS number "${writableStudentData.nemis_number}" already exists`,
         409
       );
     }
   }
 
   // 5. If class_id provided, verify it belongs to this school
-  if (studentData.current_class_id) {
+  if (writableStudentData.current_class_id) {
     const { data: validClass } = await supabase
       .from('classes')
-      .select('class_id')
-      .eq('class_id', studentData.current_class_id)
+      .select('class_id, grade_id')
+      .eq('class_id', writableStudentData.current_class_id)
       .eq('school_id', schoolId)
       .maybeSingle();
 
@@ -641,7 +797,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 6. Validate date of birth is not in the future
-  const dob = new Date(studentData.date_of_birth);
+  const dob = new Date(String(writableStudentData.date_of_birth));
   if (dob > new Date()) {
     return errorResponse('Date of birth cannot be in the future', 400);
   }
@@ -657,11 +813,11 @@ export async function POST(req: NextRequest) {
   const { data: newStudent, error: insertError } = await supabase
     .from('students')
     .insert({
-      ...studentData,
+      ...writableStudentData,
       admission_number: generatedAdmissionNumber,
       school_id: schoolId,
       enrollment_date:
-        studentData.enrollment_date ?? new Date().toISOString().split('T')[0],
+        writableStudentData.enrollment_date ?? new Date().toISOString().split('T')[0],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       created_by: user.user_id,
@@ -704,54 +860,42 @@ export async function POST(req: NextRequest) {
 
   // 9. If guardian data provided, create guardian link
   for (const guardian of guardians ?? []) {
-    let guardianId: string | null = null;
-
-    if (guardian.phone_number) {
-      const { data: existingGuardian } = await supabase
-        .from('guardians')
-        .select('guardian_id')
-        .eq('school_id', schoolId)
-        .eq('phone_number', guardian.phone_number)
-        .maybeSingle();
-
-      guardianId = existingGuardian?.guardian_id ?? null;
+    if (!guardian.email) {
+      await supabase.from('students').delete().eq('student_id', newStudent.student_id);
+      return errorResponse(
+        `Guardian email is required for ${guardian.first_name} ${guardian.last_name}`,
+        400,
+      );
     }
 
-    if (!guardianId) {
-      const { data: createdGuardian, error: guardianError } = await supabase
-        .from('guardians')
-        .insert({
-          school_id: schoolId,
-          first_name: guardian.first_name,
-          last_name: guardian.last_name,
-          phone_number: guardian.phone_number ?? `missing-${Date.now()}`,
-          email: guardian.email ?? null,
-          created_by: user.user_id,
-          updated_by: user.user_id,
-        })
-        .select('guardian_id')
-        .single();
-
-      if (guardianError) {
-        console.error('Failed to create guardian:', guardianError.message);
-        continue;
-      }
-
-      guardianId = createdGuardian.guardian_id;
+    let guardianUserId: string;
+    try {
+      guardianUserId = await ensureParentUser(
+        schoolId,
+        guardian,
+        user.user_id,
+      );
+    } catch (error) {
+      await supabase.from('students').delete().eq('student_id', newStudent.student_id);
+      return errorResponse(
+        `Failed to create guardian account: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+        500,
+      );
     }
 
     const { error: linkError } = await supabase.from('student_guardians').upsert({
       school_id: schoolId,
       student_id: newStudent.student_id,
-      guardian_id: guardianId,
+      guardian_user_id: guardianUserId,
       relationship: guardian.relationship,
       is_primary_contact: guardian.is_primary,
-      is_primary: guardian.is_primary,
-      can_pickup: guardian.can_pickup,
     });
 
     if (linkError) {
-      console.error('Failed to link guardian to student:', linkError.message);
+      await supabase.from('students').delete().eq('student_id', newStudent.student_id);
+      return errorResponse(`Failed to link guardian to student: ${linkError.message}`, 500);
     }
   }
 
@@ -769,6 +913,25 @@ export async function POST(req: NextRequest) {
         },
         { onConflict: 'student_id,academic_year_id,term_id' },
       );
+    }
+
+    try {
+      const { data: currentClass } = await supabase
+        .from('classes')
+        .select('grade_id')
+        .eq('class_id', newStudent.current_class_id)
+        .eq('school_id', schoolId)
+        .maybeSingle();
+
+      await ensureCurrentMandatoryFeesForStudent(supabase, {
+        schoolId,
+        studentId: newStudent.student_id,
+        gradeId: (currentClass as any)?.grade_id ?? null,
+        userId: user.user_id,
+        roleName,
+      });
+    } catch (feeAssignmentError) {
+      console.error('Failed to assign fees for new student:', feeAssignmentError);
     }
   }
 

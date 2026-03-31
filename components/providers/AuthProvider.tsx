@@ -16,8 +16,6 @@ import {
   onAuthStateChange,
 } from "@/services/auth.service";
 import {
-  hasPermission,
-  hasModuleAccess,
   getAllowedActions,
   getAccessibleModules,
 } from "@/lib/auth/permissions";
@@ -123,42 +121,30 @@ export function AuthProvider({
     setLoading(false);
   }, []);
 
-  const checkPermission = useCallback(
-    (module: ModuleName, action: ActionName): boolean => {
-      if (!user) {
-        return false;
-      }
-      return hasPermission(user.role, module, action);
-    },
-    [user],
-  );
-
-  const checkModuleAccess = useCallback(
-    (module: ModuleName): boolean => {
-      if (!user) {
-        return false;
-      }
-      return hasModuleAccess(user.role, module);
-    },
-    [user],
-  );
-
-  const getModuleActions = useCallback(
-    (module: ModuleName): ActionName[] => {
-      if (!user) {
-        return [];
-      }
-      return getAllowedActions(user.role, module);
-    },
-    [user],
-  );
-
   const accessibleModules = useMemo(() => {
     if (!user) {
       return [];
     }
     return getAccessibleModules(user.role);
   }, [user]);
+
+  const accessibleModuleSet = useMemo(
+    () => new Set<ModuleName>(accessibleModules),
+    [accessibleModules],
+  );
+
+  const allowedActionsByModule = useMemo(() => {
+    if (!user) {
+      return new Map<ModuleName, ActionName[]>();
+    }
+
+    return new Map(
+      accessibleModules.map((module) => [
+        module,
+        getAllowedActions(user.role, module),
+      ]),
+    );
+  }, [accessibleModules, user]);
 
   const value = useMemo<AuthContextValue>(() => {
     const isAuthenticated = !!user;
@@ -179,9 +165,10 @@ export function AuthProvider({
       error,
       login,
       logout,
-      checkPermission,
-      checkModuleAccess,
-      getModuleActions,
+      checkPermission: (module, action) =>
+        allowedActionsByModule.get(module)?.includes(action) ?? false,
+      checkModuleAccess: (module) => accessibleModuleSet.has(module),
+      getModuleActions: (module) => allowedActionsByModule.get(module) ?? [],
       accessibleModules,
       isAuthenticated,
       isAdmin,
@@ -191,10 +178,9 @@ export function AuthProvider({
     };
   }, [
     accessibleModules,
-    checkModuleAccess,
-    checkPermission,
+    accessibleModuleSet,
+    allowedActionsByModule,
     error,
-    getModuleActions,
     loading,
     login,
     logout,

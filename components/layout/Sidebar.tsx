@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { NAV_ITEMS, type NavItem } from "@/lib/navigation/navConfig";
+import { NAV_ITEMS } from "@/lib/navigation/navConfig";
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -13,78 +13,23 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed = false }: SidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
-  const { user, loading, checkModuleAccess } = useAuth();
+  const { user, loading, accessibleModules } = useAuth();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const accessibleModuleSet = useMemo(
+    () => new Set(accessibleModules),
+    [accessibleModules],
+  );
 
   const visibleNavItems = useMemo(() => {
     if (loading || !user) {
       return [];
     }
-    return NAV_ITEMS.filter((item) => checkModuleAccess(item.module));
-  }, [loading, user, checkModuleAccess]);
+    return NAV_ITEMS.filter((item) => accessibleModuleSet.has(item.module));
+  }, [accessibleModuleSet, loading, user]);
 
   useEffect(() => {
     setPendingHref(null);
   }, [pathname]);
-
-  useEffect(() => {
-    if (visibleNavItems.length === 0) {
-      return;
-    }
-
-    // Only prefetch 2 most likely destinations based on current path
-    const getLikelyDestinations = (): NavItem[] => {
-      // If on dashboard, prefetch students and attendance (most common)
-      if (pathname === "/dashboard") {
-        return [
-          visibleNavItems.find((item) => item.href === "/students"),
-          visibleNavItems.find((item) => item.href === "/attendance"),
-        ].filter((item): item is NavItem => item !== undefined);
-      }
-
-      // If on a specific section, prefetch related sections and dashboard
-      const currentSection = visibleNavItems.find((item) =>
-        pathname.startsWith(item.href)
-      );
-
-      if (currentSection) {
-        const currentIndex = visibleNavItems.findIndex(
-          (item) => item.href === currentSection.href
-        );
-        const adjacentSections = [
-          visibleNavItems[currentIndex - 1],
-          visibleNavItems[currentIndex + 1],
-        ].filter((item): item is NavItem => item !== undefined);
-
-        const dashboardItem = visibleNavItems.find(
-          (item) => item.href === "/dashboard"
-        );
-        const items = [dashboardItem, ...adjacentSections].filter(
-          (item): item is NavItem =>
-            item !== undefined && item.href !== pathname
-        );
-        return items.slice(0, 2);
-      }
-
-      // Default: just prefetch dashboard
-      const dashboardItem = visibleNavItems.find(
-        (item) => item.href === "/dashboard"
-      );
-      return dashboardItem ? [dashboardItem] : [];
-    };
-
-    const likelyDestinations = getLikelyDestinations();
-
-    // Delay prefetching to avoid competing with initial page load
-    const timeoutId = setTimeout(() => {
-      for (const item of likelyDestinations) {
-        router.prefetch(item.href);
-      }
-    }, 1500);
-
-    return () => clearTimeout(timeoutId);
-  }, [pathname, router, visibleNavItems]);
 
   const isActive = (href: string) => {
     if (href === "/dashboard") {
@@ -125,7 +70,6 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                 <li key={item.href}>
                   <Link
                     href={item.href}
-                    prefetch={false}
                     onClick={() => {
                       if (!active) {
                         setPendingHref(item.href);

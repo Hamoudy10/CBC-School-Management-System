@@ -21,7 +21,6 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Dropdown, DropdownItem } from '@/components/ui/Dropdown';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { getCurrentUser } from '@/lib/auth/session';
 import {
   STAFF_POSITION_LABELS,
   STAFF_STATUS_LABELS,
@@ -35,6 +34,7 @@ import {
 // Types
 // ============================================================
 interface StaffTableProps {
+  schoolId: string;
   filters: {
     search: string;
     position: string;
@@ -60,10 +60,8 @@ const statusColors: Record<StaffStatus, 'green' | 'gray' | 'yellow' | 'red'> = {
 // ============================================================
 // Main Component
 // ============================================================
-export async function StaffTable({ filters }: StaffTableProps) {
-  const user = await getCurrentUser();
-  if (!user) {return null;}
-
+export async function StaffTable({ filters, schoolId }: StaffTableProps) {
+  if (!schoolId) {return null;}
   const supabase = await createSupabaseServerClient();
   const { page, pageSize, sortBy, sortOrder, search, position, status, contractType } = filters;
   const offset = (page - 1) * pageSize;
@@ -94,7 +92,7 @@ export async function StaffTable({ filters }: StaffTableProps) {
     `,
       { count: 'exact' }
     )
-    .eq('school_id', user.schoolId);
+    .eq('school_id', schoolId);
 
   // Apply filters
   if (search) {

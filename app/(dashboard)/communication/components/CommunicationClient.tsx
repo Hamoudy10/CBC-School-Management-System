@@ -1,7 +1,8 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { startTransition, useState, useTransition } from 'react';
+import { startTransition, useEffect, useState, useTransition } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { RouteLoading } from '@/components/ui/RouteLoading';
 
 const AnnouncementsList = dynamic(
@@ -33,14 +34,41 @@ const tabs: { key: TabType; label: string }[] = [
   { key: 'notifications', label: 'Notifications' },
 ];
 
+function resolveTab(value: string | null): TabType {
+  if (value === 'messages' || value === 'notifications') {
+    return value;
+  }
+
+  return 'announcements';
+}
+
 export function CommunicationClient() {
-  const [activeTab, setActiveTab] = useState<TabType>('announcements');
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<TabType>(() =>
+    resolveTab(searchParams.get('tab'))
+  );
   const [isPending, startTabTransition] = useTransition();
+
+  useEffect(() => {
+    const nextTab = resolveTab(searchParams.get('tab'));
+    setActiveTab((currentTab) => (currentTab === nextTab ? currentTab : nextTab));
+  }, [searchParams]);
 
   const handleTabChange = (tab: TabType) => {
     startTabTransition(() => {
       startTransition(() => {
         setActiveTab(tab);
+        const params = new URLSearchParams(searchParams.toString());
+        if (tab === 'announcements') {
+          params.delete('tab');
+        } else {
+          params.set('tab', tab);
+        }
+
+        const query = params.toString();
+        router.replace(query ? `${pathname}?${query}` : pathname);
       });
     });
   };

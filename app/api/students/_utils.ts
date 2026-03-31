@@ -98,18 +98,16 @@ export function calculateAge(dateOfBirth: string | null | undefined) {
 
 export function normalizeGuardian(link: any) {
   const guardianUser = getSingleRelation(link.guardian ?? link.users);
-  const guardianContact = getSingleRelation(link.guardians);
-  const source = guardianUser ?? guardianContact;
+  const source = guardianUser;
 
   const userId =
     source?.user_id ??
     source?.guardian_user_id ??
     link.guardian_user_id ??
-    link.guardian_id ??
     link.id;
 
   return {
-    id: link.id ?? `${link.student_id}-${link.guardian_id ?? link.guardian_user_id ?? userId}`,
+    id: link.id ?? `${link.student_id}-${link.guardian_user_id ?? userId}`,
     studentId: link.student_id,
     guardianUserId: link.guardian_user_id ?? userId ?? '',
     relationship: link.relationship ?? 'guardian',
@@ -122,7 +120,7 @@ export function normalizeGuardian(link: any) {
           firstName: source.first_name ?? '',
           lastName: source.last_name ?? '',
           email: source.email ?? '',
-          phone: source.phone ?? source.phone_number ?? null,
+          phone: source.phone ?? null,
         }
       : null,
   };

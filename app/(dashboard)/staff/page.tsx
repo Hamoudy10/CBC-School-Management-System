@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { TableSkeleton } from "@/components/ui/Skeletons";
+import { getServerUser } from "@/services/auth.server.service";
 
 export const metadata: Metadata = {
   title: "Staff Management | School Management System",
@@ -28,7 +29,8 @@ interface StaffPageProps {
   };
 }
 
-export default function StaffPage({ searchParams }: StaffPageProps) {
+export default async function StaffPage({ searchParams }: StaffPageProps) {
+  const user = await getServerUser();
   const filters = {
     search: searchParams.search || "",
     position: searchParams.position || "",
@@ -56,7 +58,7 @@ export default function StaffPage({ searchParams }: StaffPageProps) {
       </PageHeader>
 
       <Suspense fallback={<StatsCardsSkeleton />}>
-        <StaffStatsCards />
+        <StaffStatsCards schoolId={user?.schoolId || ""} />
       </Suspense>
 
       <Card className="overflow-hidden">
@@ -65,7 +67,7 @@ export default function StaffPage({ searchParams }: StaffPageProps) {
         </div>
 
         <Suspense fallback={<TableSkeleton rows={10} columns={7} />}>
-          <StaffTable filters={filters} />
+          <StaffTable filters={filters} schoolId={user?.schoolId || ""} />
         </Suspense>
       </Card>
     </div>

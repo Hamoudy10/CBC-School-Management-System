@@ -158,7 +158,7 @@ export const learningAreaFiltersSchema = z.object({
     .optional(),
   gradeId: uuidField.optional(),
   page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+  pageSize: z.coerce.number().int().min(1).max(200).default(50),
 });
 
 export type LearningAreaFiltersInput = z.infer<
@@ -176,7 +176,7 @@ export const teacherSubjectFiltersSchema = z.object({
     .transform((v) => v === "true")
     .optional(),
   page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+  pageSize: z.coerce.number().int().min(1).max(200).default(50),
 });
 
 export type TeacherSubjectFiltersInput = z.infer<

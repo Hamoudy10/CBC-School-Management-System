@@ -5,7 +5,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
@@ -21,19 +21,27 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    router.prefetch(redirectTo);
+  }, [redirectTo, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setIsRedirecting(false);
     setLoading(true);
+    let loginSucceeded = false;
 
     try {
       const result = await login({ email, password });
 
       if (result.success) {
-        router.push(redirectTo);
-        router.refresh();
+        loginSucceeded = true;
+        setIsRedirecting(true);
+        router.replace(redirectTo);
       } else {
         setError(result.message);
         showError("Login Failed", result.message);
@@ -42,7 +50,9 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
       setError("An unexpected error occurred");
       showError("Error", "An unexpected error occurred");
     } finally {
-      setLoading(false);
+      if (!loginSucceeded) {
+        setLoading(false);
+      }
     }
   };
 
@@ -97,10 +107,16 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
         fullWidth
         size="lg"
         loading={loading}
-        disabled={!email || !password}
+        disabled={!email || !password || isRedirecting}
       >
-        Sign In
+        {isRedirecting ? "Opening Dashboard..." : "Sign In"}
       </Button>
+
+      {isRedirecting && (
+        <p className="text-center text-sm text-primary-600">
+          Signing you in and preparing your dashboard...
+        </p>
+      )}
     </form>
   );
 }

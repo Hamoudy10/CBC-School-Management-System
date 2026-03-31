@@ -7,8 +7,10 @@
 
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { NavigationFeedback } from "./NavigationFeedback";
@@ -31,8 +33,33 @@ function DashboardLayout({
   title,
   breadcrumbs,
 }: DashboardLayoutProps) {
+  const router = useRouter();
+  const { user, loading } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace("/login");
+    }
+  }, [loading, router, user]);
+
+  if (loading || !user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-secondary-50 px-6">
+        <NavigationFeedback />
+        <div className="w-full max-w-sm rounded-3xl border border-white/70 bg-white p-8 text-center shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
+          <h2 className="mt-4 text-lg font-semibold text-secondary-900">
+            Loading workspace
+          </h2>
+          <p className="mt-2 text-sm text-secondary-500">
+            Preparing your dashboard...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-secondary-50">

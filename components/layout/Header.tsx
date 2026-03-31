@@ -6,7 +6,8 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { Avatar } from "@/components/ui/Avatar";
@@ -38,8 +39,71 @@ function Header({
   className,
 }: HeaderProps) {
   const { user, logout } = useAuth();
+  const router = useRouter();
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadUnreadCount() {
+      if (!user) {
+        if (mounted) {
+          setUnreadCount(0);
+        }
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/notifications/unread-count", {
+          credentials: "include",
+        });
+        const json = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            json?.error || json?.message || "Failed to load notifications",
+          );
+        }
+
+        if (mounted) {
+          setUnreadCount(Number(json?.data?.total || 0));
+        }
+      } catch (error) {
+        if (mounted) {
+          setUnreadCount(0);
+        }
+        console.error("Failed to load unread notifications:", error);
+      }
+    }
+
+    loadUnreadCount();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user]);
+
+  const handleLogout = async () => {
+    await logout();
+    setShowUserMenu(false);
+    router.replace("/login");
+  };
+
+  const handleOpenNotifications = () => {
+    setShowUserMenu(false);
+    router.push("/communication?tab=notifications");
+  };
+
+  const handleOpenProfile = () => {
+    setShowUserMenu(false);
+    router.push("/profile");
+  };
+
+  const handleOpenSettings = () => {
+    setShowUserMenu(false);
+    router.push("/settings");
+  };
 
   return (
     <header
@@ -89,30 +153,17 @@ function Header({
         {/* Notifications */}
         <div className="relative">
           <button
-            onClick={() => setShowNotifications(!showNotifications)}
+            onClick={handleOpenNotifications}
             className="relative rounded-lg p-2 text-secondary-400 hover:bg-secondary-100 hover:text-secondary-600"
             aria-label="Notifications"
           >
             <Bell className="h-5 w-5" />
-            {/* Notification Badge */}
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-error-500" />
+            {unreadCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex min-h-[1.1rem] min-w-[1.1rem] items-center justify-center rounded-full bg-error-500 px-1 text-[10px] font-semibold text-white">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
           </button>
-
-          {/* Notifications Dropdown */}
-          {showNotifications && (
-            <div className="absolute right-0 top-full mt-2 w-80 rounded-lg border border-secondary-200 bg-white shadow-lg animate-scale-in">
-              <div className="border-b border-secondary-100 px-4 py-3">
-                <h3 className="font-semibold text-secondary-900">
-                  Notifications
-                </h3>
-              </div>
-              <div className="max-h-80 overflow-y-auto">
-                <div className="px-4 py-8 text-center text-sm text-secondary-500">
-                  No new notifications
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* User Menu */}
@@ -140,18 +191,24 @@ function Header({
                 </div>
               )}
               <div className="py-1">
-                <button className="flex w-full items-center gap-3 px-4 py-2 text-sm text-secondary-600 hover:bg-secondary-50">
+                <button
+                  onClick={handleOpenProfile}
+                  className="flex w-full items-center gap-3 px-4 py-2 text-sm text-secondary-600 hover:bg-secondary-50"
+                >
                   <User className="h-4 w-4" />
                   Profile
                 </button>
-                <button className="flex w-full items-center gap-3 px-4 py-2 text-sm text-secondary-600 hover:bg-secondary-50">
+                <button
+                  onClick={handleOpenSettings}
+                  className="flex w-full items-center gap-3 px-4 py-2 text-sm text-secondary-600 hover:bg-secondary-50"
+                >
                   <Settings className="h-4 w-4" />
                   Settings
                 </button>
               </div>
               <div className="border-t border-secondary-100 py-1">
                 <button
-                  onClick={logout}
+                  onClick={handleLogout}
                   className="flex w-full items-center gap-3 px-4 py-2 text-sm text-error-600 hover:bg-error-50"
                 >
                   <LogOut className="h-4 w-4" />
@@ -164,12 +221,11 @@ function Header({
       </div>
 
       {/* Click outside to close dropdowns */}
-      {(showUserMenu || showNotifications) && (
+      {showUserMenu && (
         <div
           className="fixed inset-0 z-[-1]"
           onClick={() => {
             setShowUserMenu(false);
-            setShowNotifications(false);
           }}
         />
       )}
