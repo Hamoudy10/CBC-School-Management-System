@@ -1,5 +1,8 @@
 // features/special-needs/index.ts
 // Barrel export for special needs module
+// NOTE: Only types and validators are exported for client components.
+// Service functions are server-only and should be imported directly from
+// the service file in API routes (never from client components).
 
 export {
   NEEDS_TYPE_LABELS,

@@ -14,7 +14,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeletons";
 import { useToast } from "@/components/ui/Toast";
 import { Plus, Search, Filter, Eye, Edit3, X, FileDown } from "lucide-react";
-import { NEEDS_TYPE_LABELS, type NeedsType, type SpecialNeed } from "@/features/special-needs";
+import { NEEDS_TYPE_LABELS } from "@/features/special-needs/types";
+import type { NeedsType, SpecialNeed } from "@/features/special-needs/types";
 
 const NEEDS_TYPE_COLORS: Record<string, "default" | "info" | "warning" | "error" | "success"> = {
   learning_disability: "warning",

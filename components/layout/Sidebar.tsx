@@ -15,6 +15,11 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
   const pathname = usePathname();
   const { user, loading, accessibleModules } = useAuth();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const accessibleModuleSet = useMemo(
     () => new Set(accessibleModules),
@@ -67,7 +72,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-4">
-        {loading ? (
+        {!mounted ? (
           <div className="space-y-1">
             {Array.from({ length: 8 }).map((_, i) => (
               <div
@@ -76,7 +81,16 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
               />
             ))}
           </div>
-        ) : categories.length === 0 ? (
+        ) : loading ? (
+          <div className="space-y-1">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-9 animate-pulse rounded-lg bg-gray-200/60"
+              />
+            ))}
+          </div>
+        ) : !mounted ? null : categories.length === 0 ? (
           <p className="px-3 py-2 text-xs text-gray-400">
             No modules available
           </p>
