@@ -8,7 +8,7 @@ import { markAllMessagesAsRead } from "@/features/communication/services/message
 
 export const POST = withAuth(async (req: NextRequest, user) => {
   try {
-    const result = await markAllMessagesAsRead(user.id, user.school_id);
+    const result = await markAllMessagesAsRead(user.id, user.schoolId!);
 
     if (!result.success) {
       return apiError(result.message, 400);

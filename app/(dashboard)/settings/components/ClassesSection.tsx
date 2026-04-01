@@ -5,6 +5,7 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  type FormEvent,
 } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -148,12 +149,12 @@ export default function ClassesSection() {
     const data = Array.isArray(json.data) ? json.data : [];
     const uniqueTeachers = Array.from(
       new Map(
-        data
+        (data as any[])
           .map(normalizeTeacherOption)
           .filter((staff: TeacherOption) => Boolean(staff.userId))
           .map((staff) => [staff.userId, staff]),
       ).values(),
-    );
+    ) as TeacherOption[];
 
     setTeachers(sortTeacherOptions(uniqueTeachers));
   }, []);

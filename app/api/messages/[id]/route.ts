@@ -13,7 +13,7 @@ export const GET = withPermission(
   { module: "communication", action: "view" },
   async (req: NextRequest, user, { params }: { params: { id: string } }) => {
     try {
-      const result = await getMessageById(params.id, user.id, user.school_id);
+      const result = await getMessageById(params.id, user.id, user.schoolId!);
 
       if (!result.success) {
         return apiError(result.message || "Message not found", 404);
@@ -30,7 +30,7 @@ export const DELETE = withPermission(
   { module: "communication", action: "delete" },
   async (req: NextRequest, user, { params }: { params: { id: string } }) => {
     try {
-      const result = await deleteMessage(params.id, user.id, user.school_id);
+      const result = await deleteMessage(params.id, user.id, user.schoolId!);
 
       if (!result.success) {
         return apiError(result.message, 400);

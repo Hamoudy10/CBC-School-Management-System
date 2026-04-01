@@ -8,8 +8,14 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/lib/api/withAuth";
-import { errorResponse } from "@/lib/api/response";
-import { ensureStorageBucket, STORAGE_BUCKET } from "@/lib/supabase/storage";
+import { errorResponse, successResponse } from "@/lib/api/response";
+import {
+  ensureStorageBucket,
+  STORAGE_BUCKET,
+  validateFile,
+  generateStoragePath,
+  getSignedUrl,
+} from "@/lib/supabase/storage";
 
 const ALLOWED_FOLDERS = new Set([
   "students",
@@ -18,7 +24,20 @@ const ALLOWED_FOLDERS = new Set([
   "users",
   "exams",
   "uploads",
+  "reports",
+  "logos",
 ]);
+
+const FOLDER_TO_CATEGORY: Record<string, string> = {
+  students: "image",
+  staff: "image",
+  teachers: "image",
+  users: "avatar",
+  exams: "document",
+  uploads: "document",
+  reports: "report",
+  logos: "logo",
+};
 
 export const POST = withAuth(async (request: NextRequest, user) => {
   try {
@@ -39,10 +58,15 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       return errorResponse("No file uploaded", 400);
     }
 
-    const fileExt = file.name.split(".").pop() || "bin";
-    const safeExt = fileExt.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10) || "bin";
+    // Validate file type and size
+    const category = (FOLDER_TO_CATEGORY[folder] || "document") as Parameters<typeof validateFile>[2];
+    const validation = validateFile(file.name, file.size, category);
+    if (!validation.success) {
+      return errorResponse(validation.message!, 400);
+    }
+
     const normalizedFolder = folder === "teachers" ? "staff" : folder;
-    const fileName = `${schoolId}/${normalizedFolder}/${crypto.randomUUID()}.${safeExt}`;
+    const fileName = generateStoragePath(schoolId, normalizedFolder, file.name);
 
     const storageSetup = await ensureStorageBucket();
     if (!storageSetup.success) {
@@ -70,14 +94,19 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       );
     }
 
+    // Generate signed URL for secure access
+    const { url: signedUrl } = await getSignedUrl(fileName, 86400);
     const { data: urlData } = adminClient.storage
       .from(STORAGE_BUCKET)
       .getPublicUrl(fileName);
 
-    return NextResponse.json(
-      { success: true, data: { url: urlData.publicUrl }, url: urlData.publicUrl, error: null },
-      { status: 200 },
-    );
+    return successResponse({
+      url: urlData.publicUrl,
+      signedUrl,
+      path: fileName,
+      size: file.size,
+      type: file.type,
+    });
   } catch (error) {
     console.error("Upload API error:", error);
     return errorResponse("Internal server error", 500);

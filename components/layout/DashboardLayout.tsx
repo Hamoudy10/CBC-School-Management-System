@@ -1,13 +1,12 @@
 // components/layout/DashboardLayout.tsx
 // ============================================================
-// Main Dashboard Layout
-// Combines: Sidebar, Header, Main Content Area
-// Handles: sidebar collapse state, mobile responsiveness
+// Main Dashboard Layout — Optimized for instant shell rendering
+// Shell (sidebar + header) renders immediately; content streams in
 // ============================================================
 
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,18 +15,12 @@ import { Header } from "./Header";
 import { NavigationFeedback } from "./NavigationFeedback";
 import type { BreadcrumbItem } from "@/components/ui/Breadcrumbs";
 
-// ============================================================
-// Layout Props
-// ============================================================
 interface DashboardLayoutProps {
   children: ReactNode;
   title?: string;
   breadcrumbs?: BreadcrumbItem[];
 }
 
-// ============================================================
-// Dashboard Layout Component
-// ============================================================
 function DashboardLayout({
   children,
   title,
@@ -44,26 +37,14 @@ function DashboardLayout({
     }
   }, [loading, router, user]);
 
-  if (loading || !user) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-secondary-50 px-6">
-        <NavigationFeedback />
-        <div className="w-full max-w-sm rounded-3xl border border-white/70 bg-white p-8 text-center shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-          <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
-          <h2 className="mt-4 text-lg font-semibold text-secondary-900">
-            Loading workspace
-          </h2>
-          <p className="mt-2 text-sm text-secondary-500">
-            Preparing your dashboard...
-          </p>
-        </div>
-      </div>
-    );
-  }
+  // Show shell immediately with skeleton content while auth loads
+  // This gives instant visual feedback instead of a blank spinner
+  const isAuthLoading = loading && !user;
 
   return (
     <div className="min-h-screen bg-secondary-50">
       <NavigationFeedback />
+
       {/* Sidebar - Desktop */}
       <div className="fixed inset-y-0 left-0 z-40 hidden lg:block">
         <Sidebar
@@ -110,9 +91,23 @@ function DashboardLayout({
         {/* Page Content */}
         <main className="flex-1 px-4 py-5 sm:px-6">
           <div className="mx-auto max-w-content">
-            <div className="min-h-[calc(100vh-12rem)] rounded-[28px] border border-white/65 bg-white/92 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.06)] backdrop-blur sm:p-6">
-              {children}
-            </div>
+            {isAuthLoading ? (
+              // Skeleton — renders instantly while auth resolves
+              <div className="min-h-[calc(100vh-12rem)] animate-pulse rounded-[28px] border border-white/65 bg-white/92 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)] backdrop-blur">
+                <div className="h-8 w-64 rounded-lg bg-gray-200" />
+                <div className="mt-4 h-4 w-96 rounded bg-gray-100" />
+                <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="h-28 rounded-xl bg-gray-100" />
+                  ))}
+                </div>
+                <div className="mt-6 h-64 rounded-xl bg-gray-100" />
+              </div>
+            ) : (
+              <div className="min-h-[calc(100vh-12rem)] rounded-[28px] border border-white/65 bg-white/92 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.06)] backdrop-blur sm:p-6">
+                {children}
+              </div>
+            )}
           </div>
         </main>
 

@@ -90,11 +90,8 @@ export async function login(
       };
     }
 
-    // Step 5: Reset failed attempts on successful login
+    // Step 5: Reset failed attempts AND record login in ONE call
     await resetFailedAttempts(authData.user.id);
-
-    // Step 6: Record successful login
-    await recordSuccessfulLogin(authData.user.id);
 
     return {
       success: true,
@@ -206,26 +203,6 @@ export async function updatePassword(
 }
 
 // ============================================================
-// GET CURRENT SESSION
-// ============================================================
-export async function getCurrentSession(): Promise<AuthUser | null> {
-  try {
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser();
-
-    if (error || !user) {
-      return null;
-    }
-
-    return await getUserProfile(user.id);
-  } catch {
-    return null;
-  }
-}
-
-// ============================================================
 // GET CURRENT USER (with auth check)
 // ============================================================
 export async function getCurrentUser(): Promise<AuthUser | null> {
@@ -256,6 +233,9 @@ export function onAuthStateChange(callback: (user: AuthUser | null) => void) {
     } else if (event === "SIGNED_OUT") {
       callback(null);
     } else if (event === "TOKEN_REFRESHED" && session?.user) {
+      const profile = await getUserProfile(session.user.id);
+      callback(profile);
+    } else if (event === "USER_UPDATED" && session?.user) {
       const profile = await getUserProfile(session.user.id);
       callback(profile);
     }

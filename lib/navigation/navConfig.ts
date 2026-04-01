@@ -1,30 +1,76 @@
-﻿import type { ModuleName } from '@/types/roles';
+import type { ModuleName } from '@/types/roles';
+import {
+  LayoutDashboard,
+  GraduationCap,
+  Users,
+  Building2,
+  BookOpen,
+  ClipboardCheck,
+  FileText,
+  CheckCircle2,
+  CalendarDays,
+  Banknote,
+  ShieldAlert,
+  MessageSquare,
+  BarChart3,
+  Library,
+  UserCog,
+  Settings,
+  type LucideIcon,
+} from 'lucide-react';
 
 export interface NavItem {
   label: string;
   href: string;
-  icon: string;
+  icon: LucideIcon;
   module: ModuleName;
+  category?: 'core' | 'academic' | 'admin' | 'support';
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { label: 'Dashboard', href: '/dashboard', icon: '🏠', module: 'dashboard' },
-  { label: 'Students', href: '/students', icon: '🎓', module: 'students' },
-  { label: 'Staff', href: '/staff', icon: '🏫', module: 'teachers' },
-  { label: 'Classes', href: '/classes', icon: '🏫', module: 'classes' },
-  { label: 'Academics', href: '/academics', icon: '📚', module: 'academics' },
-  { label: 'Assessments', href: '/assessments', icon: '📝', module: 'assessments' },
-  { label: 'Exam Bank', href: '/exams', icon: '🗂️', module: 'exams' },
-  { label: 'Attendance', href: '/attendance', icon: '✅', module: 'attendance' },
-  { label: 'Timetable', href: '/timetable', icon: '🗓️', module: 'timetable' },
-  { label: 'Finance', href: '/finance', icon: '💰', module: 'finance' },
-  { label: 'Discipline', href: '/discipline', icon: '📋', module: 'compliance' },
-  { label: 'Communication', href: '/communication', icon: '💬', module: 'communication' },
-  { label: 'Reports', href: '/reports', icon: '📊', module: 'reports' },
-  { label: 'Library', href: '/library', icon: '📖', module: 'library' },
-  { label: 'Users', href: '/users', icon: '👥', module: 'users' },
-  { label: 'Settings', href: '/settings', icon: '⚙️', module: 'settings' },
+  // Core
+  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, module: 'dashboard', category: 'core' },
+
+  // Academic
+  { label: 'Students', href: '/students', icon: GraduationCap, module: 'students', category: 'academic' },
+  { label: 'Staff', href: '/staff', icon: Users, module: 'teachers', category: 'academic' },
+  { label: 'Classes', href: '/classes', icon: Building2, module: 'classes', category: 'academic' },
+  { label: 'Academics', href: '/academics', icon: BookOpen, module: 'academics', category: 'academic' },
+  { label: 'Assessments', href: '/assessments', icon: ClipboardCheck, module: 'assessments', category: 'academic' },
+  { label: 'Exam Bank', href: '/exams', icon: FileText, module: 'exams', category: 'academic' },
+  { label: 'Attendance', href: '/attendance', icon: CheckCircle2, module: 'attendance', category: 'academic' },
+  { label: 'Timetable', href: '/timetable', icon: CalendarDays, module: 'timetable', category: 'academic' },
+
+  // Admin
+  { label: 'Finance', href: '/finance', icon: Banknote, module: 'finance', category: 'admin' },
+  { label: 'Discipline', href: '/discipline', icon: ShieldAlert, module: 'compliance', category: 'admin' },
+  { label: 'Communication', href: '/communication', icon: MessageSquare, module: 'communication', category: 'admin' },
+  { label: 'Reports', href: '/reports', icon: BarChart3, module: 'reports', category: 'admin' },
+
+  // Support
+  { label: 'Library', href: '/library', icon: Library, module: 'library', category: 'support' },
+  { label: 'Users', href: '/users', icon: UserCog, module: 'users', category: 'support' },
+  { label: 'Settings', href: '/settings', icon: Settings, module: 'settings', category: 'support' },
 ];
+
+const CATEGORY_ORDER = ['core', 'academic', 'admin', 'support'] as const;
+
+export function getNavCategories(items: NavItem[]): { label: string; items: NavItem[] }[] {
+  const groups = new Map<string, NavItem[]>();
+
+  for (const item of items) {
+    const cat = item.category ?? 'support';
+    if (!groups.has(cat)) groups.set(cat, []);
+    groups.get(cat)!.push(item);
+  }
+
+  return CATEGORY_ORDER
+    .filter((cat) => groups.has(cat))
+    .map((cat) => ({
+      label: cat === 'core' ? '' : cat.charAt(0).toUpperCase() + cat.slice(1),
+      items: groups.get(cat) ?? [],
+    }));
+}
 
 const ROUTE_MODULES: { prefix: string; module: ModuleName }[] = [
   { prefix: '/dashboard', module: 'dashboard' },

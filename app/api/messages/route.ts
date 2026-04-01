@@ -1,7 +1,9 @@
 // app/api/messages/route.ts
-// GET inbox, POST send message
+// DEPRECATED: This route is a legacy alias for /api/communication/messages.
+// All new development should target /api/communication/messages directly.
+// This file returns a deprecation warning header and forwards to the canonical path.
 
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { withPermission } from "@/lib/api/withAuth";
 import { validateBody, validateSearchParams } from "@/lib/api/validation";
 import { apiSuccess, apiError, apiPaginated } from "@/lib/api/response";
@@ -15,6 +17,19 @@ import {
   sendMessage,
 } from "@/features/communication/services/messages.service";
 
+function withDeprecationHeaders(response: NextResponse): NextResponse {
+  response.headers.set("Deprecation", "true");
+  response.headers.set(
+    "Link",
+    '</api/communication/messages>; rel="successor-version"',
+  );
+  response.headers.set(
+    "Sunset",
+    "2026-07-01T00:00:00Z",
+  );
+  return response;
+}
+
 export const GET = withPermission(
   { module: "communication", action: "view" },
   async (req: NextRequest, user) => {
@@ -22,26 +37,26 @@ export const GET = withPermission(
       const params = validateSearchParams(req, messageFilterSchema);
 
       if (!params.success) {
-        return apiError(params.error, 422);
+        return withDeprecationHeaders(apiError(params.error, 422));
       }
 
       const { page, pageSize, ...filters } = params.data;
 
       const result = await getInbox(
         user.id,
-        user.school_id,
+        user.schoolId,
         filters,
         page,
         pageSize,
       );
 
       if (!result.success) {
-        return apiError(result.message || "Failed to fetch inbox", 500);
+        return withDeprecationHeaders(apiError(result.message || "Failed to fetch inbox", 500));
       }
 
-      return apiPaginated(result.data, result.total, page, pageSize);
+      return withDeprecationHeaders(apiPaginated(result.data, result.total, page, pageSize));
     } catch (error) {
-      return apiError("Internal server error", 500);
+      return withDeprecationHeaders(apiError("Internal server error", 500));
     }
   },
 );
@@ -53,32 +68,32 @@ export const POST = withPermission(
       // Rate limit: 50 messages per hour
       const rateLimitResult = rateLimit(`messages:${user.id}`, 50, 3600);
       if (!rateLimitResult.allowed) {
-        return apiError(
+        return withDeprecationHeaders(apiError(
           `Rate limit exceeded. Try again in ${rateLimitResult.retryAfter} seconds.`,
           429,
-        );
+        ));
       }
 
       const body = await req.json();
       const validation = validateBody(body, sendMessageSchema);
 
       if (!validation.success) {
-        return apiError(validation.error, 422);
+        return withDeprecationHeaders(apiError(validation.error, 422));
       }
 
       const result = await sendMessage(
         validation.data,
         user.id,
-        user.school_id,
+        user.schoolId,
       );
 
       if (!result.success) {
-        return apiError(result.message, 400);
+        return withDeprecationHeaders(apiError(result.message, 400));
       }
 
-      return apiSuccess({ id: result.id }, result.message, 201);
+      return withDeprecationHeaders(apiSuccess({ id: result.id }, result.message, 201));
     } catch (error) {
-      return apiError("Internal server error", 500);
+      return withDeprecationHeaders(apiError("Internal server error", 500));
     }
   },
 );

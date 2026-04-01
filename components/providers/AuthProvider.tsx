@@ -50,15 +50,25 @@ export function AuthProvider({
   children,
   initialUser = null,
 }: AuthProviderProps) {
-  const [user, setUser] = useState<AuthUser | null>(initialUser);
-  const [loading, setLoading] = useState(initialUser === null);
+  // Check sessionStorage for cached user from previous navigation
+  const getCachedUser = (): AuthUser | null => {
+    try {
+      const cached = sessionStorage.getItem("auth_user");
+      if (cached) return JSON.parse(cached);
+    } catch { /* ignore */ }
+    return null;
+  };
+
+  const [user, setUser] = useState<AuthUser | null>(initialUser || getCachedUser());
+  const [loading, setLoading] = useState(initialUser === null && !getCachedUser());
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
     async function initAuth() {
-      if (initialUser) {
+      // Skip if we already have a user (from initialUser or sessionStorage cache)
+      if (initialUser || getCachedUser()) {
         setLoading(false);
         return;
       }
@@ -67,6 +77,10 @@ export function AuthProvider({
         const currentUser = await getCurrentUser();
         if (mounted) {
           setUser(currentUser);
+          // Cache user in sessionStorage for instant access on next navigation
+          if (currentUser) {
+            try { sessionStorage.setItem("auth_user", JSON.stringify(currentUser)); } catch { /* ignore */ }
+          }
         }
       } catch (err) {
         if (mounted) {
@@ -86,6 +100,12 @@ export function AuthProvider({
       if (mounted) {
         setUser(updatedUser);
         setLoading(false);
+        // Update sessionStorage cache
+        if (updatedUser) {
+          try { sessionStorage.setItem("auth_user", JSON.stringify(updatedUser)); } catch { /* ignore */ }
+        } else {
+          try { sessionStorage.removeItem("auth_user"); } catch { /* ignore */ }
+        }
       }
     });
 
@@ -104,6 +124,8 @@ export function AuthProvider({
 
       if (result.success && result.user) {
         setUser(result.user);
+        // Cache immediately so dashboard navigation is instant
+        try { sessionStorage.setItem("auth_user", JSON.stringify(result.user)); } catch { /* ignore */ }
       } else {
         setError(result.message);
       }
@@ -119,6 +141,7 @@ export function AuthProvider({
     await logoutService();
     setUser(null);
     setLoading(false);
+    try { sessionStorage.removeItem("auth_user"); } catch { /* ignore */ }
   }, []);
 
   const accessibleModules = useMemo(() => {

@@ -48,6 +48,7 @@ export const MODULES = {
   USERS: "users",
   AUDIT_LOGS: "audit_logs",
   TIMETABLE: "timetable",
+  SPECIAL_NEEDS: "special_needs",
 } as const;
 
 export type ModuleName = (typeof MODULES)[keyof typeof MODULES];
@@ -101,6 +102,7 @@ export const PERMISSION_MATRIX: PermissionMatrix = {
     users: ["view", "create", "update", "delete"],
     audit_logs: ["view", "export"],
     timetable: ["view", "create", "update", "delete"],
+    special_needs: ["view", "create", "update", "delete", "export"],
   },
 
   // ─── SCHOOL ADMIN: Full school-level access ───
@@ -123,6 +125,7 @@ export const PERMISSION_MATRIX: PermissionMatrix = {
     users: ["view", "create", "update", "delete"],
     audit_logs: ["view"],
     timetable: ["view", "create", "update", "delete"],
+    special_needs: ["view", "create", "update", "delete", "export"],
   },
 
   // ─── PRINCIPAL: Academic & administrative oversight ───
@@ -145,6 +148,7 @@ export const PERMISSION_MATRIX: PermissionMatrix = {
     users: ["view", "create", "update"],
     audit_logs: ["view"],
     timetable: ["view", "create", "update"],
+    special_needs: ["view", "create", "update", "delete", "export"],
   },
 
   // ─── DEPUTY PRINCIPAL ───
@@ -167,6 +171,7 @@ export const PERMISSION_MATRIX: PermissionMatrix = {
     users: ["view"],
     audit_logs: ["view"],
     timetable: ["view", "create", "update"],
+    special_needs: ["view", "create", "update", "delete"],
   },
 
   // ─── TEACHER (General) ───
@@ -181,6 +186,7 @@ export const PERMISSION_MATRIX: PermissionMatrix = {
     reports: ["view"],
     communication: ["view", "create"],
     analytics: ["view"],
+    special_needs: ["view"],
   },
 
   // ─── CLASS TEACHER ───
@@ -196,6 +202,7 @@ export const PERMISSION_MATRIX: PermissionMatrix = {
     communication: ["view", "create"],
     compliance: ["view"],
     analytics: ["view"],
+    special_needs: ["view", "create", "update"],
   },
 
   // ─── SUBJECT TEACHER ───
@@ -210,6 +217,7 @@ export const PERMISSION_MATRIX: PermissionMatrix = {
     reports: ["view"],
     communication: ["view", "create"],
     analytics: ["view"],
+    special_needs: ["view"],
   },
 
   // ─── FINANCE OFFICER ───
@@ -241,6 +249,7 @@ export const PERMISSION_MATRIX: PermissionMatrix = {
     reports: ["view"], // Own children's report cards
     communication: ["view", "create"],
     compliance: ["view", "update"], // Own consent management
+    special_needs: ["view"], // Own children's special needs
   },
 
   // ─── STUDENT ───
@@ -251,6 +260,7 @@ export const PERMISSION_MATRIX: PermissionMatrix = {
     reports: ["view"], // Own report cards only
     communication: ["view"],
     library: ["view"],
+    special_needs: ["view"], // Own special needs
   },
 
   // ─── LIBRARIAN ───
@@ -272,6 +282,7 @@ export const PERMISSION_MATRIX: PermissionMatrix = {
     users: ["view", "create", "update"],
     audit_logs: ["view", "export"],
     communication: ["view", "create"],
+    special_needs: ["view"],
   },
 };
 

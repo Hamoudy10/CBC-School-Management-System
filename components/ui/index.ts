@@ -75,3 +75,6 @@ export { Avatar, AvatarGroup } from "./Avatar";
 
 // Page Header
 export { PageHeader } from "./PageHeader";
+
+// Alert
+export { Alert, AlertTitle, AlertDescription } from "./Alert";

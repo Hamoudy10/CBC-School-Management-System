@@ -309,12 +309,17 @@ export const GET = withAuth(async (request, { user, params }) => {
 
     const filename = `report-card-${pdfData.student.admission_no || reportCard.report_id}.pdf`;
 
-    return new NextResponse(pdfBuffer, {
+    // Convert Buffer to ArrayBuffer for NextResponse compatibility
+    const arrayBuffer = pdfBuffer.buffer.slice(
+      pdfBuffer.byteOffset,
+      pdfBuffer.byteOffset + pdfBuffer.byteLength,
+    ) as ArrayBuffer;
+    return new NextResponse(arrayBuffer, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}"`,
-        "Content-Length": pdfBuffer.length.toString(),
+        "Content-Length": pdfBuffer.byteLength.toString(),
         "Cache-Control": "private, max-age=3600",
       },
     });

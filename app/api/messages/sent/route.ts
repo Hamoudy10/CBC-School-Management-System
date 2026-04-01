@@ -16,7 +16,7 @@ export const GET = withPermission(
 
       const result = await getSentMessages(
         user.id,
-        user.school_id,
+        user.schoolId!,
         page,
         pageSize,
       );

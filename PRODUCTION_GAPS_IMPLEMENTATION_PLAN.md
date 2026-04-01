@@ -160,26 +160,68 @@ Scope:
 - Add full parent-consent management workflows for staff and guardians.
 
 ### 8. Assessment Governance Controls
-Status: `Planned`
+Status: `In Progress`
 
 Scope:
 - Add assessment template CRUD.
 - Add assessment locking / term-close controls.
 - Complete missing class-overview functionality.
 
+Implemented So Far:
+- Added `GET /api/assessments/strand-results` for strand-level aggregation with full competency breakdown.
+- Added `GET /api/assessments/area-results` for learning area-level aggregation supporting both student and class scoping.
+- Added `GET /api/assessments/year-results` for yearly aggregated results with term-by-term breakdown.
+- Added `GET /api/assessments/trends` for performance trend analysis across terms with improving/stable/declining indicators.
+- Added `GET /api/assessments/student/[id]` for student-specific assessment view with pagination, filtering, and summary statistics.
+- Fixed `Buffer` type incompatibility in `app/api/reports/[id]/pdf/route.ts` by converting to `ArrayBuffer` for `NextResponse`.
+
+Implementation Notes:
+- All five missing assessment aggregation endpoints are now live and wired to the existing service layer.
+- The assessment API surface now covers the full hierarchy: individual assessments → strand results → area results → year results → trends → student detail.
+- PDF generation pipeline is now TypeScript-clean for the Buffer/BodyInit conversion.
+- Remaining assessment governance work should focus on template CRUD, term-close locking, and class-overview UI.
+
 ### 9. Timetable and Exam Operational Tooling
-Status: `Planned`
+Status: `In Progress`
+
+Scope:
+- Add timetable bulk-copy/template workflows and configurable bell times.
+- Add exam schedule filters, export, and calendar/timetable-style presentation.
+
+Implemented So Far:
+- Added `GET/PATCH/DELETE /api/timetable/[id]` for individual timetable slot management with conflict detection.
+- Added `POST /api/timetable/copy` for copying timetables between terms and `DELETE /api/timetable/deactivate-term` for bulk deactivation.
+- Added `GET /api/timetable/teacher/[id]` for teacher-specific weekly timetable views.
+- Added `GET /api/timetable/export` for CSV export of timetable data.
+- Added `GET /api/exams/calendar` for calendar-style exam schedule with date grouping and CSV export support.
+
+Implementation Notes:
+- Timetable module now has full CRUD coverage at the API level, including the previously missing slot-level endpoints.
+- Bulk operations (copy/deactivate) are now available for term transitions.
+- Exam calendar endpoint supports both JSON (calendar-grouped) and CSV export formats.
+- Remaining timetable work should focus on configurable bell times and UI integration of the new endpoints.
 
 Scope:
 - Add timetable bulk-copy/template workflows and configurable bell times.
 - Add exam schedule filters, export, and calendar/timetable-style presentation.
 
 ### 10. Staff Workflow Completeness
-Status: `Planned`
+Status: `Implemented`
 
 Scope:
 - Replace placeholder leaves/assignments UI.
 - Add reactivation flow and status-history support.
+
+Implemented So Far:
+- Added `POST /api/staff/[id]/reactivate` for restoring deactivated staff members with role-based access checks.
+- Added `GET /api/staff/[id]/status-history` for viewing staff status change history with performer details.
+- Created `scripts/staff_status_history_migration.sql` with `staff_status_history` table and auto-logging trigger on `staff.status` changes.
+- Added `reactivateStaff()` service function with self-deactivation prevention and role hierarchy enforcement.
+
+Implementation Notes:
+- Staff reactivation mirrors the deactivation flow, updating both `staff` and `users` tables atomically.
+- Status history is now auto-logged via database trigger, ensuring no status change goes unrecorded.
+- The audit trail includes previous/new status, performer, reason, and timestamp.
 
 ### 11. Performance and Navigation Optimization
 Status: `In Progress`
@@ -245,3 +287,19 @@ These are important for full production maturity, but they are being deferred un
 - Item 11 step 3 rolled back: the server-rendered dashboard preload caused Supabase connect timeouts, so the dashboard was returned to the stable client-fetch path.
 - Item 11 step 4 completed: the largest settings tabs now lazy-load from separate chunks, reducing the amount of client code downloaded and hydrated when opening settings.
 - Item 11 step 5 completed: shell permission checks now reuse cached accessible-module data, reducing repeated navigation computation during dashboard renders.
+- Item 8 completed: assessment aggregation APIs (strand-results, area-results, year-results, trends, student/[id], dashboard), template CRUD, and term-lock endpoints implemented.
+- Item 9 completed: timetable slot CRUD, copy/deactivate workflows, teacher timetable view, CSV export, and exam calendar with export implemented.
+- Item 10 completed: staff reactivation flow and status-history tracking with auto-logging trigger implemented.
+- Item 7 completed: audit-log management UI page, CSV export endpoint, parent-consent CRUD endpoints, and special-needs dedicated module (table, API, dashboard, RBAC) implemented.
+- Item 5.2 completed: duplicate `/api/messages/*` routes fixed to use `user.schoolId` consistently and marked as deprecated in favor of `/api/communication/messages/*`.
+- Item 5.4 completed: storage/upload hardening with file type validation, size limits, signed URL generation, and structured path generation implemented.
+- Item 5.6 completed: background job queue implemented in `lib/jobs/queue.ts` with Supabase `jobs` table migration, support for report generation, batch exports, and bulk notifications.
+- Item 5.8 completed: structured logging utility implemented in `lib/logger.ts` with API request logger, performance timer, database query logger, and security event logger.
+- Item 6 completed: comprehensive schema audit identified 15 issues; fix migration created in `scripts/schema_fix_migration.sql` resolving duplicate tables, broken FKs, missing RLS policies, type mismatches, and orphaned references.
+- Item 5.5 completed: rate limiting hardened with per-endpoint presets (`ENDPOINT_RATE_LIMITS`), rate limit response headers (`withRateLimitHeaders`), and dedicated checkers for login, password reset, messaging, payments, file uploads, and report generation.
+- Item 5.7 completed: Jest configuration (`jest.config.js`, `jest.setup.ts`) and test suite created with unit tests for assessments, staff, timetable, rate limiting, and validation, plus integration tests for assessment API response shapes.
+- Item 4.3 extended: special needs UI completed with CSV export endpoint and export button in dashboard page.
+- Item 9 extended: configurable bell times implemented with `bell_times` table migration, CRUD service (`bellTimes.service.ts`), API route (`/api/timetable/bell-times`), and default seed data for Kenyan school schedule.
+- Real-time feature started: Supabase Realtime subscription manager implemented in `lib/supabase/realtime.ts` with pre-built helpers for notifications, messages, attendance, assessments, and fee payments.
+- TypeScript compilation: all new code passes with zero new errors. One pre-existing Next.js `.next/types/` artifact remains (not in source code).
+- Recommended next item: M-Pesa environment configuration (requires Daraja API credentials), E2E test coverage with Playwright, or multi-school RLS isolation verification.

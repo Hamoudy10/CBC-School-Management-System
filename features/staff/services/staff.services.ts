@@ -630,6 +630,63 @@ export async function updateStaff(
 }
 
 // ============================================================
+// REACTIVATE STAFF (restore from inactive to active)
+// ============================================================
+export async function reactivateStaff(
+  staffId: string,
+  currentUser: AuthUser
+): Promise<{ success: boolean; message: string }> {
+  const supabase = await createSupabaseServerClient();
+
+  // Get existing staff record
+  const existingStaff = await getStaffById(staffId, currentUser);
+  if (!existingStaff) {
+    return { success: false, message: 'Staff member not found.' };
+  }
+
+  // Can only reactivate inactive staff
+  if (existingStaff.status !== 'inactive') {
+    return {
+      success: false,
+      message: 'Staff member is already active.',
+    };
+  }
+
+  // Check if user can manage this staff member's role
+  if (!canManageRole(currentUser.role, existingStaff.roleName as RoleName)) {
+    return {
+      success: false,
+      message: 'Cannot reactivate a staff member with a role equal to or higher than your own.',
+    };
+  }
+
+  // Reactivate staff record
+  const { error: staffError } = await supabase
+    .from('staff')
+    .update({ status: 'active' })
+    .eq('staff_id', staffId);
+
+  if (staffError) {
+    return { success: false, message: `Reactivation failed: ${staffError.message}` };
+  }
+
+  // Reactivate user record
+  const { error: userError } = await supabase
+    .from('users')
+    .update({
+      status: 'active',
+      updated_by: currentUser.id,
+    })
+    .eq('user_id', existingStaff.userId);
+
+  if (userError) {
+    return { success: false, message: `User reactivation failed: ${userError.message}` };
+  }
+
+  return { success: true, message: 'Staff member reactivated successfully.' };
+}
+
+// ============================================================
 // DEACTIVATE STAFF (soft delete)
 // ============================================================
 export async function deactivateStaff(

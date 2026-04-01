@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React from 'react';
 import { SWRConfig } from 'swr';
@@ -24,6 +24,8 @@ export function SWRProvider({ children }: { children: React.ReactNode }) {
         dedupingInterval: 10000,
         keepPreviousData: true,
         shouldRetryOnError: false,
+        // Cache data for 5 minutes to avoid unnecessary refetches
+        provider: () => new Map(),
       }}
     >
       {children}
