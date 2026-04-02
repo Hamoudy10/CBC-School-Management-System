@@ -15,7 +15,6 @@ import {
   validationErrorResponse,
 } from "@/lib/api/response";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getSchoolDashboardMetrics } from "@/app/api/analytics/school/route";
 
 const lockSchema = z.object({
   termId: z.string().uuid(),
