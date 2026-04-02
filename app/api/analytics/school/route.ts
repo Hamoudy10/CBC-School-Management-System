@@ -742,7 +742,7 @@ async function buildParentMetrics(params: {
   return metrics;
 }
 
-export async function getSchoolDashboardMetrics(params: {
+async function getSchoolDashboardMetrics(params: {
   user: DashboardAnalyticsUser;
   academicYearId?: string | null;
   termId?: string | null;
