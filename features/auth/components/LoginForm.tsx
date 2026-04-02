@@ -41,7 +41,9 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
       if (result.success) {
         loginSucceeded = true;
         setIsRedirecting(true);
-        router.replace(redirectTo);
+        // Use full page navigation to ensure cookies are properly set
+        // before middleware runs on the next request
+        window.location.href = redirectTo;
       } else {
         setError(result.message);
         showError("Login Failed", result.message);
