@@ -1,11 +1,10 @@
 // middleware.ts
 // ============================================================
-// Root Next.js middleware — Optimized for fast edge checks
+// Root Next.js middleware — Simplified for reliability
 // Runs before any React rendering
 // Handles:
-//   1. Fast cookie-based session check (no Supabase call needed)
-//   2. Redirect unauthenticated users to login
-//   3. Redirect authenticated users away from auth pages
+//   1. Redirect unauthenticated users to login
+//   2. Redirect authenticated users away from auth pages
 // ============================================================
 
 import { NextRequest, NextResponse } from "next/server";
@@ -43,36 +42,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Fast path: check for Supabase session cookies before hitting Supabase
-  // Supabase SSR sets cookies named sb-{project-ref}-auth-token
-  const allCookies = request.cookies.getAll();
-  const hasSupabaseCookie = allCookies.some(
-    (c) => c.name.startsWith("sb-") && c.name.includes("auth-token"),
-  );
-
   const response = NextResponse.next({
     request: { headers: request.headers },
   });
 
-  // If no Supabase cookie and route is protected, redirect immediately
-  // This skips the Supabase getUser() call entirely for unauthenticated users
-  if (!hasSupabaseCookie && !isPublicRoute) {
-    const redirectUrl = new URL("/login", request.url);
-    redirectUrl.searchParams.set("redirectTo", pathname);
-    return NextResponse.redirect(redirectUrl);
-  }
-
-  // If no Supabase cookie and on login page, let it through
-  if (!hasSupabaseCookie && isPublicRoute) {
-    return response;
-  }
-
-  // Has auth cookie — do full Supabase check (handles token refresh)
+  // Always use Supabase to check auth — handles token refresh properly
   const supabase = createSupabaseMiddlewareClient(request, response);
 
   const {
     data: { user: authUser },
-    error: userError,
   } = await supabase.auth.getUser();
 
   // Redirect authenticated users away from login
@@ -81,7 +59,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Redirect unauthenticated users away from protected routes
-  if (!authUser || userError) {
+  if (!authUser && !isPublicRoute) {
     const redirectUrl = new URL("/login", request.url);
     redirectUrl.searchParams.set("redirectTo", pathname);
     return NextResponse.redirect(redirectUrl);
