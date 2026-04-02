@@ -60,16 +60,32 @@ export function AuthProvider({
   };
 
   const [user, setUser] = useState<AuthUser | null>(initialUser || getCachedUser());
-  const [loading, setLoading] = useState(initialUser === null && !getCachedUser());
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
     async function initAuth() {
-      // Skip if we already have a user (from initialUser or sessionStorage cache)
+      // If we have a cached user, verify the session is still valid
       if (initialUser || getCachedUser()) {
-        setLoading(false);
+        try {
+          const currentUser = await getCurrentUser();
+          if (mounted) {
+            setUser(currentUser);
+            if (currentUser) {
+              try { sessionStorage.setItem("auth_user", JSON.stringify(currentUser)); } catch { /* ignore */ }
+            } else {
+              try { sessionStorage.removeItem("auth_user"); } catch { /* ignore */ }
+            }
+          }
+        } catch {
+          // Session invalid, user will be null
+        } finally {
+          if (mounted) {
+            setLoading(false);
+          }
+        }
         return;
       }
 
@@ -77,7 +93,6 @@ export function AuthProvider({
         const currentUser = await getCurrentUser();
         if (mounted) {
           setUser(currentUser);
-          // Cache user in sessionStorage for instant access on next navigation
           if (currentUser) {
             try { sessionStorage.setItem("auth_user", JSON.stringify(currentUser)); } catch { /* ignore */ }
           }

@@ -61,19 +61,15 @@ function Header({
         const json = await response.json();
 
         if (!response.ok) {
-          throw new Error(
-            json?.error || json?.message || "Failed to load notifications",
-          );
+          // Silently fail - not critical
+          return;
         }
 
         if (mounted) {
           setUnreadCount(Number(json?.data?.total || 0));
         }
-      } catch (error) {
-        if (mounted) {
-          setUnreadCount(0);
-        }
-        console.error("Failed to load unread notifications:", error);
+      } catch {
+        // Silently fail - notifications are not critical
       }
     }
 
@@ -87,7 +83,8 @@ function Header({
   const handleLogout = async () => {
     await logout();
     setShowUserMenu(false);
-    router.replace("/login");
+    // Full page navigation to clear session cookies before middleware runs
+    window.location.href = "/login";
   };
 
   const handleOpenNotifications = () => {
