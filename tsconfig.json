@@ -39,8 +39,6 @@
   ],
   "exclude": [
     "node_modules",
-    "Afya_Hospital_Management_System",
-    "CBC_School_Management_System",
-    "jest.setup.ts"
+    "jest.setup.ts.bak"
   ]
 }
