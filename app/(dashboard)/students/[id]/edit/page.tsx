@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Save, Camera, Loader2, User } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useReferenceData } from '@/hooks/useReferenceData';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -13,6 +13,102 @@ import { Select } from '@/components/ui/Select';
 import { Alert } from '@/components/ui/Alert';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
+import { cn } from '@/lib/utils';
+
+function PhotoUpload({
+  value,
+  onChange,
+  disabled,
+}: {
+  value?: string;
+  onChange: (url: string) => void;
+  disabled?: boolean;
+}) {
+  const [isUploading, setIsUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(value || null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) {return;}
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => setPreviewUrl(reader.result as string);
+    reader.readAsDataURL(file);
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'students');
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        onChange(data.url);
+      } else {
+        throw new Error('Upload failed');
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+      setPreviewUrl(value || null);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <div className="relative">
+        <div
+          className={cn(
+            'flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-4 border-dashed border-gray-300 bg-gray-50',
+            !disabled && 'hover:border-blue-400 hover:bg-blue-50'
+          )}
+        >
+          {previewUrl ? (
+            <img src={previewUrl} alt="Student photo" className="h-full w-full object-cover" />
+          ) : (
+            <User className="h-12 w-12 text-gray-400" />
+          )}
+          {isUploading && (
+            <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50">
+              <Loader2 className="h-8 w-8 animate-spin text-white" />
+            </div>
+          )}
+        </div>
+        {!disabled && (
+          <label
+            className={cn(
+              'absolute -bottom-1 -right-1 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700',
+              isUploading && 'pointer-events-none opacity-50'
+            )}
+          >
+            <Camera className="h-5 w-5" />
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              disabled={disabled || isUploading}
+              className="hidden"
+            />
+          </label>
+        )}
+      </div>
+      <p className="text-xs text-gray-500">Click the camera icon to upload a photo</p>
+    </div>
+  );
+}
 
 type EditStudentForm = {
   firstName: string;
@@ -303,12 +399,13 @@ export default function EditStudentPage() {
                 { value: 'suspended', label: 'Suspended' },
               ]}
             />
-            <Input
-              label="Photo URL"
-              name="photoUrl"
-              value={form.photoUrl}
-              onChange={handleChange}
-            />
+            <div className="flex justify-center">
+              <PhotoUpload
+                value={form.photoUrl || undefined}
+                onChange={(url) => setForm((current) => ({ ...current, photoUrl: url }))}
+                disabled={isSaving}
+              />
+            </div>
             <Input
               label="NEMIS Number"
               name="nemisNumber"
