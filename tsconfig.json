@@ -26,7 +26,6 @@
         "./*"
       ]
     },
-    "baseUrl": ".",
     "target": "ES2017",
     "forceConsistentCasingInFileNames": true
   },
