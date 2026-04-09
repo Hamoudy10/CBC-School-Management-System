@@ -214,7 +214,7 @@ function getDefaultSettings(schoolId: string): SchoolSettings {
   return {
     school_id: schoolId,
     settings: cloneSettingsPayload(),
-  };
+  } as unknown as SchoolSettings;
 }
 
 // ============================================================
@@ -303,7 +303,7 @@ export async function getSchoolSettings(
     data: {
       school_id: schoolId,
       settings: buildSettingsFromRows(data as any[]),
-    },
+    } as unknown as SchoolSettings,
   };
 }
 

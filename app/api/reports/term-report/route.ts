@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/reports/term-report/route.ts
 // POST generate term report for a student
 

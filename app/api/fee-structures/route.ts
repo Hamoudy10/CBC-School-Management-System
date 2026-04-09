@@ -1,4 +1,5 @@
-// @ts-nocheck
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { z } from 'zod';
@@ -101,7 +102,7 @@ async function authenticate(
     return { error: errorResponse('Forbidden — no school associated', 403) };
   }
 
-  const roleName = (user.roles as Record<string, string>)?.name ?? 'student';
+  const roleName = (user.roles as unknown as Record<string, string>)?.name ?? 'student';
 
   if (!allowedRoles.includes(roleName)) {
     return { error: errorResponse('Insufficient permissions', 403) };

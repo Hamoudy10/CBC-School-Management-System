@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/exams/calendar/route.ts
 // ============================================================
 // GET /api/exams/calendar - Get exam schedule in calendar-friendly format

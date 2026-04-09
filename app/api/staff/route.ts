@@ -1,4 +1,5 @@
-// @ts-nocheck
+export const dynamic = 'force-dynamic';
+
 // app/api/staff/route.ts
 // ============================================================
 // GET /api/staff - List staff members (paginated, filtered)

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/assessments/route.ts
 // ============================================================
 // GET /api/assessments - List assessments or class competency roster

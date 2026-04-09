@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/roles/route.ts
 // ============================================================
 // GET /api/roles - List all roles

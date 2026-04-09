@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/special-needs/route.ts
 // ============================================================
 // GET /api/special-needs - List special needs records

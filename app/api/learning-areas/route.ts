@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/learning-areas/route.ts
 // ============================================================
 // GET /api/learning-areas - List learning areas

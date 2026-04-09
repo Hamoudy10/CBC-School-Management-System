@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/assessments/strand-results/route.ts
 // ============================================================
 // GET /api/assessments/strand-results - Get strand-level aggregation for a student

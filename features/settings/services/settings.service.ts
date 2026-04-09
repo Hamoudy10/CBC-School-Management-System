@@ -1,8 +1,7 @@
-// @ts-nocheck
 // features/settings/services/settings.service.ts
 // System settings key-value store
 
-import { createServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { SchoolSettings, SettingsCategory, SystemConfig } from "../types";
 import { DEFAULT_SETTINGS } from "../types";
 
@@ -12,7 +11,7 @@ export class SettingsService {
     schoolId: string,
     category?: SettingsCategory,
   ): Promise<SchoolSettings[]> {
-    const supabase = await createServerClient();
+    const supabase = await createSupabaseServerClient();
 
     let query = supabase
       .from("school_settings")
@@ -30,7 +29,7 @@ export class SettingsService {
 
   // ── Get single setting ──
   static async get(schoolId: string, key: string): Promise<string | null> {
-    const supabase = await createServerClient();
+    const supabase = await createSupabaseServerClient();
 
     const { data } = await supabase
       .from("school_settings")
@@ -55,7 +54,7 @@ export class SettingsService {
     description?: string,
     updatedBy?: string,
   ): Promise<{ success: boolean; message: string }> {
-    const supabase = await createServerClient();
+    const supabase = await createSupabaseServerClient();
 
     // Upsert
     const { error } = await supabase.from("school_settings").upsert(
@@ -204,7 +203,7 @@ export class SettingsService {
         DEFAULT_SETTINGS.include_discipline_in_report,
       ),
       principal_signature_url: getVal("principal_signature_url", undefined),
-    } as SystemConfig;
+    } as unknown as SystemConfig;
   }
 
   // ── Initialize default settings for a new school ──

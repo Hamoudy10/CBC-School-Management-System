@@ -17,7 +17,7 @@ class RealtimeManager {
   private client: any = null;
 
   private async getClient() {
-    if (this.client) return this.client;
+    if (this.client) {return this.client;}
 
     const { createClient } = await import("@supabase/supabase-js");
     this.client = createClient(

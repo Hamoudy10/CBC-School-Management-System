@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/upload/route.ts
 // ============================================================
 // POST /api/upload - Uploads a file to Supabase storage

@@ -6,6 +6,7 @@ export {
   getStaffDetail,
   createStaff,
   updateStaff,
+  reactivateStaff,
   deactivateStaff,
   createLeave,
   updateLeaveStatus,

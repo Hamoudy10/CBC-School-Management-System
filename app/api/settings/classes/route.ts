@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/settings/classes/route.ts
 // GET classes, POST create class
 

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { validateBody, validateQuery, validateUuid } from "@/lib/api/validation";
 import {
   createdResponse,

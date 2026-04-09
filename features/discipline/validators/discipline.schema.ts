@@ -120,6 +120,4 @@ export const disciplineFilterSchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
 
-export type CreateDisciplineInput = z.infer<typeof createDisciplineSchema>;
-export type UpdateDisciplineInput = z.infer<typeof updateDisciplineSchema>;
 export type DisciplineFilterInput = z.infer<typeof disciplineFilterSchema>;

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
@@ -41,7 +40,7 @@ async function authenticate(
     return { error: errorResponse('Forbidden — no school associated', 403) };
   }
 
-  const roleName = (user.roles as Record<string, string>)?.name ?? 'student';
+  const roleName = (user.roles as unknown as Record<string, string>)?.name ?? 'student';
 
   return {
     auth: {
@@ -201,13 +200,13 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     feesQuery = feesQuery.eq('status', status);
   }
 
-  const { data: fees, error: feesError } = await feesQuery;
+  const { data: fees, error: feesError } = await feesQuery as any;
 
   if (feesError) {
     return errorResponse(`Failed to fetch student fees: ${feesError.message}`, 500);
   }
 
-  const feesList = fees ?? [];
+  const feesList = (fees ?? []) as any[];
 
   // 10. If include_payments, fetch payment history for each fee
   const paymentsMap: Map<string, Array<Record<string, unknown>>> = new Map();
@@ -252,7 +251,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
           payment_date: payment.payment_date,
           notes: payment.notes,
           received_by_email:
-            (payment.users as Record<string, unknown> | null)?.email ?? null,
+            (payment.users as unknown as Record<string, unknown> | null)?.email ?? null,
           created_at: payment.created_at,
         });
         paymentsMap.set(feeId, existing);
@@ -374,7 +373,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
 
   const uniqueTerms = new Map<string, { term_id: string; name: string }>();
   (availableTerms ?? []).forEach((f) => {
-    const term = f.terms as Record<string, string> | null;
+    const term = f.terms as unknown as Record<string, string> | null;
     if (term?.term_id) {
       uniqueTerms.set(term.term_id, { term_id: term.term_id, name: term.name });
     }
@@ -388,7 +387,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
 
   const uniqueYears = new Map<string, { academic_year_id: string; name: string }>();
   (availableYears ?? []).forEach((f) => {
-    const year = f.academic_years as Record<string, string> | null;
+    const year = f.academic_years as unknown as Record<string, string> | null;
     if (year?.academic_year_id) {
       uniqueYears.set(year.academic_year_id, {
         academic_year_id: year.academic_year_id,

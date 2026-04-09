@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/special-needs/export/route.ts
 // ============================================================
 // GET /api/special-needs/export - Export special needs records as CSV

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/messages/route.ts
 // DEPRECATED: This route is a legacy alias for /api/communication/messages.
 // All new development should target /api/communication/messages directly.

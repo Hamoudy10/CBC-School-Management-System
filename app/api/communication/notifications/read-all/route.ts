@@ -1,21 +1,12 @@
-import { NextRequest } from "next/server";
-import { withPermission } from "@/lib/api/withAuth";
-import { errorResponse, successResponse } from "@/lib/api/response";
-import { markAllNotificationsAsRead } from "@/features/communication";
+export const dynamic = 'force-dynamic';
 
-export const PUT = withPermission(
-  { module: "communication", action: "view" },
-  async (_req: NextRequest, { user }) => {
-    try {
-      const result = await markAllNotificationsAsRead(user.id, user.schoolId!);
+// app/api/communication/notifications/read-all/route.ts
+// DEPRECATED — Redirects to /api/notifications/read-all
+// Sunset date: 2026-07-01
 
-      if (!result.success) {
-        return errorResponse(result.message, 400);
-      }
+import { NextRequest, NextResponse } from "next/server";
 
-      return successResponse({ allRead: true, message: result.message });
-    } catch (error: any) {
-      return errorResponse(error.message, 500);
-    }
-  },
-);
+export async function POST(request: NextRequest) {
+  const redirect = new URL("/api/notifications/read-all", request.url);
+  return NextResponse.redirect(redirect, 301);
+}

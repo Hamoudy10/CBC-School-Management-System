@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/audit-logs/route.ts
 // ============================================================
 // GET /api/audit-logs - List audit trail entries

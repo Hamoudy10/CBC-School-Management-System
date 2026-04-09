@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/report-cards/generate-class/route.ts
 // ============================================================
 // POST /api/report-cards/generate-class - Generate for entire class

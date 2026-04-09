@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { NextRequest } from "next/server";
 import { withAuth, withPermission } from "@/lib/api/withAuth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";

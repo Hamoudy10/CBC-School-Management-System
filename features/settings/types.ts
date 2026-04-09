@@ -121,3 +121,54 @@ export interface SystemConfig {
   school: SchoolProfile;
   settings: SchoolSettings;
 }
+
+// ── Key-value settings (used by settings.service.ts for DB storage) ──
+
+export type SettingsCategory =
+  | "general"
+  | "academic"
+  | "finance"
+  | "communication"
+  | "branding"
+  | "security"
+  | "attendance"
+  | "compliance"
+  | "reporting";
+
+export interface SchoolSettings {
+  school_id: string;
+  setting_key: string;
+  setting_value: string;
+  category?: SettingsCategory;
+  description?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export const DEFAULT_SETTINGS: Record<string, string> = {
+  school_name: "",
+  school_type: "primary",
+  timezone: "Africa/Nairobi",
+  date_format: "YYYY-MM-DD",
+  currency: "KES",
+  grading_system: "cbc_4point",
+  attendance_threshold: "80",
+  promotion_threshold: "50",
+  max_class_size: "45",
+  attendance_cutoff_time: "08:00",
+  enable_sms_notifications: "false",
+  allow_partial_payments: "true",
+  default_language: "en",
+  academic_year_start_month: "1",
+  terms_per_year: "3",
+  report_include_attendance: "true",
+  report_include_finance: "true",
+  report_include_discipline: "true",
+  school_logo_url: "",
+  school_motto: "",
+  school_phone: "",
+  school_email: "",
+  school_address: "",
+  principal_name: "",
+  principal_signature_url: "",
+};

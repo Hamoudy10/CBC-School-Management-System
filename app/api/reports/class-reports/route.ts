@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/reports/class-report/route.ts
 // POST generate class performance report
 

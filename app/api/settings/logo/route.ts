@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/settings/logo/route.ts
 // POST upload school logo
 

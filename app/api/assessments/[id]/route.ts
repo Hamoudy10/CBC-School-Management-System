@@ -1,4 +1,3 @@
-// @ts-nocheck
 // app/api/assessments/[id]/route.ts
 // ============================================================
 // GET /api/assessments/:id - Get assessment details

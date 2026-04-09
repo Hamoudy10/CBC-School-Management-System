@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/assessments/trends/route.ts
 // ============================================================
 // GET /api/assessments/trends - Get performance trends over time

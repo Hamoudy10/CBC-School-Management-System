@@ -1,4 +1,3 @@
-// @ts-nocheck
 // features/reports/services/pdfGenerator.service.ts
 // Server-side PDF generation for all report types
 // Uses html-to-pdf approach with React components rendered to HTML
@@ -361,9 +360,8 @@ export class PdfGeneratorService {
         <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:center;font-size:12px;color:#10B981;">${s.present}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:center;font-size:12px;color:#EF4444;">${s.absent}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:center;font-size:12px;color:#F59E0B;">${s.late}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:center;font-size:12px;">${s.excused}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:center;font-size:12px;">${s.total}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:center;font-size:12px;font-weight:bold;color:${s.rate >= 80 ? "#10B981" : s.rate >= 60 ? "#F59E0B" : "#EF4444"};">${s.rate}%</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #e5e7eb;text-align:center;font-size:12px;font-weight:bold;color:${s.attendance_rate >= 80 ? "#10B981" : s.attendance_rate >= 60 ? "#F59E0B" : "#EF4444"};">${s.attendance_rate}%</td>
       </tr>
     `,
       )

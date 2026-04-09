@@ -1,106 +1,18 @@
-import { NextRequest } from "next/server";
-import { withPermission } from "@/lib/api/withAuth";
-import {
-  errorResponse,
-  paginatedResponse,
-  successResponse,
-} from "@/lib/api/response";
-import {
-  createBulkNotifications,
-  createNotification,
-  createNotificationSchema,
-  getUserNotifications,
-  notificationFilterSchema,
-} from "@/features/communication";
-import { validateBody } from "@/lib/api/validation";
+export const dynamic = 'force-dynamic';
 
-export const GET = withPermission(
-  { module: "communication", action: "view" },
-  async (req: NextRequest, { user }) => {
-    try {
-      const rawFilters = {
-        type: req.nextUrl.searchParams.get("type") ?? undefined,
-        read_status: req.nextUrl.searchParams.get("read_status") ?? undefined,
-        date_from: req.nextUrl.searchParams.get("date_from") ?? undefined,
-        date_to: req.nextUrl.searchParams.get("date_to") ?? undefined,
-        page: req.nextUrl.searchParams.get("page") ?? undefined,
-        pageSize: req.nextUrl.searchParams.get("pageSize") ?? undefined,
-      };
+// app/api/communication/notifications/route.ts
+// DEPRECATED — Redirects to /api/notifications
+// Sunset date: 2026-07-01
 
-      const params = notificationFilterSchema.safeParse(rawFilters);
-      if (!params.success) {
-        return errorResponse("Invalid query parameters", 422);
-      }
+import { NextRequest, NextResponse } from "next/server";
 
-      const { page, pageSize, ...filters } = params.data;
-      const result = await getUserNotifications(
-        user.id,
-        user.schoolId!,
-        filters,
-        page,
-        pageSize,
-      );
+export async function GET(request: NextRequest) {
+  const url = new URL(request.url);
+  const redirect = new URL(`/api/notifications${url.search}`, request.url);
+  return NextResponse.redirect(redirect, 301);
+}
 
-      if (!result.success) {
-        return errorResponse(result.message || "Failed to fetch notifications", 500);
-      }
-
-      const notifications = (result.data ?? []).map((row: any) => ({
-        id: row.id,
-        notification_id: row.id,
-        title: row.title,
-        body: row.body,
-        type: row.type,
-        read_status: row.read_status === true,
-        is_read: row.read_status === true,
-        read_at: row.read_at,
-        action_url: row.action_url,
-        created_at: row.created_at,
-      }));
-
-      return paginatedResponse(notifications, {
-        page,
-        pageSize,
-        total: result.total ?? notifications.length,
-      });
-    } catch (error: any) {
-      return errorResponse(error.message, 500);
-    }
-  },
-);
-
-export const POST = withPermission(
-  { module: "communication", action: "create" },
-  async (req: NextRequest, { user }) => {
-    try {
-      const body = await req.json();
-
-      if (body.user_ids && Array.isArray(body.user_ids)) {
-        const result = await createBulkNotifications(body, user.schoolId!);
-        if (!result.success) {
-          return errorResponse(result.message, 400);
-        }
-
-        return successResponse({ count: result.count }, 201);
-      }
-
-      const validation = validateBody(body, createNotificationSchema);
-      if (!validation.success) {
-        return errorResponse(validation.error, 422);
-      }
-
-      const result = await createNotification(validation.data, user.schoolId!);
-      if (!result.success) {
-        return errorResponse(result.message, 400);
-      }
-
-      return successResponse({ id: result.id }, 201);
-    } catch (error: any) {
-      if (error.name === "ZodError") {
-        return errorResponse(error.errors, 422);
-      }
-
-      return errorResponse(error.message, 500);
-    }
-  },
-);
+export async function POST(request: NextRequest) {
+  const redirect = new URL("/api/notifications", request.url);
+  return NextResponse.redirect(redirect, 301);
+}

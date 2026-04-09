@@ -1,4 +1,3 @@
-// @ts-nocheck
 // app/api/staff/[id]/leaves/route.ts
 // ============================================================
 // GET /api/staff/[id]/leaves - List leave requests for a staff member
@@ -75,7 +74,7 @@ export const GET = withPermission(
 // ============================================================
 export const POST = withPermission(
   'teachers',
-  'view', // Staff can view themselves and create their own leaves
+  'create',
   async (request: NextRequest, { user, params }) => {
     try {
       const { id } = params;

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/notifications/unread-count/route.ts
 // GET unread count for messages + notifications
 

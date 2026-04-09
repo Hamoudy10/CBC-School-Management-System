@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/reports/batch-report-cards/route.ts
 // POST generate report cards for entire class
 

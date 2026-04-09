@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/notifications/bulk/route.ts
 // POST send bulk notifications (admin)
 

@@ -251,6 +251,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   }
 }
 
+// PUT is an alias for PATCH (full update vs partial update — same logic)
+export const PUT = PATCH;
+
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const context = await getStudentRequestContext(params.id, STUDENT_WRITE_ROLES);
   if ('error' in context) {

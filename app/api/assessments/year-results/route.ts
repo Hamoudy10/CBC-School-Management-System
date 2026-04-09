@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/assessments/year-results/route.ts
 // ============================================================
 // GET /api/assessments/year-results - Get yearly aggregated results

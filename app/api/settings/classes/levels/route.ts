@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/settings/classes/levels/route.ts
 // GET/POST class levels
 

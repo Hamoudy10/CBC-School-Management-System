@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/settings/terms/route.ts
 // GET terms for academic year, POST create term
 

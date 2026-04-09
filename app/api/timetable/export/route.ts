@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/timetable/export/route.ts
 // ============================================================
 // GET /api/timetable/export - Export timetable as CSV

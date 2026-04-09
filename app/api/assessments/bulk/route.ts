@@ -1,4 +1,5 @@
-// @ts-nocheck
+export const dynamic = 'force-dynamic';
+
 // app/api/assessments/bulk/route.ts
 // ============================================================
 // POST /api/assessments/bulk - Bulk create/update assessments

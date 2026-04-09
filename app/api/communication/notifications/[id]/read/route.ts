@@ -1,28 +1,13 @@
-import { NextRequest } from "next/server";
-import { withPermission } from "@/lib/api/withAuth";
-import { errorResponse, successResponse } from "@/lib/api/response";
-import { markNotificationAsRead } from "@/features/communication";
+// app/api/communication/notifications/[id]/read/route.ts
+// DEPRECATED — Redirects to /api/notifications/[id]/read
+// Sunset date: 2026-07-01
 
-export const PUT = withPermission(
-  { module: "communication", action: "view" },
-  async (
-    _req: NextRequest,
-    { user, params }: { user: any; params: { id: string } },
-  ) => {
-    try {
-      const result = await markNotificationAsRead(
-        params.id,
-        user.id,
-        user.schoolId!,
-      );
+import { NextRequest, NextResponse } from "next/server";
 
-      if (!result.success) {
-        return errorResponse(result.message, 400);
-      }
-
-      return successResponse({ id: params.id, read: true });
-    } catch (error: any) {
-      return errorResponse(error.message, 500);
-    }
-  },
-);
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  const redirect = new URL(`/api/notifications/${params.id}/read`, request.url);
+  return NextResponse.redirect(redirect, 301);
+}

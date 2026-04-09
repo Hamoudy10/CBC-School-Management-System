@@ -14,8 +14,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeletons";
 import { useToast } from "@/components/ui/Toast";
 import { Plus, Search, Filter, Eye, Edit3, X, FileDown } from "lucide-react";
-import { NEEDS_TYPE_LABELS } from "@/features/special-needs/types";
-import type { NeedsType, SpecialNeed } from "@/features/special-needs/types";
+import { NEEDS_TYPE_LABELS, type NeedsType, type SpecialNeed } from "@/features/special-needs/types";
 
 const NEEDS_TYPE_COLORS: Record<string, "default" | "info" | "warning" | "error" | "success"> = {
   learning_disability: "warning",
@@ -55,15 +54,15 @@ export default function SpecialNeedsPage() {
   const pageSize = 20;
 
   const fetchRecords = useCallback(async () => {
-    if (!user) return;
+    if (!user) {return;}
     setLoading(true);
     try {
       const params = new URLSearchParams({
         page: String(page),
         pageSize: String(pageSize),
       });
-      if (typeFilter) params.set("needsType", typeFilter);
-      if (statusFilter) params.set("isActive", statusFilter);
+      if (typeFilter) {params.set("needsType", typeFilter);}
+      if (statusFilter) {params.set("isActive", statusFilter);}
 
       const res = await fetch(`/api/special-needs?${params}`);
       const json = await res.json();
@@ -141,8 +140,8 @@ export default function SpecialNeedsPage() {
   const handleExport = async () => {
     try {
       const params = new URLSearchParams();
-      if (typeFilter) params.set("needsType", typeFilter);
-      if (statusFilter) params.set("isActive", statusFilter);
+      if (typeFilter) {params.set("needsType", typeFilter);}
+      if (statusFilter) {params.set("isActive", statusFilter);}
 
       const res = await fetch(`/api/special-needs/export?${params}`);
       const blob = await res.blob();

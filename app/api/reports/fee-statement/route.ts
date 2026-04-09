@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/reports/fee-statement/route.ts
 // POST generate fee statement for a student
 

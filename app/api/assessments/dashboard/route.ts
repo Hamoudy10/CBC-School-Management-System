@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/assessments/dashboard/route.ts
 // ============================================================
 // GET /api/assessments/dashboard - Class overview dashboard with analytics

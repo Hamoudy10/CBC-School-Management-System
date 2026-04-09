@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/reports/report-cards/route.ts
 // ============================================================
 // POST /api/reports/report-cards - Generate or refresh a single report card

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/admin/users/route.ts
 // ============================================================
 // POST /api/admin/users - Create user by role name (admin helper)

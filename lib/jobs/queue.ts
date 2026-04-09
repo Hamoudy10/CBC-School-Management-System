@@ -117,7 +117,7 @@ export async function getPendingJobs(
 let isProcessing = false;
 
 async function processQueue() {
-  if (isProcessing) return;
+  if (isProcessing) {return;}
   isProcessing = true;
 
   try {
@@ -125,7 +125,7 @@ async function processQueue() {
     let activeCount = 0;
 
     for (const job of pendingJobs) {
-      if (activeCount >= MAX_CONCURRENT_JOBS) break;
+      if (activeCount >= MAX_CONCURRENT_JOBS) {break;}
 
       job.status = "processing";
       job.startedAt = new Date().toISOString();

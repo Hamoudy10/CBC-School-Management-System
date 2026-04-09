@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { withAuth, withPermission } from "@/lib/api/withAuth";
@@ -107,7 +109,7 @@ export const GET = withAuth(async (request: NextRequest, { user }) => {
   });
 });
 
-export const POST = withPermission("finance", "create", async (request) => {
+export const POST = withPermission("finance", "create", async (request, { user }) => {
   let body: Record<string, unknown>;
 
   try {
@@ -150,31 +152,8 @@ export const POST = withPermission("finance", "create", async (request) => {
   };
 
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
 
-  if (!authUser) {
-    return errorResponse("Unauthorized", 401);
-  }
-
-  const { data: appUser } = await supabase
-    .from("users")
-    .select("user_id, school_id, first_name, last_name, roles(name)")
-    .eq("user_id", authUser.id)
-    .single();
-
-  if (!appUser?.school_id) {
-    return errorResponse("Forbidden", 403);
-  }
-
-  const currentUser = {
-    id: appUser.user_id,
-    schoolId: appUser.school_id,
-    role: (appUser.roles as any)?.name ?? "finance_officer",
-  } as any;
-
-  const result = await createPayment(paymentPayload, currentUser);
+  const result = await createPayment(paymentPayload, user);
 
   if (!result.success) {
     return errorResponse(result.message, 400);

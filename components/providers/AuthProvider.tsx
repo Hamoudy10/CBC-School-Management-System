@@ -54,7 +54,7 @@ export function AuthProvider({
   const getCachedUser = (): AuthUser | null => {
     try {
       const cached = sessionStorage.getItem("auth_user");
-      if (cached) return JSON.parse(cached);
+      if (cached) {return JSON.parse(cached);}
     } catch { /* ignore */ }
     return null;
   };

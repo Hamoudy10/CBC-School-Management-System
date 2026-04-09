@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/timetable/bell-times/route.ts
 // ============================================================
 // GET /api/timetable/bell-times - List bell times

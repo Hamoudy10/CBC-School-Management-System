@@ -1,4 +1,5 @@
-// @ts-nocheck
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
 import { getCurrentAcademicContext, normalizeStudent } from '@/app/api/students/_utils';
@@ -266,13 +267,13 @@ function normalizeCreateStudentBody(body: Record<string, unknown>) {
   const fallbackGuardian = body.guardian
     ? [
         {
-          first_name: body.guardian.first_name ?? body.guardian.firstName ?? '',
-          last_name: body.guardian.last_name ?? body.guardian.lastName ?? '',
-          phone_number: body.guardian.phone_number ?? body.guardian.phone ?? null,
-          email: body.guardian.email ?? null,
-          relationship: body.guardian.relationship ?? 'guardian',
-          is_primary: body.guardian.is_primary ?? true,
-          can_pickup: body.guardian.can_pickup ?? true,
+          first_name: (body.guardian as any).first_name ?? (body.guardian as any).firstName ?? '',
+          last_name: (body.guardian as any).last_name ?? (body.guardian as any).lastName ?? '',
+          phone_number: (body.guardian as any).phone_number ?? (body.guardian as any).phone ?? null,
+          email: (body.guardian as any).email ?? null,
+          relationship: (body.guardian as any).relationship ?? 'guardian',
+          is_primary: (body.guardian as any).is_primary ?? true,
+          can_pickup: (body.guardian as any).can_pickup ?? true,
         },
       ]
     : [];
@@ -339,7 +340,7 @@ async function authenticateAndAuthorize(
     return { error: errorResponse('Forbidden — no school associated', 403) };
   }
 
-  const roleName = (user.roles as Record<string, string>)?.name ?? 'student';
+  const roleName = (user.roles as unknown as Record<string, string>)?.name ?? 'student';
 
   if (!requiredRoles.includes(roleName)) {
     return { error: errorResponse('Insufficient permissions', 403) };
@@ -615,7 +616,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const transformedStudents = (students ?? []).map((student) => {
+  const transformedStudents = (students ?? []).map((student: any) => {
     const currentClass = student.classes
       ? {
           classId: student.classes.class_id,
@@ -760,7 +761,7 @@ export async function POST(req: NextRequest) {
 
   if (existingStudent) {
     return errorResponse(
-      `A student with admission number "${studentData.admission_number}" already exists`,
+      `A student with admission number "${(studentData as any).admission_number}" already exists`,
       409
     );
   }
@@ -872,7 +873,7 @@ export async function POST(req: NextRequest) {
     try {
       guardianUserId = await ensureParentUser(
         schoolId,
-        guardian,
+        guardian as any,
         user.user_id,
       );
     } catch (error) {

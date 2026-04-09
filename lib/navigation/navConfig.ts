@@ -60,7 +60,7 @@ export function getNavCategories(items: NavItem[]): { label: string; items: NavI
 
   for (const item of items) {
     const cat = item.category ?? 'support';
-    if (!groups.has(cat)) groups.set(cat, []);
+    if (!groups.has(cat)) {groups.set(cat, []);}
     groups.get(cat)!.push(item);
   }
 

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/report-cards/publish/route.ts
 // ============================================================
 // POST /api/report-cards/publish - Publish report cards for class

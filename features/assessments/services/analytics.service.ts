@@ -1,4 +1,3 @@
-// @ts-nocheck
 // features/assessments/services/analytics.service.ts
 // ============================================================
 // Analytics & Trends service
@@ -253,7 +252,7 @@ export async function getClassPerformanceSummary(
       studentAverages.push({
         studentId: sc.student_id,
         studentName: sc.students
-          ? `${sc.students.first_name} ${sc.students.last_name}`
+          ? `${(sc.students as any).first_name} ${(sc.students as any).last_name}`
           : "Unknown",
         averageScore: Math.round(avg * 100) / 100,
       });

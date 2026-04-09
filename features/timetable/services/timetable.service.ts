@@ -1,4 +1,3 @@
-// @ts-nocheck
 // features/timetable/services/timetable.service.ts
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -507,7 +506,7 @@ export class TimetableService {
           dayOfWeek: input.dayOfWeek,
           startTime: slot.start_time,
           endTime: slot.end_time,
-        });
+        } as any);
       }
     }
 
@@ -542,7 +541,7 @@ export class TimetableService {
           dayOfWeek: input.dayOfWeek,
           startTime: slot.start_time,
           endTime: slot.end_time,
-        });
+        } as any);
       }
     }
 
@@ -577,7 +576,7 @@ export class TimetableService {
             dayOfWeek: input.dayOfWeek,
             startTime: slot.start_time,
             endTime: slot.end_time,
-          });
+          } as any);
         }
       }
     }
@@ -751,7 +750,7 @@ export class TimetableService {
       teacherInitials,
       academicYear: row.academic_year?.year ?? '',
       termName: row.term?.name ?? '',
-    };
+    } as unknown as TimetableSlotWithDetails;
   }
 
   private static async ensureTeacherAssignmentExists(

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/users/route.ts
 // ============================================================
 // GET /api/users - List users (paginated, filtered)

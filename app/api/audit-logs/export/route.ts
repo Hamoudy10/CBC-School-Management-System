@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/audit-logs/export/route.ts
 // ============================================================
 // GET /api/audit-logs/export - Export audit logs as CSV

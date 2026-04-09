@@ -1,4 +1,3 @@
-// @ts-nocheck
 // app/api/staff/[id]/route.ts
 // ============================================================
 // GET /api/staff/[id] - Get single staff member

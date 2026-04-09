@@ -16,6 +16,143 @@ export type ReportFormat = "pdf" | "csv" | "json";
 
 export type ReportStatus = "pending" | "generating" | "completed" | "failed";
 
+// ── Report Data Service Types (used by reportData.service.ts & pdfGenerator.service.ts) ──
+
+export interface SchoolInfo {
+  name: string;
+  address?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  logo_url?: string;
+  motto?: string;
+}
+
+export interface StudentInfo {
+  name: string;
+  admission_no: string;
+  class_name: string;
+  date_of_birth?: string;
+  gender?: string;
+  parent_name?: string;
+  parent_phone?: string;
+}
+
+export interface LearningAreaReport {
+  name: string;
+  strands: Array<{
+    name: string;
+    sub_strands: Array<{
+      name: string;
+      competencies: Array<{
+        name: string;
+        score: number;
+        level: string;
+        remarks?: string | null;
+      }>;
+      average_score: number;
+      level: string;
+    }>;
+    average_score: number;
+    level: string;
+  }>;
+  overall_score: number;
+  overall_level: string;
+}
+
+export interface TermReportData {
+  school: SchoolInfo;
+  student: StudentInfo;
+  term: string;
+  academic_year: string;
+  learning_areas: LearningAreaReport[];
+  attendance_summary: {
+    total_days: number;
+    present: number;
+    absent: number;
+    late: number;
+    attendance_rate: number;
+  };
+  overall_summary: {
+    total_competencies: number;
+    exceeding: number;
+    meeting: number;
+    approaching: number;
+    below: number;
+    overall_level: string;
+  };
+  class_teacher_remarks?: string;
+  principal_remarks?: string;
+  next_term_opens?: string;
+  closing_date?: string;
+}
+
+export interface ClassListData {
+  school: SchoolInfo;
+  class_name: string;
+  term: string;
+  academic_year: string;
+  class_teacher: string;
+  students: Array<{
+    no: number;
+    admission_no: string;
+    name: string;
+    gender: string;
+    date_of_birth: string;
+    parent_name: string;
+    parent_phone: string;
+  }>;
+  total_boys: number;
+  total_girls: number;
+  total_students: number;
+}
+
+export interface FeeStatementData {
+  school: SchoolInfo;
+  student: StudentInfo;
+  academic_year: string;
+  fees: Array<{
+    description: string;
+    amount_due: number;
+    amount_paid: number;
+    balance: number;
+    status: string;
+    due_date: string;
+  }>;
+  payments: Array<{
+    date: string;
+    receipt_no: string;
+    amount: number;
+    method: string;
+  }>;
+  total_due: number;
+  total_paid: number;
+  total_balance: number;
+  generated_date: string;
+}
+
+export interface AttendanceReportData {
+  school: SchoolInfo;
+  class_name?: string;
+  term: string;
+  academic_year: string;
+  period: { from: string; to: string };
+  students: Array<{
+    admission_no: string;
+    name: string;
+    class_name: string;
+    present: number;
+    absent: number;
+    late: number;
+    total: number;
+    attendance_rate: number;
+  }>;
+  total_school_days: number;
+  class_average_rate: number;
+  overall_attendance_rate: number;
+}
+
+// ── Original Report Types ──
+
 export interface ReportRequest {
   id: string;
   report_type: ReportType;

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { withPermission } from "@/lib/api/withAuth";
 import { errorResponse, successResponse } from "@/lib/api/response";
 import { markAllMessagesAsRead } from "@/features/communication";

@@ -50,7 +50,7 @@ export default function AuditLogsPage() {
 
   useEffect(() => {
     const fetchLogs = async () => {
-      if (!user) return;
+      if (!user) {return;}
 
       setLoading(true);
       try {
@@ -59,8 +59,8 @@ export default function AuditLogsPage() {
           pageSize: String(pageSize),
         });
 
-        if (tableFilter) params.set("tableName", tableFilter);
-        if (actionFilter) params.set("action", actionFilter);
+        if (tableFilter) {params.set("tableName", tableFilter);}
+        if (actionFilter) {params.set("action", actionFilter);}
 
         const res = await fetch(`/api/audit-logs?${params}`);
         const json = await res.json();

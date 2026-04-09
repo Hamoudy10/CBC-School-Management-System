@@ -1,74 +1,39 @@
 // app/api/announcements/[id]/route.ts
-// GET single, PUT update, DELETE deactivate announcement
+// DEPRECATED — Redirects to /api/communication/announcements/[id]
+// Sunset date: 2026-07-01
 
-import { NextRequest } from "next/server";
-import { withAuth, withPermission } from "@/lib/api/withAuth";
-import { validateBody } from "@/lib/api/validation";
-import { apiSuccess, apiError } from "@/lib/api/response";
-import { updateAnnouncementSchema } from "@/features/communication";
-import {
-  getAnnouncementById,
-  updateAnnouncement,
-  deleteAnnouncement,
-} from "@/features/communication/services/announcements.service";
+import { NextRequest, NextResponse } from "next/server";
 
-export const GET = withAuth(
-  async (req: NextRequest, user, { params }: { params: { id: string } }) => {
-    try {
-      const result = await getAnnouncementById(params.id, user.school_id);
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  const url = new URL(request.url);
+  const redirect = new URL(
+    `/api/communication/announcements/${params.id}${url.search}`,
+    request.url,
+  );
+  return NextResponse.redirect(redirect, 301);
+}
 
-      if (!result.success) {
-        return apiError(result.message || "Announcement not found", 404);
-      }
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  const redirect = new URL(
+    `/api/communication/announcements/${params.id}`,
+    request.url,
+  );
+  return NextResponse.redirect(redirect, 301);
+}
 
-      return apiSuccess(result.data);
-    } catch (error) {
-      return apiError("Internal server error", 500);
-    }
-  },
-);
-
-export const PUT = withPermission(
-  { module: "communication", action: "edit" },
-  async (req: NextRequest, user, { params }: { params: { id: string } }) => {
-    try {
-      const body = await req.json();
-      const validation = validateBody(body, updateAnnouncementSchema);
-
-      if (!validation.success) {
-        return apiError(validation.error, 422);
-      }
-
-      const result = await updateAnnouncement(
-        params.id,
-        validation.data,
-        user.school_id,
-      );
-
-      if (!result.success) {
-        return apiError(result.message, 400);
-      }
-
-      return apiSuccess(null, result.message);
-    } catch (error) {
-      return apiError("Internal server error", 500);
-    }
-  },
-);
-
-export const DELETE = withPermission(
-  { module: "communication", action: "delete" },
-  async (req: NextRequest, user, { params }: { params: { id: string } }) => {
-    try {
-      const result = await deleteAnnouncement(params.id, user.school_id);
-
-      if (!result.success) {
-        return apiError(result.message, 400);
-      }
-
-      return apiSuccess(null, result.message);
-    } catch (error) {
-      return apiError("Internal server error", 500);
-    }
-  },
-);
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  const redirect = new URL(
+    `/api/communication/announcements/${params.id}`,
+    request.url,
+  );
+  return NextResponse.redirect(redirect, 301);
+}

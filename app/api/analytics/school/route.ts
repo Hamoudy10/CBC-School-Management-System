@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/analytics/school/route.ts
 // ============================================================
 // GET /api/analytics/school - Get school-wide dashboard data

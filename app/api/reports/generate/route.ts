@@ -1,4 +1,5 @@
-// @ts-nocheck
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { z } from 'zod';
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
 
   if (!user?.school_id) {return errorResponse('Forbidden', 403);}
 
-  const roleName = (user.roles as Record<string, string>)?.name ?? 'student';
+  const roleName = (user.roles as unknown as Record<string, string>)?.name ?? 'student';
   const schoolId = user.school_id;
 
   // 3. Admin-only access
@@ -175,7 +176,7 @@ export async function POST(req: NextRequest) {
     existing.push({
       learning_area_id: agg.learning_area_id,
       learning_area_name:
-        (agg.learning_areas as Record<string, string> | null)?.name ?? 'Unknown',
+        (agg.learning_areas as unknown as Record<string, string> | null)?.name ?? 'Unknown',
       average_score: agg.average_score ?? 0,
       performance_level: agg.performance_level ?? null,
     });

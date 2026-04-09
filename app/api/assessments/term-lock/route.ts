@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/assessments/term-lock/route.ts
 // ============================================================
 // GET /api/assessments/term-lock - Check if current term is locked for assessment edits

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // features/assessments/services/reportCards.service.ts
 // ============================================================
 // Report Card Generation service
@@ -135,14 +134,14 @@ export async function listReportCards(
       studentId: row.student_id,
       studentName: student
         ? `${student.first_name} ${student.last_name}`.trim()
-        : null,
-      studentAdmissionNo: student?.admission_number || null,
+        : undefined,
+      studentAdmissionNo: student?.admission_number || undefined,
       classId: row.class_id,
-      className: classRecord?.name || null,
+      className: classRecord?.name || undefined,
       academicYearId: row.academic_year_id,
-      academicYear: academicYear?.year || null,
+      academicYear: academicYear?.year || undefined,
       termId: row.term_id,
-      termName: term?.name || null,
+      termName: term?.name || undefined,
       reportType: row.report_type,
       overallAverage: row.overall_average
         ? parseFloat(row.overall_average)
@@ -223,10 +222,10 @@ export async function getReportCardById(
     studentId: data.student_id,
     studentName: student
       ? `${student.first_name} ${student.last_name}`.trim()
-      : null,
-    studentAdmissionNo: student?.admission_number || null,
+      : undefined,
+    studentAdmissionNo: student?.admission_number || undefined,
     classId: data.class_id,
-    className: classRecord?.name || null,
+    className: classRecord?.name || undefined,
     academicYearId: data.academic_year_id,
     academicYear: academicYear?.year || null,
     termId: data.term_id,
@@ -488,15 +487,14 @@ export async function publishReportCard(
       published_at: new Date().toISOString(),
     })
     .eq("report_id", reportId)
-    .eq("is_published", false)
-    .select("report_id")
-    .maybeSingle();
+    .eq("is_published", false);
 
   if (currentUser.role !== "super_admin") {
     query = query.eq("school_id", currentUser.schoolId!);
   }
 
-  const { data, error } = await query;
+  const selectQuery = query.select("report_id").maybeSingle();
+  const { data, error } = await selectQuery;
 
   if (error) {
     return {

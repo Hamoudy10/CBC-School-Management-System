@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/settings/current-context/route.ts
 // GET current active academic year + term
 

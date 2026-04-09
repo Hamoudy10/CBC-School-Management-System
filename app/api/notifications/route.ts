@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/notifications/route.ts
 // GET user notifications, POST create notification (admin only)
 

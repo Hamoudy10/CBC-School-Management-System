@@ -1,8 +1,7 @@
-// @ts-nocheck
 // features/reports/services/reportData.service.ts
 // Gathers data required for all report types
 
-import { createServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   TermReportData,
   SchoolInfo,
@@ -16,7 +15,7 @@ import type {
 export class ReportDataService {
   // ── Get school info ──
   static async getSchoolInfo(schoolId: string): Promise<SchoolInfo> {
-    const supabase = await createServerClient();
+    const supabase = await createSupabaseServerClient();
     const { data, error } = await supabase
       .from("schools")
       .select("name, address, contact_phone, contact_email, logo_url, motto")
@@ -32,7 +31,7 @@ export class ReportDataService {
     schoolId: string,
     studentId: string,
   ): Promise<StudentInfo> {
-    const supabase = await createServerClient();
+    const supabase = await createSupabaseServerClient();
 
     const { data, error } = await supabase
       .from("students")
@@ -79,7 +78,7 @@ export class ReportDataService {
       closing_date?: string;
     },
   ): Promise<TermReportData> {
-    const supabase = await createServerClient();
+    const supabase = await createSupabaseServerClient();
 
     const [school, student] = await Promise.all([
       this.getSchoolInfo(schoolId),
@@ -279,7 +278,7 @@ export class ReportDataService {
     term: string,
     academicYear: string,
   ): Promise<ClassListData> {
-    const supabase = await createServerClient();
+    const supabase = await createSupabaseServerClient();
     const school = await this.getSchoolInfo(schoolId);
 
     // Get class details
@@ -355,7 +354,7 @@ export class ReportDataService {
     studentId: string,
     academicYear: string,
   ): Promise<FeeStatementData> {
-    const supabase = await createServerClient();
+    const supabase = await createSupabaseServerClient();
 
     const [school, student] = await Promise.all([
       this.getSchoolInfo(schoolId),
@@ -436,7 +435,7 @@ export class ReportDataService {
     dateFrom: string,
     dateTo: string,
   ): Promise<AttendanceReportData> {
-    const supabase = await createServerClient();
+    const supabase = await createSupabaseServerClient();
     const school = await this.getSchoolInfo(schoolId);
 
     const { data: classData } = await supabase
@@ -465,7 +464,13 @@ export class ReportDataService {
         students: [],
         class_average_rate: 0,
         total_school_days: 0,
-      };
+        overall_attendance_rate: 0,
+        report_period: { from: dateFrom, to: dateTo },
+        school_summary: { total_students: 0, average_attendance_rate: 0, total_school_days: 0 },
+        by_class: [],
+        at_risk_students: [],
+        trends: [],
+      } as AttendanceReportData;
     }
 
     const studentIds = students.map((s) => s.id);
@@ -505,12 +510,12 @@ export class ReportDataService {
       return {
         name: `${s.first_name} ${s.last_name}`,
         admission_no: s.admission_no,
+        class_name: classData?.name || "",
         present,
         absent,
         late,
-        excused,
         total,
-        rate,
+        attendance_rate: rate,
       };
     });
 
@@ -526,7 +531,22 @@ export class ReportDataService {
           ? Math.round(totalRate / studentReports.length)
           : 0,
       total_school_days: totalDays,
-    };
+      overall_attendance_rate:
+        studentReports.length > 0
+          ? Math.round(totalRate / studentReports.length)
+          : 0,
+      report_period: { from: dateFrom, to: dateTo },
+      school_summary: { total_students: studentReports.length, average_attendance_rate: studentReports.length > 0 ? Math.round(totalRate / studentReports.length) : 0, total_school_days: totalDays },
+      by_class: [],
+      at_risk_students: studentReports.filter((s) => s.attendance_rate < 60).map((s) => ({
+        student_name: s.name,
+        admission_no: s.admission_no,
+        class_name: s.class_name,
+        attendance_rate: s.attendance_rate,
+        absent_days: s.absent,
+      })),
+      trends: [],
+    } as AttendanceReportData;
   }
 
   // ── Helper: score to CBC level ──

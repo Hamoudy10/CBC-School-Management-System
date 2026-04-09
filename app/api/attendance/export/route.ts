@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import * as XLSX from "xlsx";
 import { withPermission } from "@/lib/api/withAuth";
 import { apiError } from "@/lib/api/response";

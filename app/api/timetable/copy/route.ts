@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/timetable/copy/route.ts
 // ============================================================
 // POST /api/timetable/copy - Copy timetable from one term to another

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/attendance/import/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';

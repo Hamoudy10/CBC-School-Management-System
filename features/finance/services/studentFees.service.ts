@@ -1,4 +1,3 @@
-// @ts-nocheck
 // features/finance/services/studentFees.service.ts
 // ============================================================
 // Student Fees CRUD service
@@ -119,7 +118,7 @@ export async function listStudentFees(
       .select("student_id")
       .eq("guardian_user_id", currentUser.id);
 
-    const childIds = guardianLinks?.map((g) => g.student_id) || [];
+    const childIds = guardianLinks?.map((g: any) => g.student_id) || [];
     if (childIds.length === 0) {
       return { data: [], total: 0, page, pageSize, totalPages: 0 };
     }

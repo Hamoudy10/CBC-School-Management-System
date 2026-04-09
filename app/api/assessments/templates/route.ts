@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/assessments/templates/route.ts
 // ============================================================
 // GET /api/assessments/templates - List assessment templates

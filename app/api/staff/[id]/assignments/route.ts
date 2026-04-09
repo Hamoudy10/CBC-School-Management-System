@@ -1,4 +1,3 @@
-// @ts-nocheck
 // app/api/staff/[id]/assignments/route.ts
 // ============================================================
 // GET /api/staff/[id]/assignments - List subject assignments for a teacher

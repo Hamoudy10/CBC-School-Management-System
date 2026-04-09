@@ -22,7 +22,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
   );
 
   const visibleNavItems = useMemo(() => {
-    if (loading || !user) return [];
+    if (loading || !user) {return [];}
     return NAV_ITEMS.filter((item) => accessibleModuleSet.has(item.module));
   }, [accessibleModuleSet, loading, user]);
 
@@ -36,7 +36,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
   }, [pathname]);
 
   const isActive = (href: string) => {
-    if (href === "/dashboard") return pathname === "/dashboard";
+    if (href === "/dashboard") {return pathname === "/dashboard";}
     return pathname.startsWith(href);
   };
 
@@ -98,7 +98,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                         <Link
                           href={item.href}
                           onClick={() => {
-                            if (!active) setPendingHref(item.href);
+                            if (!active) {setPendingHref(item.href);}
                           }}
                           className={`group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 ${
                             active

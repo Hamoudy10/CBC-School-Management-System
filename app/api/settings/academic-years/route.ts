@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/settings/academic-years/route.ts
 // GET list, POST create academic year
 

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/assessments/area-results/route.ts
 // ============================================================
 // GET /api/assessments/area-results - Get learning area-level aggregation

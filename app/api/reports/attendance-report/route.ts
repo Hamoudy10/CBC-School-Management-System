@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/reports/attendance-report/route.ts
 // POST generate attendance report for a class
 

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/settings/config/route.ts
 // GET system configuration, PUT update settings
 

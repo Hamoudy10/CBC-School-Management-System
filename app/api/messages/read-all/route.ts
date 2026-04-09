@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/messages/read-all/route.ts
 // POST mark all messages as read
 

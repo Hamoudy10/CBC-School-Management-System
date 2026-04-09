@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 // app/api/reports/class-list/route.ts
 // POST generate class list report
 

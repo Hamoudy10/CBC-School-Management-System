@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { withPermission } from "@/lib/api/withAuth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { errorResponse, successResponse } from "@/lib/api/response";

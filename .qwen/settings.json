@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir *)",
+      "Bash(powershell *)",
+      "Bash(del *)",
+      "Bash(npx *)",
+      "Bash(rmdir *)",
+      "Bash(mkdir *)",
+      "Bash(findstr *)",
+      "Bash(git add *)"
+    ]
+  },
+  "$version": 3
+}
