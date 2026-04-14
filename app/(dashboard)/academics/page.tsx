@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { AcademicsOverview } from "./components/AcademicsOverview";
 import { AcademicsManager } from "./components/AcademicsManager";
+import { SchemeImport } from "./components/SchemeImport";
 
 export const metadata: Metadata = {
   title: "Academics",
@@ -73,6 +74,7 @@ export default async function AcademicsPage() {
         classes={academicData.classes}
       />
       <AcademicsManager initialLearningAreas={academicData.learningAreas} />
+      <SchemeImport />
     </div>
   );
 }

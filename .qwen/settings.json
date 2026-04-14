@@ -10,7 +10,9 @@
       "Bash(findstr *)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(copy *)",
+      "Bash(npm install *)"
     ]
   },
   "$version": 3
