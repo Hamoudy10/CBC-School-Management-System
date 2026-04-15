@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS learning_areas (
   description TEXT,
   is_core BOOLEAN DEFAULT true,
   applicable_grades TEXT[], -- e.g., '{"Grade 4", "Grade 5", "Grade 6"}'
+  grade_level VARCHAR(50),  -- e.g., "6" for Grade 6
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   created_by UUID,

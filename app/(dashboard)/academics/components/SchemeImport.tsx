@@ -1,24 +1,26 @@
 // app/(dashboard)/academics/components/SchemeImport.tsx
 // ============================================================
 // Intelligent Scheme of Work Import Component
-// Allows admins/teachers to paste scheme text and auto-create:
-// - Learning Areas, Strands, Sub-Strands, Competencies
-// - Detects missing elements and warns the user
+// Supports: paste, drag-and-drop, file upload (.txt, .docx)
+// Auto-creates: Learning Areas, Strands, Sub-Strands, Competencies
+// Detects missing elements and warns the user
 // ============================================================
 
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
   ClipboardPaste,
   FileUp,
-  Info,
   Loader2,
   Upload,
   XCircle,
+  FileText,
+  X,
 } from "lucide-react";
+import mammoth from "mammoth";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/Alert";
@@ -48,6 +50,12 @@ interface SchemeImportResult {
   } | null;
 }
 
+const ALLOWED_TYPES = [
+  "text/plain",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];
+const ALLOWED_EXTENSIONS = [".txt", ".docx"];
+
 export function SchemeImport() {
   const { success, error: toastError, warning } = useToast();
   const [textContent, setTextContent] = useState("");
@@ -56,8 +64,99 @@ export function SchemeImport() {
   const [showModal, setShowModal] = useState(false);
   const [importToDb, setImportToDb] = useState(true);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
 
-  // Sample text for demo/reference
+  // ─── File Processing ─────────────────────────────────────────────
+
+  const processFile = useCallback(async (file: File) => {
+    setParseError(null);
+    setUploadedFile(file.name);
+
+    try {
+      if (file.type === "text/plain" || file.name.endsWith(".txt")) {
+        const text = await file.text();
+        setTextContent(text);
+        success("File loaded", `Loaded ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+      } else if (file.name.endsWith(".docx")) {
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        setTextContent(result.value);
+
+        if (result.messages.length > 0) {
+          console.warn("Mammoth warnings:", result.messages);
+        }
+
+        success("Document parsed", `Loaded ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+      } else {
+        setParseError(`Unsupported file type: ${file.type || file.name}. Please use .txt or .docx files.`);
+        setUploadedFile(null);
+      }
+    } catch (err) {
+      setParseError(`Failed to read file: ${err instanceof Error ? err.message : "Unknown error"}`);
+      setUploadedFile(null);
+    }
+  }, [success]);
+
+  // ─── Drag and Drop ───────────────────────────────────────────────
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set dragging to false if we left the drop zone
+    if (dropZoneRef.current && !dropZoneRef.current.contains(e.relatedTarget as Node)) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      // Check file type/extension
+      const isValid = ALLOWED_TYPES.includes(file.type) ||
+        ALLOWED_EXTENSIONS.some(ext => file.name.toLowerCase().endsWith(ext));
+
+      if (isValid) {
+        processFile(file);
+      } else {
+        setParseError(`Unsupported file: ${file.name}. Please use .txt or .docx files.`);
+      }
+    }
+  }, [processFile]);
+
+  // ─── File Input ──────────────────────────────────────────────────
+
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      await processFile(file);
+    }
+    // Reset input so same file can be selected again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }, [processFile]);
+
+  // ─── Sample Text ─────────────────────────────────────────────────
+
   const loadSampleText = () => {
     setTextContent(`2024 GRADE 6 JKF NEW PRIMARY ENGLISH SCHEMES OF WORK - TERM 2
 
@@ -79,22 +178,11 @@ Realia\tWritten questions
 Oral questions
 Portfolio
 Oral Report Observation
-Self and peer assessment\t
-1\t2\tOur Tourist Attractions\tListening and Speaking
-
-Pronunciation and vocabulary\tBy the end of the lesson, the learner should be able to:
-Listen as the teacher reads the poem, 'The Wonder'
-Identify new words about tourist attractions.
-Have fun reciting the poem.\tLearners are guided in pairs, in groups or individually to:
-Listen as the teacher reads the poem, 'The Wonder'
-Recite the poem, 'The Wonder'
-Identify new words about tourist attractions.\tWhat is the poem about?\tJKF New Primary English Learner's Book Grade 6 pg. 44-46
-Dictionaries\tWritten questions
-Oral questions
-Portfolio
 Self and peer assessment\t`);
     success("Sample loaded", "This shows the expected format. Replace with your own scheme.");
   };
+
+  // ─── Import ──────────────────────────────────────────────────────
 
   const handleImport = async () => {
     if (textContent.trim().length < 100) {
@@ -128,13 +216,11 @@ Self and peer assessment\t`);
       setShowModal(true);
 
       if (data.missingElements.length > 0) {
-        warning("Missing Elements", `${data.missingElements.length} required element(s) not found in the scheme.`);
+        warning("Missing Elements", `${data.missingElements.length} required element(s) not found.`);
       }
-
       if (data.warnings.length > 0) {
-        warning("Warnings", `${data.warnings.length} warning(s) about the scheme content.`);
+        warning("Warnings", `${data.warnings.length} warning(s) about the scheme.`);
       }
-
       if (data.databaseImport?.success) {
         success("Import Successful", data.databaseImport.message);
       }
@@ -147,31 +233,13 @@ Self and peer assessment\t`);
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) {return;}
-
-    if (file.type === "text/plain" || file.name.endsWith(".txt")) {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const text = ev.target?.result as string;
-        setTextContent(text);
-        success("File loaded", `Loaded ${file.name} (${Math.round(file.size / 1024)}KB)`);
-      };
-      reader.readAsText(file);
-    } else if (file.name.endsWith(".docx")) {
-      // For .docx files, inform user to copy-paste from Word
-      setParseError(
-        "For .docx files, please open the file in Microsoft Word or Google Docs, select all content (Ctrl+A), copy (Ctrl+C), and paste it into the text area below. This preserves the table structure needed for parsing."
-      );
-    } else if (file.name.endsWith(".doc")) {
-      setParseError(
-        ".doc files are not directly supported. Please open the file in Microsoft Word, select all (Ctrl+A), copy (Ctrl+C), and paste into the text area below."
-      );
-    } else {
-      setParseError("Unsupported file type. Please use .txt files or copy-paste from your document.");
-    }
+  const clearFile = () => {
+    setTextContent("");
+    setUploadedFile(null);
+    setParseError(null);
   };
+
+  // ─── Render ──────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
@@ -185,7 +253,7 @@ Self and peer assessment\t`);
             <div>
               <CardTitle>Import Scheme of Work</CardTitle>
               <CardDescription>
-                Paste your CBC scheme of work to auto-create learning areas, strands, sub-strands, and competencies
+                Upload or paste your CBC scheme to auto-create learning areas, strands, sub-strands, and competencies
               </CardDescription>
             </div>
           </div>
@@ -197,18 +265,94 @@ Self and peer assessment\t`);
             <ClipboardPaste className="h-4 w-4" />
             <AlertTitle>How to import your scheme</AlertTitle>
             <AlertDescription className="space-y-2">
-              <ol className="list-decimal pl-5 space-y-1 text-sm">
-                <li>Open your scheme document (Word, Google Docs, Excel)</li>
-                <li>Select <strong>all content</strong> (Ctrl+A)</li>
-                <li>Copy (Ctrl+C)</li>
-                <li>Paste into the text area below (Ctrl+V)</li>
-                <li>Click &quot;Analyze &amp; Import&quot;</li>
-              </ol>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-gray-700">Option 1: Upload a file</p>
+                  <ul className="list-disc pl-5 space-y-1 text-sm text-gray-600">
+                    <li>Drag &amp; drop a <code className="bg-gray-100 px-1 rounded">.docx</code> or <code className="bg-gray-100 px-1 rounded">.txt</code> file</li>
+                    <li>Or click &quot;Upload&quot; to browse files</li>
+                  </ul>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-gray-700">Option 2: Copy &amp; paste</p>
+                  <ul className="list-disc pl-5 space-y-1 text-sm text-gray-600">
+                    <li>Open your scheme document</li>
+                    <li>Select all (Ctrl+A) → Copy (Ctrl+C)</li>
+                    <li>Paste into the text area below</li>
+                  </ul>
+                </div>
+              </div>
               <p className="text-xs text-gray-500 mt-2">
-                The system will intelligently parse the scheme and extract strands, sub-strands, learning outcomes, and more.
+                The system intelligently extracts strands, sub-strands, learning outcomes, and validates CBC compliance.
               </p>
             </AlertDescription>
           </Alert>
+
+          {/* Drag & Drop Zone */}
+          <div
+            ref={dropZoneRef}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            className={cn(
+              "relative rounded-lg border-2 border-dashed p-6 text-center transition-colors",
+              isDragging
+                ? "border-blue-500 bg-blue-50"
+                : "border-gray-300 bg-gray-50 hover:border-gray-400",
+            )}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".txt,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+
+            <Upload className={cn(
+              "mx-auto h-8 w-8 transition-colors",
+              isDragging ? "text-blue-500" : "text-gray-400",
+            )} />
+            <p className="mt-2 text-sm font-medium text-gray-700">
+              {isDragging ? "Drop your file here" : "Drag & drop your scheme file here"}
+            </p>
+            <p className="mt-1 text-xs text-gray-500">
+              Supports <code className="bg-gray-100 px-1 rounded">.docx</code> (Word) and <code className="bg-gray-100 px-1 rounded">.txt</code> files
+            </p>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              Browse Files
+            </button>
+          </div>
+
+          {/* Uploaded File Badge */}
+          {uploadedFile && (
+            <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+              <FileText className="h-4 w-4 text-green-600" />
+              <span className="text-sm text-green-700 font-medium">{uploadedFile}</span>
+              <Badge variant="success" className="text-xs ml-auto">Loaded</Badge>
+              <button
+                type="button"
+                onClick={clearFile}
+                className="ml-1 text-gray-400 hover:text-gray-600"
+                title="Remove file"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Divider */}
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-gray-200" />
+            <span className="text-xs font-medium text-gray-400 uppercase">or paste text below</span>
+            <div className="h-px flex-1 bg-gray-200" />
+          </div>
 
           {/* Text Area */}
           <div className="space-y-2">
@@ -224,25 +368,13 @@ Self and peer assessment\t`);
             />
             <div className="flex items-center justify-between text-xs text-gray-500">
               <span>{textContent.length} characters</span>
-              <div className="flex gap-2">
-                <label className="cursor-pointer text-blue-600 hover:text-blue-700">
-                  <Upload className="inline h-3.5 w-3.5 mr-1" />
-                  Upload .txt file
-                  <input
-                    type="file"
-                    accept=".txt,.doc,.docx"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={loadSampleText}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  Load sample
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={loadSampleText}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                Load sample
+              </button>
             </div>
           </div>
 
