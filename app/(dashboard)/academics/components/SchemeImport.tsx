@@ -195,7 +195,8 @@ Self and peer assessment\t`);
     setResult(null);
 
     try {
-      const response = await fetch("/api/academics/scheme-import", {
+      // Use AI-powered endpoint (more reliable for .docx files)
+      const response = await fetch("/api/academics/scheme-import-ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
