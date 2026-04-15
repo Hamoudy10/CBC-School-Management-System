@@ -160,6 +160,11 @@ export function parseSchemeText(rawText: string): ParsedScheme {
     lessons.push(...result.lessons);
   }
 
+  // Compute unique counts for return
+  const uniqueStrands = new Set(lessons.map((l) => l.strand));
+  const uniqueSubStrands = new Set(lessons.map((l) => l.subStrand));
+  const totalOutcomes = lessons.reduce((sum, l) => sum + l.learningOutcomes.length, 0);
+
   // ── Detect Missing Elements ──────────────────────────────────
   const allOutcomes = lessons.flatMap((l) => l.learningOutcomes);
   const allExperiences = lessons.flatMap((l) => l.learningExperiences);
@@ -434,9 +439,9 @@ function parseCellByCell(lines: string[], warnings: string[]): ParseResult {
 
     // Accumulate content and detect column transitions
     switch (state) {
-      case 1: // Waiting for lesson number (shouldn't happen, but handle)
+      case 1: // Waiting for lesson number — re-detect
         if (/^\d{1,2}$/.test(trimmed)) {
-          lessonNum = num;
+          lessonNum = parseInt(trimmed);
           state = 2;
         }
         break;
