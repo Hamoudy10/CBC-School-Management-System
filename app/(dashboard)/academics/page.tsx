@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 async function getAcademicData(schoolId: string) {
   const supabase = await createSupabaseServerClient();
 
-  const [yearsRes, termsRes, classesRes, learningAreasRes] = await Promise.all([
+  const [yearsRes, termsRes, classesRes, learningAreasRes] = await Promise.allSettled([
     supabase
       .from("academic_years")
       .select("*")
@@ -33,25 +33,27 @@ async function getAcademicData(schoolId: string) {
       .eq("school_id", schoolId),
     supabase
       .from("learning_areas")
-      .select("learning_area_id, school_id, name, description, is_core, applicable_grades, created_at, updated_at")
+      .select("id, school_id, name, description, is_core, applicable_grades, created_at, updated_at")
       .eq("school_id", schoolId)
       .order("name", { ascending: true }),
   ]);
 
   return {
-    academicYears: yearsRes.data || [],
-    terms: termsRes.data || [],
-    classes: classesRes.data || [],
-    learningAreas: (learningAreasRes.data || []).map((row: any) => ({
-      learningAreaId: row.learning_area_id,
-      schoolId: row.school_id,
-      name: row.name,
-      description: row.description,
-      isCore: row.is_core,
-      applicableGrades: row.applicable_grades || [],
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    })),
+    academicYears: yearsRes.status === "fulfilled" ? (yearsRes.value.data || []) : [],
+    terms: termsRes.status === "fulfilled" ? (termsRes.value.data || []) : [],
+    classes: classesRes.status === "fulfilled" ? (classesRes.value.data || []) : [],
+    learningAreas: learningAreasRes.status === "fulfilled"
+      ? (learningAreasRes.value.data || []).map((row: any) => ({
+          learningAreaId: row.id,
+          schoolId: row.school_id,
+          name: row.name,
+          description: row.description,
+          isCore: row.is_core,
+          applicableGrades: row.applicable_grades || [],
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        }))
+      : [],
   };
 }
 
