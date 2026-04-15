@@ -142,196 +142,22 @@ export function parseSchemeText(rawText: string): ParsedScheme {
     }
   }
 
-  // ── Parse Table Data ─────────────────────────────────────────
-  // The scheme has columns:
-  // Week | Lesson | Strand | Sub-Strand | Learning Outcomes | Learning Experiences |
-  // Inquiry Questions | Resources | Assessment Methods | Reflection
+  // ── Detect Format ─────────────────────────────────────────────
+  // Format A: Tab-delimited (copy-paste from browser/Word with table structure)
+  // Format B: Cell-by-cell (mammoth extraction — each cell on separate lines)
+  const hasTabs = lines.some((l) => l.includes('\t'));
+  const tabLineCount = lines.filter((l) => l.includes('\t')).length;
 
   const lessons: SchemeLesson[] = [];
-  let currentWeek = 0;
 
-  // Strategy: Parse line-by-line looking for tabular data
-  // Each lesson row typically starts with a week number and lesson number
-
-  // First, try to find the table header row
-  let headerRowIdx = -1;
-  for (let i = 0; i < Math.min(10, lines.length); i++) {
-    const l = lines[i].toUpperCase();
-    if (l.includes('WEEK') && l.includes('LESSON') && l.includes('STRAND')) {
-      headerRowIdx = i;
-      break;
-    }
-  }
-
-  if (headerRowIdx === -1) {
-    // Try to find the first data row with week number
-    for (let i = 0; i < Math.min(15, lines.length); i++) {
-      if (/^\d+\s+\d+/.test(lines[i])) {
-        headerRowIdx = i;
-        break;
-      }
-    }
-  }
-
-  if (headerRowIdx === -1) {
-    warnings.push('Could not identify the scheme table structure. Please ensure the document contains a table with Week, Lesson, Strand columns.');
-    return {
-      header,
-      lessons: [],
-      warnings,
-      missingElements: ['Unable to parse scheme structure'],
-      strandCount: 0,
-      subStrandCount: 0,
-      competencyCount: 0,
-    };
-  }
-
-  // Parse data rows after the header
-  const dataLines = lines.slice(headerRowIdx + 1);
-
-  // We need to detect column boundaries. Since this is extracted from a table,
-  // columns may be separated by tabs, pipes, or multiple spaces.
-  // Let's use a smart approach: detect lines that start with week numbers
-
-  let buffer = '';
-  const allDataLines: string[] = [];
-
-  for (const line of dataLines) {
-    if (/^\d{1,2}\s*$/.test(line.trim()) || /^\d{1,2}\s+\d{1,2}/.test(line.trim())) {
-      // This looks like a new row start (week number, possibly with lesson number)
-      if (buffer.trim()) {
-        allDataLines.push(buffer.trim());
-      }
-      buffer = line;
-    } else {
-      buffer += ` ${  line}`;
-    }
-  }
-  if (buffer.trim()) {allDataLines.push(buffer.trim());}
-
-  // Now parse each combined row
-  const uniqueStrands = new Set<string>();
-  const uniqueSubStrands = new Set<string>();
-  let totalOutcomes = 0;
-
-  for (const row of allDataLines) {
-    // Split by tabs, pipes, or multiple spaces to find columns
-    // The pattern is: Week | Lesson | Strand | Sub-Strand | Outcomes | Experiences | Questions | Resources | Assessment | Reflection
-
-    const parts = row.split(/\t|\|/).map((p) => p.trim()).filter((p) => p.length > 0);
-
-    let week = 0;
-    let lesson = 0;
-    let strand = '';
-    let subStrand = '';
-    let outcomes: string[] = [];
-    let experiences: string[] = [];
-    let questions: string[] = [];
-    let resources: string[] = [];
-    let assessmentMethods: string[] = [];
-
-    if (parts.length >= 4) {
-      // We have enough columns
-      // Week is first numeric
-      const weekMatch = parts[0].match(/^(\d+)/);
-      if (weekMatch) {week = parseInt(weekMatch[1]);}
-      else {continue;}
-
-      // Lesson is next numeric
-      const lessonIdx = weekMatch ? 1 : 0;
-      if (parts.length > lessonIdx) {
-        const lessonMatch = parts[lessonIdx].match(/^(\d+)/);
-        if (lessonMatch) {lesson = parseInt(lessonMatch[1]);}
-      }
-
-      // Determine which columns are which by content
-      // Find the strand (usually a short title-cased phrase)
-      let colIdx = weekMatch ? 1 : 0;
-      if (parts.length > colIdx && /^\d+$/.test(parts[colIdx].trim())) {
-        colIdx++; // Skip lesson number
-      }
-
-      // Now find strand - first non-numeric meaningful column
-      if (parts.length > colIdx) {
-        strand = parts[colIdx];
-        colIdx++;
-      }
-      if (parts.length > colIdx) {
-        subStrand = parts[colIdx];
-        colIdx++;
-      }
-      if (parts.length > colIdx) {
-        outcomes = extractOutcomes(parts.slice(colIdx).join(' '));
-        colIdx++;
-      }
-      // Continue extracting remaining columns
-      const remainingParts = parts.slice(colIdx);
-      if (remainingParts.length >= 1) {
-        experiences = extractExperiences(remainingParts.slice(0, 2).join(' '));
-      }
-      if (remainingParts.length >= 2) {
-        questions = extractQuestions(remainingParts.slice(1, 3).join(' '));
-      }
-      if (remainingParts.length >= 3) {
-        resources = extractResources(remainingParts.slice(2, 4).join(' '));
-      }
-      if (remainingParts.length >= 4) {
-        assessmentMethods = extractAssessmentMethods(remainingParts.slice(3, 5).join(' '));
-      }
-    } else if (parts.length >= 1) {
-      // Fewer columns - try to extract what we can from the combined text
-      // Find week and lesson numbers
-      const allNums = row.match(/\b(\d+)\b/g);
-      if (allNums && allNums.length >= 2) {
-        week = parseInt(allNums[0]);
-        lesson = parseInt(allNums[1]);
-      } else if (allNums && allNums.length === 1) {
-        week = parseInt(allNums[0]);
-        lesson = 1;
-      }
-
-      // Find strand - look for known patterns
-      const strandMatch = row.match(/(?:^|\s)(Our Tourist Attractions|Jobs and Occupations[^|]*|Technology[^|]*|The Farm[^|]*|[^|]{5,30}?)(?:\s{2,}|\t|\|)/);
-      if (strandMatch) {
-        strand = strandMatch[1].trim();
-      }
-
-      // Find sub-strand
-      const subMatch = row.match(/(Listening and Speaking[^|]*|Reading[^|]*|Writing[^|]*|Grammar[^|]*|Pronunciation[^|]*|Extensive[^|]*|Intensive[^|]*)/i);
-      if (subMatch) {
-        subStrand = subMatch[1].trim().split(/\s{2,}|\t|\|/)[0].trim();
-      }
-
-      // Extract learning outcomes
-      outcomes = extractOutcomes(row);
-      experiences = extractExperiences(row);
-      questions = extractQuestions(row);
-      resources = extractResources(row);
-      assessmentMethods = extractAssessmentMethods(row);
-    }
-
-    if (week === 0 || !strand) {continue;}
-
-    if (currentWeek !== week) {
-      currentWeek = week;
-      if (lesson === 0) {lesson = 1;}
-    }
-
-    if (strand) {uniqueStrands.add(strand);}
-    if (subStrand) {uniqueSubStrands.add(subStrand);}
-    totalOutcomes += outcomes.length;
-
-    lessons.push({
-      week,
-      lesson,
-      strand: strand.trim(),
-      subStrand: subStrand.trim(),
-      learningOutcomes: outcomes,
-      learningExperiences: experiences,
-      inquiryQuestions: questions,
-      resources,
-      assessmentMethods,
-    });
+  if (hasTabs && tabLineCount > 3) {
+    // Format A: Tab-delimited
+    const result = parseTabDelimited(lines, warnings);
+    lessons.push(...result.lessons);
+  } else {
+    // Format B: Cell-by-cell (mammoth)
+    const result = parseCellByCell(lines, warnings);
+    lessons.push(...result.lessons);
   }
 
   // ── Detect Missing Elements ──────────────────────────────────
@@ -426,6 +252,331 @@ export function parseSchemeText(rawText: string): ParsedScheme {
     subStrandCount: uniqueSubStrands.size,
     competencyCount: totalOutcomes,
   };
+}
+
+// ─── Format-A: Tab-Delimited Parser ─────────────────────────────
+
+interface ParseResult { lessons: SchemeLesson[]; }
+
+function parseTabDelimited(lines: string[], warnings: string[]): ParseResult {
+  const lessons: SchemeLesson[] = [];
+
+  // Find header row with column names
+  let headerRowIdx = -1;
+  for (let i = 0; i < Math.min(10, lines.length); i++) {
+    const l = lines[i].toUpperCase();
+    if (l.includes('WEEK') && l.includes('LESSON') && l.includes('STRAND')) {
+      headerRowIdx = i;
+      break;
+    }
+  }
+  if (headerRowIdx === -1) {
+    for (let i = 0; i < Math.min(15, lines.length); i++) {
+      if (/^\d+\s+\d+/.test(lines[i])) {
+        headerRowIdx = i;
+        break;
+      }
+    }
+  }
+  if (headerRowIdx === -1) {
+    warnings.push('Could not identify the scheme table structure.');
+    return { lessons: [] };
+  }
+
+  const dataLines = lines.slice(headerRowIdx + 1);
+  let buffer = '';
+  const allDataLines: string[] = [];
+
+  for (const line of dataLines) {
+    if (/^\d{1,2}\s*$/.test(line.trim()) || /^\d{1,2}\s+\d{1,2}/.test(line.trim())) {
+      if (buffer.trim()) allDataLines.push(buffer.trim());
+      buffer = line;
+    } else {
+      buffer += ` ${line}`;
+    }
+  }
+  if (buffer.trim()) allDataLines.push(buffer.trim());
+
+  for (const row of allDataLines) {
+    const parts = row.split(/\t|\|/).map((p) => p.trim()).filter((p) => p.length > 0);
+    if (parts.length < 4) continue;
+
+    const weekMatch = parts[0].match(/^(\d+)/);
+    if (!weekMatch) continue;
+    const week = parseInt(weekMatch[1]);
+
+    let lessonIdx = 1;
+    let lesson = 0;
+    if (parts.length > 1) {
+      const lm = parts[1].match(/^(\d+)/);
+      if (lm) { lesson = parseInt(lm[1]); lessonIdx = 2; }
+    }
+    if (lesson === 0) lesson = 1;
+
+    const strand = parts[lessonIdx] || '';
+    const subStrand = parts[lessonIdx + 1] || '';
+    const outcomes = extractOutcomes(parts.slice(lessonIdx + 2).join(' '));
+    const experiences = extractExperiences(parts.slice(lessonIdx + 2).join(' '));
+    const questions = extractQuestions(parts.slice(lessonIdx + 2).join(' '));
+    const resources = extractResources(parts.slice(lessonIdx + 2).join(' '));
+    const assessmentMethods = extractAssessmentMethods(parts.slice(lessonIdx + 2).join(' '));
+
+    if (!strand) continue;
+
+    lessons.push({
+      week, lesson, strand: strand.trim(), subStrand: subStrand.trim(),
+      learningOutcomes: outcomes, learningExperiences: experiences,
+      inquiryQuestions: questions, resources, assessmentMethods,
+    });
+  }
+
+  return { lessons };
+}
+
+// ─── Format-B: Cell-by-Cell Parser (mammoth output) ─────────────
+// Handles mammoth extraction where each table cell is on its own line(s)
+// with NO tab delimiters between columns.
+
+function parseCellByCell(lines: string[], warnings: string[]): ParseResult {
+  const lessons: SchemeLesson[] = [];
+  const NUM_COLUMNS = 9; // Week, Lesson, Strand, Sub-strand, Outcomes, Experiences, Questions, Resources, Assessment
+
+  // Find the header row (contains "Week", "Lesson", "Strand", "Sub-strand")
+  let headerStart = -1;
+  let headerEnd = -1;
+
+  for (let i = 0; i < Math.min(20, lines.length); i++) {
+    const upper = lines[i].toUpperCase();
+    if (upper === 'WEEK' || upper.includes('WEEK')) {
+      headerStart = i;
+      break;
+    }
+  }
+
+  if (headerStart === -1) {
+    warnings.push('Could not find column headers. Expected headers: Week, Lesson, Strand, Sub-strand');
+    return { lessons: [] };
+  }
+
+  // Read header columns until we hit a standalone number (first data row week number)
+  for (let i = headerStart; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (/^\d{1,2}$/.test(line)) {
+      headerEnd = i;
+      break;
+    }
+  }
+
+  if (headerEnd === -1) {
+    warnings.push('Could not find data rows after headers.');
+    return { lessons: [] };
+  }
+
+  // After headers, each lesson row starts with: week number, lesson number (standalone)
+  // Then remaining cells follow — detected by content patterns:
+  //   Strand: title-case text, 1-3 lines
+  //   Sub-strand: topic name (until "By the end of the lesson")
+  //   Outcomes: starts with "By the end of the lesson"
+  //   Experiences: starts with "Learners are guided"
+  //   Questions: short lines with "?"
+  //   Resources: book names, "Pictures", "Charts", etc.
+  //   Assessment: "Oral questions", "Written questions", etc.
+
+  const dataLines = lines.slice(headerEnd);
+  const rows: { week: number; lesson: number; cells: string[] }[] = [];
+  let currentCells: string[] = [];
+  let currentCellLines: string[] = [];
+  let weekNum = 0;
+  let lessonNum = 0;
+
+  function pushCell() {
+    if (currentCellLines.length > 0) {
+      currentCells.push(currentCellLines.join('\n').trim());
+      currentCellLines = [];
+    }
+  }
+
+  function startNewRow(week: number, lesson: number) {
+    pushCell();
+    if (currentCells.length > 0) {
+      rows.push({ week: weekNum, lesson: lessonNum, cells: [...currentCells] });
+    }
+    currentCells = [];
+    currentCellLines = [];
+    weekNum = week;
+    lessonNum = lesson;
+  }
+
+  // State: 0=week, 1=lesson, 2=strand+sub-strand (combined), 3=outcomes,
+  //        4=experiences, 5=questions, 6=resources, 7=assessment, 8=reflection
+  let state = 0;
+
+  for (const line of dataLines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Detect standalone numbers (week or lesson)
+    if (/^\d{1,2}$/.test(trimmed)) {
+      const num = parseInt(trimmed);
+
+      if (state === 0) {
+        weekNum = num;
+        state = 1;
+      } else if (state === 1) {
+        lessonNum = num;
+        state = 2;
+      } else {
+        startNewRow(num, 0);
+        state = 1;
+      }
+      continue;
+    }
+
+    // Accumulate content and detect column transitions
+    switch (state) {
+      case 1: // Waiting for lesson number (shouldn't happen, but handle)
+        if (/^\d{1,2}$/.test(trimmed)) {
+          lessonNum = num;
+          state = 2;
+        }
+        break;
+
+      case 2: // Strand + sub-strand (combined until outcomes)
+        currentCellLines.push(trimmed);
+        break;
+
+      case 3: // Outcomes → experiences
+        currentCellLines.push(trimmed);
+        if (/learners are guided/i.test(trimmed)) {
+          pushCell();
+          state = 4;
+        }
+        break;
+
+      case 4: // Experiences → questions
+        currentCellLines.push(trimmed);
+        if (trimmed.endsWith('?') || /^(what|why|how|which|when|where|who)\b/i.test(trimmed)) {
+          pushCell();
+          state = 5;
+        }
+        break;
+
+      case 5: // Questions → resources
+        currentCellLines.push(trimmed);
+        if (/^(pictures|charts|realia|dictionaries|journals|internet|computing|digital|newspapers|magazines|curriculum|moran|spotlight|JKF)/i.test(trimmed)) {
+          pushCell();
+          state = 6;
+        }
+        break;
+
+      case 6: // Resources → assessment
+        currentCellLines.push(trimmed);
+        if (/^(oral|written|portfolio|observation|self and peer)/i.test(trimmed)) {
+          pushCell();
+          state = 7;
+        }
+        break;
+
+      case 7: // Assessment → reflection
+        currentCellLines.push(trimmed);
+        if (trimmed.length < 20 && !/^(oral|written|portfolio|observation)/i.test(trimmed)) {
+          pushCell();
+          state = 8;
+        }
+        break;
+
+      case 8: // Reflection (usually empty)
+        currentCellLines.push(trimmed);
+        break;
+
+      default:
+        currentCellLines.push(trimmed);
+    }
+
+    // Detect transition from strand+sub-strand to outcomes
+    if (state === 2 && /by the end of the lesson/i.test(trimmed)) {
+      pushCell();
+      state = 3;
+    }
+  }
+
+  // Flush last row
+  pushCell();
+  if (currentCells.length > 0) {
+    rows.push({ week: weekNum, lesson: lessonNum, cells: [...currentCells] });
+  }
+
+  // Build lessons from parsed rows
+  // Cell 0 = strand + sub-strand combined, need to split
+  for (const row of rows) {
+    if (row.week === 0) continue;
+
+    // Split strand + sub-strand from combined cell
+    const combinedCell = row.cells[0] || '';
+    const { strand, subStrand } = splitStrandSubStrand(combinedCell);
+
+    // Skip break/revision/assessment rows
+    const strandUpper = strand.toUpperCase();
+    if (strandUpper.includes('BREAK') || strandUpper.includes('REVISION') ||
+        strandUpper.includes('ASSESSMENT') || strandUpper.includes('HALF TERM')) {
+      continue;
+    }
+
+    if (!strand) continue;
+
+    lessons.push({
+      week: row.week,
+      lesson: row.lesson || 1,
+      strand,
+      subStrand,
+      learningOutcomes: extractOutcomes(row.cells[1] || ''),
+      learningExperiences: extractExperiences(row.cells[2] || ''),
+      inquiryQuestions: extractQuestions(row.cells[3] || ''),
+      resources: extractResources(row.cells[4] || ''),
+      assessmentMethods: extractAssessmentMethods(row.cells[5] || ''),
+    });
+  }
+
+  return { lessons };
+}
+
+// ─── Helper: Split strand + sub-strand from combined cell ────────
+
+function splitStrandSubStrand(combined: string): { strand: string; subStrand: string } {
+  const lines = combined.split('\n').filter((l) => l.trim().length > 0);
+
+  if (lines.length === 0) {
+    return { strand: '', subStrand: '' };
+  }
+
+  if (lines.length === 1) {
+    return { strand: lines[0].trim(), subStrand: '' };
+  }
+
+  // Strategy: strand is usually 1-2 lines of title-case text
+  // sub-strand is the rest (often a topic name)
+  // Look for a line that looks like a topic (contains semicolons, colons, or specific keywords)
+
+  let strandEndIdx = 0;
+  for (let i = 0; i < Math.min(3, lines.length); i++) {
+    const line = lines[i].trim();
+    // If line contains semicolon or colon, it's likely a sub-strand marker
+    if (line.includes(';') || line.includes(':')) {
+      strandEndIdx = i;
+      break;
+    }
+    // If line starts with lowercase, previous line was end of strand
+    if (i > 0 && /^[a-z]/.test(line)) {
+      strandEndIdx = i - 1;
+      break;
+    }
+    strandEndIdx = i;
+  }
+
+  const strand = lines.slice(0, strandEndIdx + 1).join(' ').trim();
+  const subStrand = lines.slice(strandEndIdx + 1).join(' ').trim();
+
+  return { strand, subStrand };
 }
 
 // ─── Helper Extraction Functions ────────────────────────────────
