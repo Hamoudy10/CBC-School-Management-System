@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest } from "next/server";
 import { withPermission } from "@/lib/api/withAuth";
 import { validateBody } from "@/lib/api/validation";
+import { importSchemeToDatabase } from "@/features/academics/services/schemeParser.service";
 import {
   successResponse,
   errorResponse,
