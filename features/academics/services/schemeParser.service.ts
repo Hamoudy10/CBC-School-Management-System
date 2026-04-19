@@ -915,7 +915,7 @@ export async function importSchemeToDatabase(
           name: parsed.header.learningArea,
           description: `${parsed.header.grade} - ${parsed.header.learningArea} - ${parsed.header.term} ${parsed.header.year}`,
           school_id: schoolId,
-          grade_level: parsed.header.grade.replace(/Grade\s*/i, "") || null,
+          applicable_grades: [parsed.header.grade],
         })
         .select("id")
         .single();
