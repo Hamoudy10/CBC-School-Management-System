@@ -899,45 +899,51 @@ export async function importSchemeToDatabase(
     let learningAreaId: string | null = null;
 
     try {
-      // Use a stored procedure to bypass PostgREST schema cache issues
-      // First, let's try inserting and let it fail if it exists (Postgres will handle the duplicate)
-      const { data: newArea, error: insertError } = await supabase
+      // Try to create or get the learning area
+      // First do an insert with ON CONFLICT DO NOTHING for the id
+      const { error: insertError } = await supabase
         .from("learning_areas")
-        .upsert(
-          {
-            name: parsed.header.learningArea,
-            description: `${parsed.header.grade} - ${parsed.header.learningArea} - ${parsed.header.term} ${parsed.header.year}`,
-            school_id: schoolId,
-            applicable_grades: [parsed.header.grade],
-          },
-          { onConflict: 'school_id,name', ignoreDuplicates: false }
-        )
-        .select("id")
-        .single();
+        .insert({
+          name: parsed.header.learningArea,
+          description: `${parsed.header.grade} - ${parsed.header.learningArea} - ${parsed.header.term} ${parsed.header.year}`,
+          school_id: schoolId,
+          applicable_grades: [parsed.header.grade],
+        })
+        .onConflict('school_id,name')
+        .ignore();
 
-      if (insertError) {
-        console.error("Insert/Upsert error:", insertError);
-        // Try select * instead of select id
-        const { data: existing, error: selectError } = await supabase
-          .from("learning_areas")
-          .select("*")
-          .eq("name", parsed.header.learningArea)
-          .eq("school_id", schoolId)
-          .maybeSingle();
-          
-        if (selectError) {
-          return {
-            success: false,
-            message: `Error accessing learning_areas: ${selectError.message}`,
-            createdStrands: [],
-            createdSubStrands: [],
-            createdCompetencies: []
-          };
-        }
-        learningAreaId = existing?.id;
-      } else {
-        learningAreaId = newArea?.id;
+      // Now fetch the learning area ID regardless of insert outcome
+      const { data: areaData, error: selectError } = await supabase
+        .from("learning_areas")
+        .select("id")
+        .eq("name", parsed.header.learningArea)
+        .eq("school_id", schoolId)
+        .maybeSingle();
+
+      if (selectError) {
+        console.error("Select error:", selectError);
+        return {
+          success: false,
+          message: `Error fetching learning area: ${selectError.message}`,
+          createdStrands: [],
+          createdSubStrands: [],
+          createdCompetencies: []
+        };
       }
+
+      if (!areaData) {
+        return {
+          success: false,
+          message: "Could not find learning area after creation",
+          createdStrands: [],
+          createdSubStrands: [],
+          createdCompetencies: []
+        };
+      }
+
+      learningAreaId = areaData.id;
+      console.log("Learning area ID obtained:", learningAreaId);
+
     } catch (err) {
       console.error("Outer error in learning area step:", err);
       return {
@@ -948,6 +954,8 @@ export async function importSchemeToDatabase(
         createdCompetencies: []
       };
     }
+
+    console.log("Final learning area ID:", learningAreaId);
 
     if (!learningAreaId) {
       return {
