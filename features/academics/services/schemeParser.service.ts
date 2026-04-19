@@ -899,54 +899,44 @@ export async function importSchemeToDatabase(
     let learningAreaId: string | null = null;
 
     try {
-      // First, try to find existing learning area
-      const { data: existingArea, error: checkError } = await supabase
+      // Use a stored procedure to bypass PostgREST schema cache issues
+      // First, let's try inserting and let it fail if it exists (Postgres will handle the duplicate)
+      const { data: newArea, error: insertError } = await supabase
         .from("learning_areas")
-        .select("id, name")
-        .eq("name", parsed.header.learningArea)
-        .eq("school_id", schoolId)
-        .limit(1);
-
-      if (checkError) {
-        console.error("Error checking learning area:", checkError);
-        return {
-          success: false,
-          message: `Database error checking learning area: ${checkError.message}`,
-          createdStrands: [],
-          createdSubStrands: [],
-          createdCompetencies: []
-        };
-      }
-
-      if (existingArea && existingArea.length > 0) {
-        learningAreaId = existingArea[0].id;
-        console.log("Found existing learning area:", learningAreaId);
-      } else {
-        // Create learning area - try inserting directly
-        const { data: newArea, error: insertError } = await supabase
-          .from("learning_areas")
-          .insert({
+        .upsert(
+          {
             name: parsed.header.learningArea,
             description: `${parsed.header.grade} - ${parsed.header.learningArea} - ${parsed.header.term} ${parsed.header.year}`,
             school_id: schoolId,
             applicable_grades: [parsed.header.grade],
-          })
-          .select("id")
-          .single();
+          },
+          { onConflict: 'school_id,name', ignoreDuplicates: false }
+        )
+        .select("id")
+        .single();
 
-        if (insertError) {
-          console.error("Error creating learning area:", insertError);
+      if (insertError) {
+        console.error("Insert/Upsert error:", insertError);
+        // Try select * instead of select id
+        const { data: existing, error: selectError } = await supabase
+          .from("learning_areas")
+          .select("*")
+          .eq("name", parsed.header.learningArea)
+          .eq("school_id", schoolId)
+          .maybeSingle();
+          
+        if (selectError) {
           return {
             success: false,
-            message: `Failed to create learning area: ${insertError.message}`,
+            message: `Error accessing learning_areas: ${selectError.message}`,
             createdStrands: [],
             createdSubStrands: [],
             createdCompetencies: []
           };
         }
-
+        learningAreaId = existing?.id;
+      } else {
         learningAreaId = newArea?.id;
-        console.log("Created new learning area:", learningAreaId);
       }
     } catch (err) {
       console.error("Outer error in learning area step:", err);
