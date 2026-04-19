@@ -898,38 +898,65 @@ export async function importSchemeToDatabase(
     // ── Step 1: Find or create learning area ────────────────────
     let learningAreaId: string | null = null;
 
-    const { data: existingArea } = await supabase
-      .from("learning_areas")
-      .select("id")
-      .eq("name", parsed.header.learningArea)
-      .eq("school_id", schoolId)
-      .maybeSingle();
-
-    if (existingArea) {
-      learningAreaId = existingArea.id;
-    } else {
-      // Create learning area
-      const { data: newArea, error } = await supabase
+    try {
+      // First, try to find existing learning area
+      const { data: existingArea, error: checkError } = await supabase
         .from("learning_areas")
-        .insert({
-          name: parsed.header.learningArea,
-          description: `${parsed.header.grade} - ${parsed.header.learningArea} - ${parsed.header.term} ${parsed.header.year}`,
-          school_id: schoolId,
-          applicable_grades: [parsed.header.grade],
-        })
-        .select("id")
-        .single();
+        .select("id, name")
+        .eq("name", parsed.header.learningArea)
+        .eq("school_id", schoolId)
+        .limit(1);
 
-      if (error) {
+      if (checkError) {
+        console.error("Error checking learning area:", checkError);
         return {
           success: false,
-          message: `Failed to create learning area: ${error.message}`,
+          message: `Database error checking learning area: ${checkError.message}`,
           createdStrands: [],
           createdSubStrands: [],
           createdCompetencies: []
         };
       }
-      learningAreaId = newArea.id;
+
+      if (existingArea && existingArea.length > 0) {
+        learningAreaId = existingArea[0].id;
+        console.log("Found existing learning area:", learningAreaId);
+      } else {
+        // Create learning area - try inserting directly
+        const { data: newArea, error: insertError } = await supabase
+          .from("learning_areas")
+          .insert({
+            name: parsed.header.learningArea,
+            description: `${parsed.header.grade} - ${parsed.header.learningArea} - ${parsed.header.term} ${parsed.header.year}`,
+            school_id: schoolId,
+            applicable_grades: [parsed.header.grade],
+          })
+          .select("id")
+          .single();
+
+        if (insertError) {
+          console.error("Error creating learning area:", insertError);
+          return {
+            success: false,
+            message: `Failed to create learning area: ${insertError.message}`,
+            createdStrands: [],
+            createdSubStrands: [],
+            createdCompetencies: []
+          };
+        }
+
+        learningAreaId = newArea?.id;
+        console.log("Created new learning area:", learningAreaId);
+      }
+    } catch (err) {
+      console.error("Outer error in learning area step:", err);
+      return {
+        success: false,
+        message: `Error in learning area step: ${err instanceof Error ? err.message : "Unknown error"}`,
+        createdStrands: [],
+        createdSubStrands: [],
+        createdCompetencies: []
+      };
     }
 
     if (!learningAreaId) {
