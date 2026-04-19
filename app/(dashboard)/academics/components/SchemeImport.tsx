@@ -216,14 +216,16 @@ Self and peer assessment\t`);
       setResult(data);
       setShowModal(true);
 
-      if (data.missingElements.length > 0) {
+      if (data.missingElements?.length > 0) {
         warning("Missing Elements", `${data.missingElements.length} required element(s) not found.`);
       }
-      if (data.warnings.length > 0) {
+      if (data.warnings?.length > 0) {
         warning("Warnings", `${data.warnings.length} warning(s) about the scheme.`);
       }
       if (data.databaseImport?.success) {
         success("Import Successful", data.databaseImport.message);
+      } else if (data.databaseImport && !data.databaseImport.success) {
+        warning("Import Issue", data.databaseImport.message);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to import scheme";

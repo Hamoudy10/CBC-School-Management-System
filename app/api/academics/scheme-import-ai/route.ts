@@ -161,17 +161,19 @@ Output format:
       let databaseImport = null;
       if (importToDatabase) {
         try {
+          console.log("Starting database import for scheme...");
           const importResult = await importSchemeToDatabase(parsedScheme, user);
+          console.log("Database import completed:", importResult.success);
           databaseImport = importResult;
 
           // Add warnings and missing elements from import result
-          if (importResult.warnings) {
+          if (importResult.warnings && Array.isArray(importResult.warnings)) {
             parsedScheme.warnings = [
               ...parsedScheme.warnings,
               ...importResult.warnings,
             ];
           }
-          if (importResult.missingElements) {
+          if (importResult.missingElements && Array.isArray(importResult.missingElements)) {
             parsedScheme.missingElements = [
               ...parsedScheme.missingElements,
               ...importResult.missingElements,
@@ -179,6 +181,10 @@ Output format:
           }
         } catch (importError) {
           console.error("Database import error:", importError);
+          databaseImport = {
+            success: false,
+            message: importError instanceof Error ? importError.message : "Unknown error during import"
+          };
           parsedScheme.warnings.push(
             `Database import failed: ${importError instanceof Error ? importError.message : "Unknown error"}`,
           );
