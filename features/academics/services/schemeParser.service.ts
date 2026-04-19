@@ -879,7 +879,13 @@ export async function importSchemeToDatabase(
   currentUser: AuthUser,
 ): Promise<SchemeImportResult> {
   if (!currentUser.schoolId) {
-    return { success: false, message: "No school context available" };
+    return { 
+      success: false, 
+      message: "No school context available",
+      createdStrands: [],
+      createdSubStrands: [],
+      createdCompetencies: []
+    };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -918,6 +924,9 @@ export async function importSchemeToDatabase(
         return {
           success: false,
           message: `Failed to create learning area: ${error.message}`,
+          createdStrands: [],
+          createdSubStrands: [],
+          createdCompetencies: []
         };
       }
       learningAreaId = newArea.id;
@@ -927,6 +936,9 @@ export async function importSchemeToDatabase(
       return {
         success: false,
         message: "Could not determine learning area ID",
+        createdStrands: [],
+        createdSubStrands: [],
+        createdCompetencies: []
       };
     }
 
@@ -1094,6 +1106,9 @@ export async function importSchemeToDatabase(
       success: false,
       message:
         error instanceof Error ? error.message : "Unknown error during import",
+      createdStrands: [],
+      createdSubStrands: [],
+      createdCompetencies: []
     };
   }
 }
