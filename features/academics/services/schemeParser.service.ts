@@ -8,8 +8,8 @@
 // - Detects missing elements and alerts the user
 // ============================================================
 
-import { createSupabaseServerClient } from '@/lib/supabase/server';
-import type { AuthUser } from '@/types/auth';
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { AuthUser } from "@/types/auth";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -50,6 +50,8 @@ export interface SchemeImportResult {
   createdStrands?: string[];
   createdSubStrands?: string[];
   createdCompetencies?: string[];
+  warnings?: string[];
+  missingElements?: string[];
 }
 
 // ─── Parser Core ────────────────────────────────────────────────
@@ -61,17 +63,17 @@ export function parseSchemeText(rawText: string): ParsedScheme {
   const warnings: string[] = [];
   const missingElements: string[] = [];
   const lines = rawText
-    .split('\n')
-    .map((l) => l.replace(/\r/g, '').replace(/\t/g, ' ').trim())
+    .split("\n")
+    .map((l) => l.replace(/\r/g, "").replace(/\t/g, " ").trim())
     .filter((l) => l.length > 0);
 
   // ── Extract Header ────────────────────────────────────────────
   const header: SchemeHeader = {
-    school: '',
-    grade: '',
-    learningArea: '',
-    term: '',
-    year: '',
+    school: "",
+    grade: "",
+    learningArea: "",
+    term: "",
+    year: "",
   };
 
   // Look for header info in first ~20 lines
@@ -79,43 +81,62 @@ export function parseSchemeText(rawText: string): ParsedScheme {
     const line = lines[i].toUpperCase();
 
     // Grade
-    if (line.includes('GRADE') && !header.grade) {
+    if (line.includes("GRADE") && !header.grade) {
       const match = lines[i].match(/(?:GRADE|Grade)\s*[:\s]*([^\s,;|]+)/i);
-      if (match) {header.grade = match[1].trim();}
+      if (match) {
+        header.grade = match[1].trim();
+      }
       // Also check for "GRADE 6" patterns
       if (!header.grade) {
         const gradeMatch = lines[i].match(/GRADE\s*(\d+)/i);
-        if (gradeMatch) {header.grade = `Grade ${gradeMatch[1]}`;}
+        if (gradeMatch) {
+          header.grade = `Grade ${gradeMatch[1]}`;
+        }
       }
     }
 
     // Learning Area / Subject
-    if ((line.includes('LEARNING AREA') || line.includes('SUBJECT')) && !header.learningArea) {
-      const match = lines[i].match(/(?:Learning Area|Subject)\s*[:\s]*([^\s,;|]{2,})/i);
-      if (match) {header.learningArea = match[1].trim();}
+    if (
+      (line.includes("LEARNING AREA") || line.includes("SUBJECT")) &&
+      !header.learningArea
+    ) {
+      const match = lines[i].match(
+        /(?:Learning Area|Subject)\s*[:\s]*([^\s,;|]{2,})/i,
+      );
+      if (match) {
+        header.learningArea = match[1].trim();
+      }
     }
 
     // Term
-    if (line.includes('TERM') && !header.term) {
+    if (line.includes("TERM") && !header.term) {
       const match = lines[i].match(/(?:Term|TERM)\s*[:\s]*(\d+)/i);
-      if (match) {header.term = `Term ${match[1]}`;}
+      if (match) {
+        header.term = `Term ${match[1]}`;
+      }
       // Check for "TERM 2" in title line
       if (!header.term) {
         const titleMatch = lines[i].match(/TERM\s*(\d+)/i);
-        if (titleMatch) {header.term = `Term ${titleMatch[1]}`;}
+        if (titleMatch) {
+          header.term = `Term ${titleMatch[1]}`;
+        }
       }
     }
 
     // Year
     if (line.match(/\b20\d{2}\b/) && !header.year) {
       const match = lines[i].match(/\b(20\d{2})\b/);
-      if (match) {header.year = match[1];}
+      if (match) {
+        header.year = match[1];
+      }
     }
 
     // School name
-    if (line.includes('SCHOOL') && !header.school) {
+    if (line.includes("SCHOOL") && !header.school) {
       const match = lines[i].match(/(?:School|SCHOOL)\s*[:\s]*([^\s,;|]{3,})/i);
-      if (match) {header.school = match[1].trim();}
+      if (match) {
+        header.school = match[1].trim();
+      }
     }
   }
 
@@ -125,28 +146,36 @@ export function parseSchemeText(rawText: string): ParsedScheme {
     const titleLine = lines[0];
     if (!header.grade) {
       const g = titleLine.match(/GRADE\s*(\d+)/i);
-      if (g) {header.grade = `Grade ${g[1]}`;}
+      if (g) {
+        header.grade = `Grade ${g[1]}`;
+      }
     }
     if (!header.term) {
       const t = titleLine.match(/TERM\s*(\d+)/i);
-      if (t) {header.term = `Term ${t[1]}`;}
+      if (t) {
+        header.term = `Term ${t[1]}`;
+      }
     }
     if (!header.year) {
       const y = titleLine.match(/\b(20\d{2})\b/);
-      if (y) {header.year = y[1];}
+      if (y) {
+        header.year = y[1];
+      }
     }
     if (!header.learningArea) {
       // Try to extract subject from title
       const la = titleLine.match(/(?:PRIMARY\s+)?(\w+(?:\s+\w+)?)\s+SCHEMES/i);
-      if (la) {header.learningArea = la[1].trim();}
+      if (la) {
+        header.learningArea = la[1].trim();
+      }
     }
   }
 
   // ── Detect Format ─────────────────────────────────────────────
   // Format A: Tab-delimited (copy-paste from browser/Word with table structure)
   // Format B: Cell-by-cell (mammoth extraction — each cell on separate lines)
-  const hasTabs = lines.some((l) => l.includes('\t'));
-  const tabLineCount = lines.filter((l) => l.includes('\t')).length;
+  const hasTabs = lines.some((l) => l.includes("\t"));
+  const tabLineCount = lines.filter((l) => l.includes("\t")).length;
 
   const lessons: SchemeLesson[] = [];
 
@@ -163,7 +192,10 @@ export function parseSchemeText(rawText: string): ParsedScheme {
   // Compute unique counts for return
   const uniqueStrands = new Set(lessons.map((l) => l.strand));
   const uniqueSubStrands = new Set(lessons.map((l) => l.subStrand));
-  const totalOutcomes = lessons.reduce((sum, l) => sum + l.learningOutcomes.length, 0);
+  const totalOutcomes = lessons.reduce(
+    (sum, l) => sum + l.learningOutcomes.length,
+    0,
+  );
 
   // ── Detect Missing Elements ──────────────────────────────────
   const allOutcomes = lessons.flatMap((l) => l.learningOutcomes);
@@ -172,71 +204,115 @@ export function parseSchemeText(rawText: string): ParsedScheme {
   const allResources = lessons.flatMap((l) => l.resources);
   const allAssessments = lessons.flatMap((l) => l.assessmentMethods);
 
-  if (!header.grade) {missingElements.push('Grade level not detected');}
-  if (!header.learningArea) {missingElements.push('Learning area / subject not detected');}
-  if (!header.term) {missingElements.push('Term not detected');}
-  if (!header.year) {missingElements.push('Year not detected');}
-  if (lessons.length === 0) {missingElements.push('No lessons found — scheme table may not be parseable');}
+  if (!header.grade) {
+    missingElements.push("Grade level not detected");
+  }
+  if (!header.learningArea) {
+    missingElements.push("Learning area / subject not detected");
+  }
+  if (!header.term) {
+    missingElements.push("Term not detected");
+  }
+  if (!header.year) {
+    missingElements.push("Year not detected");
+  }
+  if (lessons.length === 0) {
+    missingElements.push(
+      "No lessons found — scheme table may not be parseable",
+    );
+  }
 
   // Check for CBC-required elements
   const hasAffectiveOutcomes = allOutcomes.some((o) =>
     /appreciate|enjoy|display|advocate|have fun/i.test(o),
   );
   if (!hasAffectiveOutcomes && lessons.length > 0) {
-    warnings.push('No affective learning outcomes detected (appreciate, enjoy, display, advocate). CBC requires cognitive, psychomotor, AND affective domains.');
+    warnings.push(
+      "No affective learning outcomes detected (appreciate, enjoy, display, advocate). CBC requires cognitive, psychomotor, AND affective domains.",
+    );
   }
 
   const hasPsychomotorOutcomes = allOutcomes.some((o) =>
-    /construct|write|draw|identify|pick|make|role.play|create|use|pronounce|recite/i.test(o),
+    /construct|write|draw|identify|pick|make|role.play|create|use|pronounce|recite/i.test(
+      o,
+    ),
   );
   if (!hasPsychomotorOutcomes && lessons.length > 0) {
-    warnings.push('No psychomotor learning outcomes detected (construct, write, draw, identify, pronounce). CBC requires all three domains.');
+    warnings.push(
+      "No psychomotor learning outcomes detected (construct, write, draw, identify, pronounce). CBC requires all three domains.",
+    );
   }
 
   // Check for assessment variety
-  const assessmentVariety = new Set(allAssessments.map((a) => a.toLowerCase().trim()));
+  const assessmentVariety = new Set(
+    allAssessments.map((a) => a.toLowerCase().trim()),
+  );
   if (assessmentVariety.size < 2 && lessons.length > 0) {
-    warnings.push('Limited assessment methods detected. CBC requires diverse assessment types (observation, oral, written, portfolio, peer/self-assessment).');
+    warnings.push(
+      "Limited assessment methods detected. CBC requires diverse assessment types (observation, oral, written, portfolio, peer/self-assessment).",
+    );
   }
 
   // Check for inquiry questions coverage
-  const lessonsWithoutQuestions = lessons.filter((l) => l.inquiryQuestions.length === 0).length;
+  const lessonsWithoutQuestions = lessons.filter(
+    (l) => l.inquiryQuestions.length === 0,
+  ).length;
   if (lessonsWithoutQuestions > 0 && lessons.length > 0) {
-    warnings.push(`${lessonsWithoutQuestions} lesson(s) have no key inquiry questions. CBC requires inquiry-based learning.`);
+    warnings.push(
+      `${lessonsWithoutQuestions} lesson(s) have no key inquiry questions. CBC requires inquiry-based learning.`,
+    );
   }
 
   // Check for resource variety
   if (allResources.length === 0 && lessons.length > 0) {
-    warnings.push('No learning resources detected. Please ensure resources are specified for each lesson.');
+    warnings.push(
+      "No learning resources detected. Please ensure resources are specified for each lesson.",
+    );
   }
 
   // Check strand coverage
   if (uniqueStrands.size < 2 && lessons.length > 3) {
-    warnings.push(`Only ${uniqueStrands.size} strand(s) detected across ${lessons.length} lessons. Verify the scheme covers multiple strands.`);
+    warnings.push(
+      `Only ${uniqueStrands.size} strand(s) detected across ${lessons.length} lessons. Verify the scheme covers multiple strands.`,
+    );
   }
 
   // Check if reflection column has content
   const hasAnyReflection = false; // Can't easily detect from text extraction
   if (!hasAnyReflection && lessons.length > 0) {
-    warnings.push('Teacher reflection column appears empty. Teachers should fill this after each lesson.');
+    warnings.push(
+      "Teacher reflection column appears empty. Teachers should fill this after each lesson.",
+    );
   }
 
   // Validate learning outcomes follow CBC pattern
-  const hasProperOutcomes = allOutcomes.some((o) =>
-    /By the end of the lesson|By the end of this/i.test(o) ||
-    /(should be able to|identify|construct|read|write|listen|speak|discuss)/i.test(o),
+  const hasProperOutcomes = allOutcomes.some(
+    (o) =>
+      /By the end of the lesson|By the end of this/i.test(o) ||
+      /(should be able to|identify|construct|read|write|listen|speak|discuss)/i.test(
+        o,
+      ),
   );
   if (!hasProperOutcomes && lessons.length > 0) {
-    missingElements.push('Specific learning outcomes not in CBC format (should start with "By the end of the lesson, the learner should be able to...")');
+    missingElements.push(
+      'Specific learning outcomes not in CBC format (should start with "By the end of the lesson, the learner should be able to...")',
+    );
   }
 
   // Check weeks continuity
-  const weekNumbers = [...new Set(lessons.map((l) => l.week))].sort((a, b) => a - b);
+  const weekNumbers = Array.from(new Set(lessons.map((l) => l.week))).sort(
+    (a, b) => a - b,
+  );
   if (weekNumbers.length > 0) {
-    const expectedWeeks = Array.from({ length: weekNumbers[weekNumbers.length - 1] }, (_, i) => i + 1);
+    const expectedWeeks = Array.from(
+      { length: weekNumbers[weekNumbers.length - 1] },
+      (_, i) => i + 1,
+    );
     const missingWeeks = expectedWeeks.filter((w) => !weekNumbers.includes(w));
     if (missingWeeks.length > 0) {
-      warnings.push(`Weeks ${missingWeeks.join(', ')} are missing from the scheme. Ensure all weeks are covered.`);
+      warnings.push(
+        `Weeks ${missingWeeks.join(", ")} are missing from the scheme. Ensure all weeks are covered.`,
+      );
     }
   }
 
@@ -244,7 +320,9 @@ export function parseSchemeText(rawText: string): ParsedScheme {
   for (const week of weekNumbers) {
     const weekLessons = lessons.filter((l) => l.week === week);
     if (weekLessons.length < 3) {
-      warnings.push(`Week ${week} has only ${weekLessons.length} lesson(s). A typical week should have 4-5 lessons.`);
+      warnings.push(
+        `Week ${week} has only ${weekLessons.length} lesson(s). A typical week should have 4-5 lessons.`,
+      );
     }
   }
 
@@ -261,7 +339,9 @@ export function parseSchemeText(rawText: string): ParsedScheme {
 
 // ─── Format-A: Tab-Delimited Parser ─────────────────────────────
 
-interface ParseResult { lessons: SchemeLesson[]; }
+interface ParseResult {
+  lessons: SchemeLesson[];
+}
 
 function parseTabDelimited(lines: string[], warnings: string[]): ParseResult {
   const lessons: SchemeLesson[] = [];
@@ -270,7 +350,7 @@ function parseTabDelimited(lines: string[], warnings: string[]): ParseResult {
   let headerRowIdx = -1;
   for (let i = 0; i < Math.min(10, lines.length); i++) {
     const l = lines[i].toUpperCase();
-    if (l.includes('WEEK') && l.includes('LESSON') && l.includes('STRAND')) {
+    if (l.includes("WEEK") && l.includes("LESSON") && l.includes("STRAND")) {
       headerRowIdx = i;
       break;
     }
@@ -284,16 +364,19 @@ function parseTabDelimited(lines: string[], warnings: string[]): ParseResult {
     }
   }
   if (headerRowIdx === -1) {
-    warnings.push('Could not identify the scheme table structure.');
+    warnings.push("Could not identify the scheme table structure.");
     return { lessons: [] };
   }
 
   const dataLines = lines.slice(headerRowIdx + 1);
-  let buffer = '';
+  let buffer = "";
   const allDataLines: string[] = [];
 
   for (const line of dataLines) {
-    if (/^\d{1,2}\s*$/.test(line.trim()) || /^\d{1,2}\s+\d{1,2}/.test(line.trim())) {
+    if (
+      /^\d{1,2}\s*$/.test(line.trim()) ||
+      /^\d{1,2}\s+\d{1,2}/.test(line.trim())
+    ) {
       if (buffer.trim()) allDataLines.push(buffer.trim());
       buffer = line;
     } else {
@@ -303,7 +386,10 @@ function parseTabDelimited(lines: string[], warnings: string[]): ParseResult {
   if (buffer.trim()) allDataLines.push(buffer.trim());
 
   for (const row of allDataLines) {
-    const parts = row.split(/\t|\|/).map((p) => p.trim()).filter((p) => p.length > 0);
+    const parts = row
+      .split(/\t|\|/)
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
     if (parts.length < 4) continue;
 
     const weekMatch = parts[0].match(/^(\d+)/);
@@ -314,24 +400,37 @@ function parseTabDelimited(lines: string[], warnings: string[]): ParseResult {
     let lesson = 0;
     if (parts.length > 1) {
       const lm = parts[1].match(/^(\d+)/);
-      if (lm) { lesson = parseInt(lm[1]); lessonIdx = 2; }
+      if (lm) {
+        lesson = parseInt(lm[1]);
+        lessonIdx = 2;
+      }
     }
     if (lesson === 0) lesson = 1;
 
-    const strand = parts[lessonIdx] || '';
-    const subStrand = parts[lessonIdx + 1] || '';
-    const outcomes = extractOutcomes(parts.slice(lessonIdx + 2).join(' '));
-    const experiences = extractExperiences(parts.slice(lessonIdx + 2).join(' '));
-    const questions = extractQuestions(parts.slice(lessonIdx + 2).join(' '));
-    const resources = extractResources(parts.slice(lessonIdx + 2).join(' '));
-    const assessmentMethods = extractAssessmentMethods(parts.slice(lessonIdx + 2).join(' '));
+    const strand = parts[lessonIdx] || "";
+    const subStrand = parts[lessonIdx + 1] || "";
+    const outcomes = extractOutcomes(parts.slice(lessonIdx + 2).join(" "));
+    const experiences = extractExperiences(
+      parts.slice(lessonIdx + 2).join(" "),
+    );
+    const questions = extractQuestions(parts.slice(lessonIdx + 2).join(" "));
+    const resources = extractResources(parts.slice(lessonIdx + 2).join(" "));
+    const assessmentMethods = extractAssessmentMethods(
+      parts.slice(lessonIdx + 2).join(" "),
+    );
 
     if (!strand) continue;
 
     lessons.push({
-      week, lesson, strand: strand.trim(), subStrand: subStrand.trim(),
-      learningOutcomes: outcomes, learningExperiences: experiences,
-      inquiryQuestions: questions, resources, assessmentMethods,
+      week,
+      lesson,
+      strand: strand.trim(),
+      subStrand: subStrand.trim(),
+      learningOutcomes: outcomes,
+      learningExperiences: experiences,
+      inquiryQuestions: questions,
+      resources,
+      assessmentMethods,
     });
   }
 
@@ -352,14 +451,16 @@ function parseCellByCell(lines: string[], warnings: string[]): ParseResult {
 
   for (let i = 0; i < Math.min(20, lines.length); i++) {
     const upper = lines[i].toUpperCase();
-    if (upper === 'WEEK' || upper.includes('WEEK')) {
+    if (upper === "WEEK" || upper.includes("WEEK")) {
       headerStart = i;
       break;
     }
   }
 
   if (headerStart === -1) {
-    warnings.push('Could not find column headers. Expected headers: Week, Lesson, Strand, Sub-strand');
+    warnings.push(
+      "Could not find column headers. Expected headers: Week, Lesson, Strand, Sub-strand",
+    );
     return { lessons: [] };
   }
 
@@ -373,7 +474,7 @@ function parseCellByCell(lines: string[], warnings: string[]): ParseResult {
   }
 
   if (headerEnd === -1) {
-    warnings.push('Could not find data rows after headers.');
+    warnings.push("Could not find data rows after headers.");
     return { lessons: [] };
   }
 
@@ -396,7 +497,7 @@ function parseCellByCell(lines: string[], warnings: string[]): ParseResult {
 
   function pushCell() {
     if (currentCellLines.length > 0) {
-      currentCells.push(currentCellLines.join('\n').trim());
+      currentCells.push(currentCellLines.join("\n").trim());
       currentCellLines = [];
     }
   }
@@ -460,7 +561,10 @@ function parseCellByCell(lines: string[], warnings: string[]): ParseResult {
 
       case 4: // Experiences → questions
         currentCellLines.push(trimmed);
-        if (trimmed.endsWith('?') || /^(what|why|how|which|when|where|who)\b/i.test(trimmed)) {
+        if (
+          trimmed.endsWith("?") ||
+          /^(what|why|how|which|when|where|who)\b/i.test(trimmed)
+        ) {
           pushCell();
           state = 5;
         }
@@ -468,7 +572,11 @@ function parseCellByCell(lines: string[], warnings: string[]): ParseResult {
 
       case 5: // Questions → resources
         currentCellLines.push(trimmed);
-        if (/^(pictures|charts|realia|dictionaries|journals|internet|computing|digital|newspapers|magazines|curriculum|moran|spotlight|JKF)/i.test(trimmed)) {
+        if (
+          /^(pictures|charts|realia|dictionaries|journals|internet|computing|digital|newspapers|magazines|curriculum|moran|spotlight|JKF)/i.test(
+            trimmed,
+          )
+        ) {
           pushCell();
           state = 6;
         }
@@ -476,7 +584,9 @@ function parseCellByCell(lines: string[], warnings: string[]): ParseResult {
 
       case 6: // Resources → assessment
         currentCellLines.push(trimmed);
-        if (/^(oral|written|portfolio|observation|self and peer)/i.test(trimmed)) {
+        if (
+          /^(oral|written|portfolio|observation|self and peer)/i.test(trimmed)
+        ) {
           pushCell();
           state = 7;
         }
@@ -484,7 +594,10 @@ function parseCellByCell(lines: string[], warnings: string[]): ParseResult {
 
       case 7: // Assessment → reflection
         currentCellLines.push(trimmed);
-        if (trimmed.length < 20 && !/^(oral|written|portfolio|observation)/i.test(trimmed)) {
+        if (
+          trimmed.length < 20 &&
+          !/^(oral|written|portfolio|observation)/i.test(trimmed)
+        ) {
           pushCell();
           state = 8;
         }
@@ -517,13 +630,17 @@ function parseCellByCell(lines: string[], warnings: string[]): ParseResult {
     if (row.week === 0) continue;
 
     // Split strand + sub-strand from combined cell
-    const combinedCell = row.cells[0] || '';
+    const combinedCell = row.cells[0] || "";
     const { strand, subStrand } = splitStrandSubStrand(combinedCell);
 
     // Skip break/revision/assessment rows
     const strandUpper = strand.toUpperCase();
-    if (strandUpper.includes('BREAK') || strandUpper.includes('REVISION') ||
-        strandUpper.includes('ASSESSMENT') || strandUpper.includes('HALF TERM')) {
+    if (
+      strandUpper.includes("BREAK") ||
+      strandUpper.includes("REVISION") ||
+      strandUpper.includes("ASSESSMENT") ||
+      strandUpper.includes("HALF TERM")
+    ) {
       continue;
     }
 
@@ -534,11 +651,11 @@ function parseCellByCell(lines: string[], warnings: string[]): ParseResult {
       lesson: row.lesson || 1,
       strand,
       subStrand,
-      learningOutcomes: extractOutcomes(row.cells[1] || ''),
-      learningExperiences: extractExperiences(row.cells[2] || ''),
-      inquiryQuestions: extractQuestions(row.cells[3] || ''),
-      resources: extractResources(row.cells[4] || ''),
-      assessmentMethods: extractAssessmentMethods(row.cells[5] || ''),
+      learningOutcomes: extractOutcomes(row.cells[1] || ""),
+      learningExperiences: extractExperiences(row.cells[2] || ""),
+      inquiryQuestions: extractQuestions(row.cells[3] || ""),
+      resources: extractResources(row.cells[4] || ""),
+      assessmentMethods: extractAssessmentMethods(row.cells[5] || ""),
     });
   }
 
@@ -547,15 +664,18 @@ function parseCellByCell(lines: string[], warnings: string[]): ParseResult {
 
 // ─── Helper: Split strand + sub-strand from combined cell ────────
 
-function splitStrandSubStrand(combined: string): { strand: string; subStrand: string } {
-  const lines = combined.split('\n').filter((l) => l.trim().length > 0);
+function splitStrandSubStrand(combined: string): {
+  strand: string;
+  subStrand: string;
+} {
+  const lines = combined.split("\n").filter((l) => l.trim().length > 0);
 
   if (lines.length === 0) {
-    return { strand: '', subStrand: '' };
+    return { strand: "", subStrand: "" };
   }
 
   if (lines.length === 1) {
-    return { strand: lines[0].trim(), subStrand: '' };
+    return { strand: lines[0].trim(), subStrand: "" };
   }
 
   // Strategy: strand is usually 1-2 lines of title-case text
@@ -566,7 +686,7 @@ function splitStrandSubStrand(combined: string): { strand: string; subStrand: st
   for (let i = 0; i < Math.min(3, lines.length); i++) {
     const line = lines[i].trim();
     // If line contains semicolon or colon, it's likely a sub-strand marker
-    if (line.includes(';') || line.includes(':')) {
+    if (line.includes(";") || line.includes(":")) {
       strandEndIdx = i;
       break;
     }
@@ -578,8 +698,14 @@ function splitStrandSubStrand(combined: string): { strand: string; subStrand: st
     strandEndIdx = i;
   }
 
-  const strand = lines.slice(0, strandEndIdx + 1).join(' ').trim();
-  const subStrand = lines.slice(strandEndIdx + 1).join(' ').trim();
+  const strand = lines
+    .slice(0, strandEndIdx + 1)
+    .join(" ")
+    .trim();
+  const subStrand = lines
+    .slice(strandEndIdx + 1)
+    .join(" ")
+    .trim();
 
   return { strand, subStrand };
 }
@@ -590,7 +716,9 @@ function extractOutcomes(text: string): string[] {
   const outcomes: string[] = [];
 
   // Find "By the end of the lesson, the learner should be able to:" sections
-  const outcomeBlocks = text.split(/By the end of the lesson,? the learner should be able to:/gi);
+  const outcomeBlocks = text.split(
+    /By the end of the lesson,? the learner should be able to:/gi,
+  );
 
   if (outcomeBlocks.length > 1) {
     for (let i = 1; i < outcomeBlocks.length; i++) {
@@ -602,7 +730,7 @@ function extractOutcomes(text: string): string[] {
 
       for (const item of block) {
         // Clean up - remove leading bullets, numbers
-        const cleaned = item.replace(/^[\d.)\-\u2022]+\s*/, '').trim();
+        const cleaned = item.replace(/^[\d.)\-\u2022]+\s*/, "").trim();
         if (cleaned.length > 15 && /[a-z]/i.test(cleaned)) {
           outcomes.push(cleaned);
         }
@@ -612,9 +740,16 @@ function extractOutcomes(text: string): string[] {
 
   // If no structured outcomes found, try to find outcome-like sentences
   if (outcomes.length === 0) {
-    const sentences = text.split(/[.\n]/).map((s) => s.trim()).filter((s) => s.length > 20);
+    const sentences = text
+      .split(/[.\n]/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 20);
     for (const sentence of sentences) {
-      if (/should be able to|identify|construct|read|write|listen|pronounce|recite|discuss|appreciate|enjoy|select|find/i.test(sentence)) {
+      if (
+        /should be able to|identify|construct|read|write|listen|pronounce|recite|discuss|appreciate|enjoy|select|find/i.test(
+          sentence,
+        )
+      ) {
         outcomes.push(sentence.trim());
       }
     }
@@ -637,7 +772,7 @@ function extractExperiences(text: string): string[] {
         .filter((s) => s.length > 10);
 
       for (const item of block) {
-        const cleaned = item.replace(/^[\d.)\-\u2022]+\s*/, '').trim();
+        const cleaned = item.replace(/^[\d.)\-\u2022]+\s*/, "").trim();
         if (cleaned.length > 15 && /[a-z]/i.test(cleaned)) {
           experiences.push(cleaned);
         }
@@ -656,7 +791,7 @@ function extractQuestions(text: string): string[] {
   for (const q of qSentences) {
     const trimmed = q.trim();
     if (trimmed.length > 10 && /[a-z]/i.test(trimmed)) {
-      questions.push(trimmed.endsWith('?') ? trimmed : `${trimmed  }?`);
+      questions.push(trimmed.endsWith("?") ? trimmed : `${trimmed}?`);
     }
   }
 
@@ -744,7 +879,7 @@ export async function importSchemeToDatabase(
   currentUser: AuthUser,
 ): Promise<SchemeImportResult> {
   if (!currentUser.schoolId) {
-    return { success: false, message: 'No school context available' };
+    return { success: false, message: "No school context available" };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -758,10 +893,10 @@ export async function importSchemeToDatabase(
     let learningAreaId: string | null = null;
 
     const { data: existingArea } = await supabase
-      .from('learning_areas')
-      .select('id')
-      .eq('name', parsed.header.learningArea)
-      .eq('school_id', schoolId)
+      .from("learning_areas")
+      .select("id")
+      .eq("name", parsed.header.learningArea)
+      .eq("school_id", schoolId)
       .maybeSingle();
 
     if (existingArea) {
@@ -769,54 +904,64 @@ export async function importSchemeToDatabase(
     } else {
       // Create learning area
       const { data: newArea, error } = await supabase
-        .from('learning_areas')
+        .from("learning_areas")
         .insert({
           name: parsed.header.learningArea,
           description: `${parsed.header.grade} - ${parsed.header.learningArea} - ${parsed.header.term} ${parsed.header.year}`,
           school_id: schoolId,
-          grade_level: parsed.header.grade.replace(/Grade\s*/i, '') || null,
+          grade_level: parsed.header.grade.replace(/Grade\s*/i, "") || null,
         })
-        .select('id')
+        .select("id")
         .single();
 
       if (error) {
-        return { success: false, message: `Failed to create learning area: ${error.message}` };
+        return {
+          success: false,
+          message: `Failed to create learning area: ${error.message}`,
+        };
       }
       learningAreaId = newArea.id;
     }
 
     if (!learningAreaId) {
-      return { success: false, message: 'Could not determine learning area ID' };
+      return {
+        success: false,
+        message: "Could not determine learning area ID",
+      };
     }
 
     // ── Step 2: Extract unique strands and create them ──────────
-    const uniqueStrands = [...new Set(parsed.lessons.map((l) => l.strand.trim()))];
+    const uniqueStrands = Array.from(
+      new Set(parsed.lessons.map((l) => l.strand.trim())),
+    );
     const strandIdMap = new Map<string, string>();
 
     for (const strandName of uniqueStrands) {
       const { data: existingStrand } = await supabase
-        .from('strands')
-        .select('id')
-        .eq('name', strandName)
-        .eq('learning_area_id', learningAreaId)
+        .from("strands")
+        .select("id")
+        .eq("name", strandName)
+        .eq("learning_area_id", learningAreaId)
         .maybeSingle();
 
       if (existingStrand) {
         strandIdMap.set(strandName, existingStrand.id);
       } else {
         const { data: newStrand, error } = await supabase
-          .from('strands')
+          .from("strands")
           .insert({
             name: strandName,
             description: `Strand from ${parsed.header.term} ${parsed.header.year} scheme`,
             learning_area_id: learningAreaId,
             school_id: schoolId,
           })
-          .select('id')
+          .select("id")
           .single();
 
         if (error) {
-          createdStrands.push(`⚠️ Failed to create "${strandName}": ${error.message}`);
+          createdStrands.push(
+            `⚠️ Failed to create "${strandName}": ${error.message}`,
+          );
         } else {
           strandIdMap.set(strandName, newStrand.id);
           createdStrands.push(strandName);
@@ -825,40 +970,48 @@ export async function importSchemeToDatabase(
     }
 
     // ── Step 3: Extract unique sub-strands and create them ──────
-    const uniqueSubStrands = [...new Set(parsed.lessons.map((l) => l.subStrand.trim()).filter(Boolean))];
+    const uniqueSubStrands = Array.from(
+      new Set(parsed.lessons.map((l) => l.subStrand.trim()).filter(Boolean)),
+    );
     const subStrandIdMap = new Map<string, string>();
 
     for (const subStrandName of uniqueSubStrands) {
       // Find parent strand for this sub-strand
-      const parentLesson = parsed.lessons.find((l) => l.subStrand.trim() === subStrandName);
+      const parentLesson = parsed.lessons.find(
+        (l) => l.subStrand.trim() === subStrandName,
+      );
       const parentStrandName = parentLesson?.strand.trim() || uniqueStrands[0];
       const parentStrandId = strandIdMap.get(parentStrandName);
 
-      if (!parentStrandId) {continue;}
+      if (!parentStrandId) {
+        continue;
+      }
 
       const { data: existingSub } = await supabase
-        .from('sub_strands')
-        .select('id')
-        .eq('name', subStrandName)
-        .eq('strand_id', parentStrandId)
+        .from("sub_strands")
+        .select("id")
+        .eq("name", subStrandName)
+        .eq("strand_id", parentStrandId)
         .maybeSingle();
 
       if (existingSub) {
         subStrandIdMap.set(subStrandName, existingSub.id);
       } else {
         const { data: newSub, error } = await supabase
-          .from('sub_strands')
+          .from("sub_strands")
           .insert({
             name: subStrandName,
             description: `Sub-strand from ${parsed.header.term} ${parsed.header.year} scheme`,
             strand_id: parentStrandId,
             school_id: schoolId,
           })
-          .select('id')
+          .select("id")
           .single();
 
         if (error) {
-          createdSubStrands.push(`⚠️ Failed to create "${subStrandName}": ${error.message}`);
+          createdSubStrands.push(
+            `⚠️ Failed to create "${subStrandName}": ${error.message}`,
+          );
         } else {
           subStrandIdMap.set(subStrandName, newSub.id);
           createdSubStrands.push(subStrandName);
@@ -875,24 +1028,26 @@ export async function importSchemeToDatabase(
       }
     }
 
-    for (const key of outcomeSet) {
-      const [subStrandName, outcomeText] = key.split('|||');
+    for (const key of Array.from(outcomeSet)) {
+      const [subStrandName, outcomeText] = key.split("|||");
       const subStrandId = subStrandIdMap.get(subStrandName);
 
-      if (!subStrandId) {continue;}
+      if (!subStrandId) {
+        continue;
+      }
 
       // Check for similar existing competency
       const truncated = outcomeText.substring(0, 100);
       const { data: existingComp } = await supabase
-        .from('competencies')
-        .select('id')
-        .eq('name', truncated)
-        .eq('sub_strand_id', subStrandId)
+        .from("competencies")
+        .select("id")
+        .eq("name", truncated)
+        .eq("sub_strand_id", subStrandId)
         .maybeSingle();
 
       if (!existingComp) {
         const { data: newComp, error } = await supabase
-          .from('competencies')
+          .from("competencies")
           .insert({
             name: truncated,
             description: outcomeText,
@@ -900,37 +1055,45 @@ export async function importSchemeToDatabase(
             school_id: schoolId,
             term: parsed.header.term,
             academic_year: parsed.header.year,
-            assessment_type: 'observation',
+            assessment_type: "observation",
           })
-          .select('id')
+          .select("id")
           .single();
 
         if (error) {
-          createdCompetencies.push(`⚠️ Failed to create competency: ${error.message}`);
+          createdCompetencies.push(
+            `⚠️ Failed to create competency: ${error.message}`,
+          );
         } else {
-          createdCompetencies.push(`${truncated.substring(0, 60)  }...`);
+          createdCompetencies.push(`${truncated.substring(0, 60)}...`);
         }
       }
     }
 
-    const totalCreated = createdStrands.length + createdSubStrands.length + createdCompetencies.length;
+    const totalCreated =
+      createdStrands.length +
+      createdSubStrands.length +
+      createdCompetencies.length;
     const totalFailed =
-      createdStrands.filter((s) => s.startsWith('⚠️')).length +
-      createdSubStrands.filter((s) => s.startsWith('⚠️')).length +
-      createdCompetencies.filter((c) => c.startsWith('⚠️')).length;
+      createdStrands.filter((s) => s.startsWith("⚠️")).length +
+      createdSubStrands.filter((s) => s.startsWith("⚠️")).length +
+      createdCompetencies.filter((c) => c.startsWith("⚠️")).length;
 
     return {
       success: true,
-      message: `Imported scheme: ${parsed.header.learningArea} - ${parsed.header.term} ${parsed.header.year}. Created ${createdStrands.filter((s) => !s.startsWith('⚠️')).length} strand(s), ${createdSubStrands.filter((s) => !s.startsWith('⚠️')).length} sub-strand(s), ${createdCompetencies.filter((c) => !c.startsWith('⚠️')).length} competenc${createdCompetencies.filter((c) => !c.startsWith('⚠️')).length === 1 ? 'y' : 'ies'}.`,
+      message: `Imported scheme: ${parsed.header.learningArea} - ${parsed.header.term} ${parsed.header.year}. Created ${createdStrands.filter((s) => !s.startsWith("⚠️")).length} strand(s), ${createdSubStrands.filter((s) => !s.startsWith("⚠️")).length} sub-strand(s), ${createdCompetencies.filter((c) => !c.startsWith("⚠️")).length} competenc${createdCompetencies.filter((c) => !c.startsWith("⚠️")).length === 1 ? "y" : "ies"}.`,
       parsed,
-      createdStrands: createdStrands.filter((s) => !s.startsWith('⚠️')),
-      createdSubStrands: createdSubStrands.filter((s) => !s.startsWith('⚠️')),
-      createdCompetencies: createdCompetencies.filter((c) => !c.startsWith('⚠️')),
+      createdStrands: createdStrands.filter((s) => !s.startsWith("⚠️")),
+      createdSubStrands: createdSubStrands.filter((s) => !s.startsWith("⚠️")),
+      createdCompetencies: createdCompetencies.filter(
+        (c) => !c.startsWith("⚠️"),
+      ),
     };
   } catch (error) {
     return {
       success: false,
-      message: error instanceof Error ? error.message : 'Unknown error during import',
+      message:
+        error instanceof Error ? error.message : "Unknown error during import",
     };
   }
 }

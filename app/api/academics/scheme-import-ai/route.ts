@@ -142,28 +142,67 @@ Output format:
         );
       }
 
-      return successResponse({
-        parsed: {
-          header: parsed.header || {},
-          lessonCount: parsed.lessons.length,
-          strandCount: new Set(parsed.lessons.map((l: any) => l.strand)).size,
-          subStrandCount: new Set(parsed.lessons.map((l: any) => l.subStrand))
-            .size,
-          competencyCount: parsed.lessons.reduce(
-            (sum: number, l: any) => sum + (l.learningOutcomes?.length || 0),
-            0,
-          ),
-          weeks: (
-            [...new Set(parsed.lessons.map((l: any) => l.week))] as number[]
-          ).sort((a, b) => a - b),
-          strands: [
-            ...new Set(parsed.lessons.map((l: any) => l.strand)),
-          ] as string[],
-        },
+      // Create the parsed scheme object with proper validation
+      const parsedScheme: any = {
+        header: parsed.header || {},
         lessons: parsed.lessons,
         warnings: [],
         missingElements: [],
-        databaseImport: null,
+        strandCount: new Set(parsed.lessons.map((l: any) => l.strand)).size,
+        subStrandCount: new Set(parsed.lessons.map((l: any) => l.subStrand))
+          .size,
+        competencyCount: parsed.lessons.reduce(
+          (sum: number, l: any) => sum + (l.learningOutcomes?.length || 0),
+          0,
+        ),
+      };
+
+      // If importToDatabase is true, import to database
+      let databaseImport = null;
+      if (importToDatabase) {
+        try {
+          const importResult = await importSchemeToDatabase(parsedScheme, user);
+          databaseImport = importResult;
+
+          // Add warnings and missing elements from import result
+          if (importResult.warnings) {
+            parsedScheme.warnings = [
+              ...parsedScheme.warnings,
+              ...importResult.warnings,
+            ];
+          }
+          if (importResult.missingElements) {
+            parsedScheme.missingElements = [
+              ...parsedScheme.missingElements,
+              ...importResult.missingElements,
+            ];
+          }
+        } catch (importError) {
+          console.error("Database import error:", importError);
+          parsedScheme.warnings.push(
+            `Database import failed: ${importError instanceof Error ? importError.message : "Unknown error"}`,
+          );
+        }
+      }
+
+      return successResponse({
+        parsed: {
+          header: parsedScheme.header,
+          lessonCount: parsedScheme.lessons.length,
+          strandCount: parsedScheme.strandCount,
+          subStrandCount: parsedScheme.subStrandCount,
+          competencyCount: parsedScheme.competencyCount,
+          weeks: Array.from(
+            new Set(parsedScheme.lessons.map((l: any) => l.week)),
+          ).sort((a, b) => (a as number) - (b as number)),
+          strands: Array.from(
+            new Set(parsedScheme.lessons.map((l: any) => l.strand)),
+          ),
+        },
+        lessons: parsedScheme.lessons,
+        warnings: parsedScheme.warnings,
+        missingElements: parsedScheme.missingElements,
+        databaseImport,
       });
     } catch (err) {
       return errorResponse(
