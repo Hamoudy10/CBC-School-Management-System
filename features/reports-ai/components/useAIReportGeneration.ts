@@ -1,12 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { AIReportService } from '../services/ai-report.service';
-import type { AIReportGenerationRequest, AIReportGenerationResponse } from '../types/report-ai.types';
+import type { AIReportGenerationRequest, CBCReportData } from '../types/report-ai.types';
+
+export type GeneratedAIReport = CBCReportData & {
+  generated_at: string;
+  ai_confidence: number;
+  processing_time: number;
+  pdf_url?: string;
+};
 
 export function useAIReportGeneration() {
   const [isGenerating, setIsGenerating] = useState(false);
-  const [report, setReport] = useState<any>(null);
+  const [report, setReport] = useState<GeneratedAIReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
 
@@ -29,9 +36,14 @@ export function useAIReportGeneration() {
       setProgress(100);
 
       if (response.success) {
-        setReport(response.data);
+        setReport({
+          ...response.data,
+          generated_at: new Date().toISOString(),
+          ai_confidence: response.confidence,
+          processing_time: response.meta?.durationMs ?? 0
+        });
       } else {
-        setError(response.error || 'Failed to generate report');
+        setError(response.warnings?.[0] || 'Failed to generate report');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error occurred');

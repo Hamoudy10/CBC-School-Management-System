@@ -155,7 +155,7 @@ export function generateOfflineId(): string {
   return uuidv4();
 }
 
-export default {
+const offlineStorage = {
   addToStore,
   getFromStore,
   getAllFromStore,
@@ -164,3 +164,5 @@ export default {
   clearStore,
   generateOfflineId
 };
+
+export default offlineStorage;

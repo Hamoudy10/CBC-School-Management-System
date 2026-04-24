@@ -1,12 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { ReportUtils } from '../utils/report-utils';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Select } from '@/components/ui/Select';
+import { Input } from '@/components/ui/Input';
 
 interface ParentSummaryGeneratorProps {
   onSummaryGenerated?: (summary: string) => void;
@@ -23,11 +21,9 @@ export function ParentSummaryGenerator({ onSummaryGenerated }: ParentSummaryGene
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const reportUtils = new ReportUtils();
-
   const generateSummary = async () => {
     if (!studentId || !studentName || !className || !term || !year || !schoolName) {
-      setError('Please fill in all required fields');
+      setError('Please fill in all required fields.');
       return;
     }
 
@@ -35,150 +31,49 @@ export function ParentSummaryGenerator({ onSummaryGenerated }: ParentSummaryGene
     setError(null);
 
     try {
-      // Mock report data for demonstration
-      const mockReportData = {
-        student_info: {
-          id: studentId,
-          name: studentName,
-          admission_number: `ADM${Math.floor(Math.random() * 1000)}`,
-          class: className,
-          class_teacher: 'Mrs. Wangari',
-          term: term,
-          year: year,
-          school_name: schoolName
-        },
-        learning_areas: [
-          {
-            code: 'MAT',
-            name: 'Mathematics',
-            score: 75,
-            level: 'Meeting Expectations',
-            comment: 'Good understanding of basic operations',
-            competencies: [
-              {
-                code: 'MAT.01',
-                name: 'Number Sense',
-                score: 80,
-                level: 'Meeting Expectations',
-                comment: 'Strong understanding of place value'
-              },
-              {
-                code: 'MAT.02',
-                name: 'Operations',
-                score: 70,
-                level: 'Meeting Expectations',
-                comment: 'Good with addition and subtraction'
-              }
-            ]
-          },
-          {
-            code: 'ENG',
-            name: 'English',
-            score: 85,
-            level: 'Exceeding Expectations',
-            comment: 'Excellent reading comprehension',
-            competencies: [
-              {
-                code: 'ENG.01',
-                name: 'Reading',
-                score: 90,
-                level: 'Exceeding Expectations',
-                comment: 'Fluent reader with good comprehension'
-              },
-              {
-                code: 'ENG.02',
-                name: 'Writing',
-                score: 80,
-                level: 'Meeting Expectations',
-                comment: 'Clear writing with good structure'
-              }
-            ]
-          }
-        ],
-        summary: {
-          total_subjects: 2,
-          average_score: 80,
-          overall_level: 'Good',
-          attendance_percentage: 95,
-          total_days_present: 95,
-          total_days_absent: 5
-        }
-      };
+      const generatedSummary = [
+        `Dear Parent,`,
+        '',
+        `We are pleased to share ${studentName}'s ${term.replace('_', ' ')} update.`,
+        `${studentName} has shown consistent growth in class ${className} and attends school regularly.`,
+        '',
+        'Highlights:',
+        '- Strong participation during lessons.',
+        '- Steady progress across learning activities.',
+        '- Positive classroom behavior and effort.',
+        '',
+        'Areas to support at home:',
+        '- Encourage daily reading and short written reflections.',
+        '- Continue practicing core math facts for fluency.',
+        '- Keep regular communication with the class teacher.',
+        '',
+        `Thank you for your continued partnership with ${schoolName}.`,
+        `Together, we can keep ${studentName} on a strong learning path.`,
+      ].join('\n');
 
-      // Generate AI summary using the mock data
-      const aiPrompt = `
-Generate a warm, encouraging parent-friendly summary for the following CBC report:
-
-Student: ${studentName}
-Class: ${className}
-School: ${schoolName}
-Term: ${term}
-
-Report Data:
-${JSON.stringify(mockReportData, null, 2)}
-
-Requirements:
-1. Write in warm, encouraging language that parents can easily understand
-2. Highlight specific achievements and strengths
-3. Address areas for improvement constructively
-4. Provide clear next steps for parents
-5. Use simple, accessible language (avoid educational jargon)
-6. Be 150-300 words long
-7. End with a positive and encouraging tone
-
-Return only the summary text.
-`;
-
-      // Mock AI response
-      const mockSummary = `Dear Parent,
-
-We're delighted to share ${studentName}'s progress report for ${term}. Your child has shown excellent growth in several areas! 🎉
-
-**Strengths:**
-- Reading comprehension is outstanding - ${studentName} is reading fluently with great understanding
-- Mathematical reasoning skills are developing well
-- Attendance has been excellent at 95%
-- ${studentName} participates actively in class discussions
-
-**Areas for Growth:**
-- Writing skills could use more practice, especially creative writing
-- Multiplication and division facts need reinforcement
-
-**Next Steps:**
-- Encourage daily reading at home
-- Practice math facts through games and activities
-- Provide opportunities for writing practice
-
-${studentName} is making wonderful progress! Thank you for your continued support at home. Together, we're helping ${studentName} build a strong foundation for future learning.
-
-Warm regards,
-The ${schoolName} Team`;
-
-      setSummary(mockSummary);
-      
+      setSummary(generatedSummary);
       if (onSummaryGenerated) {
-        onSummaryGenerated(mockSummary);
+        onSummaryGenerated(generatedSummary);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate summary');
+    } catch (generateError) {
+      setError(generateError instanceof Error ? generateError.message : 'Failed to generate summary.');
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(summary);
-    alert('Summary copied to clipboard!');
+  const copyToClipboard = async () => {
+    await navigator.clipboard.writeText(summary);
   };
 
   const downloadSummary = () => {
-    const element = document.createElement('a');
     const file = new Blob([summary], { type: 'text/plain' });
-    element.href = URL.createObjectURL(file);
-    element.download = `${studentName.replace(/\s+/g, '_')}_Parent_Summary_${term}_${year}.txt`;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(file);
+    link.download = `${studentName.replace(/\s+/g, '_')}_Parent_Summary_${term}_${year}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const clearForm = () => {
@@ -198,81 +93,34 @@ The ${schoolName} Team`;
         <CardHeader>
           <CardTitle>Parent-Friendly Summary Generator</CardTitle>
           <CardDescription>
-            Create warm, encouraging summaries that parents can easily understand
+            Create clear and encouraging summaries that families can understand quickly.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="student-id">Student ID</Label>
-              <Input
-                id="student-id"
-                placeholder="e.g., STU001"
-                value={studentId}
-                onChange={(e) => setStudentId(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="student-name">Student Name</Label>
-              <Input
-                id="student-name"
-                placeholder="e.g., John Doe"
-                value={studentName}
-                onChange={(e) => setStudentName(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="class">Class</Label>
-              <Input
-                id="class"
-                placeholder="e.g., Grade 5"
-                value={className}
-                onChange={(e) => setClassName(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="term">Term</Label>
-              <Select value={term} onValueChange={setTerm}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select term" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="TERM_1">First Term</SelectItem>
-                  <SelectItem value="TERM_2">Second Term</SelectItem>
-                  <SelectItem value="TERM_3">Third Term</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="year">Academic Year</Label>
-              <Select value={year} onValueChange={setYear}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select year" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="2026">2026</SelectItem>
-                  <SelectItem value="2025">2025</SelectItem>
-                  <SelectItem value="2025_2026">2025-2026</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="school-name">School Name</Label>
-              <Input
-                id="school-name"
-                placeholder="e.g., Example Primary School"
-                value={schoolName}
-                onChange={(e) => setSchoolName(e.target.value)}
-              />
-            </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <Input id="student-id" label="Student ID" placeholder="e.g., STU001" value={studentId} onChange={(event) => setStudentId(event.target.value)} />
+            <Input id="student-name" label="Student Name" placeholder="e.g., John Doe" value={studentName} onChange={(event) => setStudentName(event.target.value)} />
+            <Input id="class" label="Class" placeholder="e.g., Grade 5" value={className} onChange={(event) => setClassName(event.target.value)} />
+
+            <Select id="term" label="Term" value={term} onChange={(event) => setTerm(event.target.value)}>
+              <option value="">Select term</option>
+              <option value="TERM_1">First Term</option>
+              <option value="TERM_2">Second Term</option>
+              <option value="TERM_3">Third Term</option>
+            </Select>
+
+            <Select id="year" label="Academic Year" value={year} onChange={(event) => setYear(event.target.value)}>
+              <option value="">Select year</option>
+              <option value="2026">2026</option>
+              <option value="2025">2025</option>
+              <option value="2025_2026">2025-2026</option>
+            </Select>
+
+            <Input id="school-name" label="School Name" placeholder="e.g., Example Primary School" value={schoolName} onChange={(event) => setSchoolName(event.target.value)} />
           </div>
 
-          <div className="flex gap-2 mt-6">
-            <Button 
-              onClick={generateSummary}
-              disabled={isGenerating}
-              className="flex-1"
-            >
+          <div className="mt-6 flex gap-2">
+            <Button onClick={generateSummary} disabled={isGenerating} className="flex-1">
               {isGenerating ? 'Generating...' : 'Generate Summary'}
             </Button>
             <Button onClick={clearForm} variant="outline">
@@ -281,7 +129,7 @@ The ${schoolName} Team`;
           </div>
 
           {error && (
-            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3">
               <p className="text-sm text-red-600">{error}</p>
             </div>
           )}
@@ -294,7 +142,7 @@ The ${schoolName} Team`;
             <CardTitle className="flex items-center justify-between">
               <span>Parent-Friendly Summary</span>
               <div className="flex gap-2">
-                <Button onClick={copyToClipboard} variant="outline" size="sm">
+                <Button onClick={() => void copyToClipboard()} variant="outline" size="sm">
                   Copy
                 </Button>
                 <Button onClick={downloadSummary} variant="outline" size="sm">
@@ -304,22 +152,8 @@ The ${schoolName} Team`;
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="prose prose-sm max-w-none">
-              <div className="p-6 bg-yellow-50 rounded-lg border border-yellow-200">
-                <p className="text-sm leading-relaxed whitespace-pre-line">{summary}</p>
-              </div>
-              
-              <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-                <h4 className="font-semibold text-blue-800 mb-2">Summary Features:</h4>
-                <ul className="text-sm text-blue-700 space-y-1">
-                  <li>✅ Warm, encouraging tone</li>
-                  <li>✅ Specific achievements highlighted</li>
-                  <li>✅ Constructive improvement areas</li>
-                  <li>✅ Clear next steps for parents</li>
-                  <li>✅ Simple, accessible language</li>
-                  <li>✅ Positive closing message</li>
-                </ul>
-              </div>
+            <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-6">
+              <p className="whitespace-pre-line text-sm leading-relaxed">{summary}</p>
             </div>
           </CardContent>
         </Card>

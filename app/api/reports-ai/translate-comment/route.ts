@@ -4,12 +4,25 @@ import { validateRequest } from '@/lib/validation';
 
 const translatorService = new ReportTranslatorService();
 
+type TranslateCommentRequest = {
+  comment: string;
+  context: {
+    competency_name?: string;
+    score?: number;
+    level?: string;
+    subject?: string;
+    grade?: string;
+    performance_level?: string;
+    learning_area?: string;
+  };
+};
+
 export async function POST(request: NextRequest) {
   try {
     // Validate request body
     const body = await request.json();
     
-    const validation = validateRequest(body, {
+    const validation = validateRequest<TranslateCommentRequest>(body, {
       comment: 'string',
       context: 'object'
     });

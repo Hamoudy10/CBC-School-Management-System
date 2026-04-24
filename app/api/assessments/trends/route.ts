@@ -111,7 +111,9 @@ export const GET = withAuth(async (request: NextRequest, { user }) => {
 
     for (const assessment of assessments) {
       const la = (assessment as any).learning_areas;
-      if (!la) continue;
+      if (!la) {
+        continue;
+      }
 
       const laKey = la.learning_area_id;
       if (!laTermMap.has(laKey)) {

@@ -222,7 +222,7 @@ export async function isSyncInProgress(userId: string, deviceId: string, schoolI
   }
 }
 
-export default {
+const offlineMetadata = {
   getOrCreateOfflineMetadata,
   updateOfflineMetadata,
   markSyncStarted,
@@ -230,3 +230,5 @@ export default {
   getLastSyncTime,
   isSyncInProgress
 };
+
+export default offlineMetadata;

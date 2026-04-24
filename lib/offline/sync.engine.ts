@@ -153,7 +153,8 @@ async function processSyncQueue(supabase: SupabaseClient): Promise<void> {
           await markOperationAsProcessed(operation.id);
         } catch (error) {
           // Handle operation failure
-          await handleOperationFailure(operation, error);
+          const normalizedError = error instanceof Error ? error : new Error('Unknown sync operation failure');
+          await handleOperationFailure(operation, normalizedError);
         }
       }
     }
@@ -207,7 +208,9 @@ async function handleInsertOperation(supabase: SupabaseClient, tableName: string
     .select()
     .single();
     
-  if (error) throw error;
+  if (error) {
+    throw error;
+  }
   
   logger.debug(`Inserted record into ${tableName}`, {
     source: 'offline.sync.engine',
@@ -227,7 +230,9 @@ async function handleUpdateOperation(supabase: SupabaseClient, tableName: string
     .select()
     .single();
     
-  if (error) throw error;
+  if (error) {
+    throw error;
+  }
   
   logger.debug(`Updated record in ${tableName}`, {
     source: 'offline.sync.engine',
@@ -245,7 +250,9 @@ async function handleDeleteOperation(supabase: SupabaseClient, tableName: string
     .delete()
     .eq('id', recordId);
     
-  if (error) throw error;
+  if (error) {
+    throw error;
+  }
   
   logger.debug(`Deleted record from ${tableName}`, {
     source: 'offline.sync.engine',
@@ -348,8 +355,8 @@ export async function queueSyncOperation(
       table_name: tableName,
       record_id: recordId,
       operation_type: operationType,
-      payload: payload,
-      priority: priority,
+      payload,
+      priority,
       created_at: new Date().toISOString(),
       processed: false,
       retry_count: 0
@@ -402,7 +409,7 @@ export async function manualSync(): Promise<void> {
 }
 
 // Export default object for easier importing
-export default {
+const offlineSyncEngine = {
   initializeOfflineSync,
   stopOfflineSync,
   syncWithServer,
@@ -410,3 +417,5 @@ export default {
   manualSync,
   getSyncStatus
 };
+
+export default offlineSyncEngine;

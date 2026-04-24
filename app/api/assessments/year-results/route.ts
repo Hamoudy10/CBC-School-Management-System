@@ -97,7 +97,9 @@ export const GET = withAuth(async (request: NextRequest, { user }) => {
 
     for (const assessment of assessments) {
       const la = (assessment as any).learning_areas;
-      if (!la) continue;
+      if (!la) {
+        continue;
+      }
 
       const termKey = assessment.term_id;
       if (!termMap.has(termKey)) {

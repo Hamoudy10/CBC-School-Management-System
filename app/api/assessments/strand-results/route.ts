@@ -104,16 +104,24 @@ export const GET = withAuth(async (request: NextRequest, { user }) => {
 
     for (const assessment of assessments) {
       const competency = (assessment as any).competencies;
-      if (!competency) continue;
+      if (!competency) {
+        continue;
+      }
 
       const subStrand = competency.sub_strands;
-      if (!subStrand) continue;
+      if (!subStrand) {
+        continue;
+      }
 
       const strand = subStrand.strands;
-      if (!strand) continue;
+      if (!strand) {
+        continue;
+      }
 
       const learningArea = strand.learning_areas;
-      if (!learningArea) continue;
+      if (!learningArea) {
+        continue;
+      }
 
       const strandKey = strand.strand_id;
       if (!strandMap.has(strandKey)) {

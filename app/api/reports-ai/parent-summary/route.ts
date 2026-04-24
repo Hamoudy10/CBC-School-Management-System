@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
 
     if (!summaryResponse.success) {
       return NextResponse.json(
-        { error: summaryResponse.error || 'Failed to generate parent summary' },
+        { error: summaryResponse.warnings?.[0] || 'Failed to generate parent summary' },
         { status: 500 }
       );
     }

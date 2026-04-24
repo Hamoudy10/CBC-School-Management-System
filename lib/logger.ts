@@ -99,11 +99,13 @@ function createLogEntry(
 export const logger = {
   debug(message: string, context?: LogContext) {
     const entry = createLogEntry("debug", message, context);
+    // eslint-disable-next-line no-console
     console.debug(formatLogEntry(entry));
   },
 
   info(message: string, context?: LogContext) {
     const entry = createLogEntry("info", message, context);
+    // eslint-disable-next-line no-console
     console.info(formatLogEntry(entry));
   },
 
@@ -179,6 +181,7 @@ export function createRequestLogger(routeName: string) {
       } else if (level === "warn") {
         console.warn(formatLogEntry(entry));
       } else {
+        // eslint-disable-next-line no-console
         console.info(formatLogEntry(entry));
       }
     },

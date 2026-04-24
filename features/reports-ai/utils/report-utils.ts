@@ -1,5 +1,21 @@
 import { ReportTranslatorService } from '../services/translator.service';
 
+type PerformanceMetricEntry = {
+  competency: string;
+  score: number;
+  area: string;
+};
+
+type PerformanceMetrics = {
+  total_competencies: number;
+  excellent_competencies: number;
+  good_competencies: number;
+  needs_improvement_competencies: number;
+  average_score: number;
+  strengths: PerformanceMetricEntry[];
+  weaknesses: PerformanceMetricEntry[];
+};
+
 export class ReportUtils {
   private translator: ReportTranslatorService;
 
@@ -45,19 +61,25 @@ export class ReportUtils {
   }
 
   validateReportData(data: any): boolean {
-    if (!data || typeof data !== 'object') return false;
+    if (!data || typeof data !== 'object') {
+      return false;
+    }
     
     // Check required fields
     const requiredFields = ['student_info', 'learning_areas', 'summary'];
     for (const field of requiredFields) {
-      if (!data[field]) return false;
+      if (!data[field]) {
+        return false;
+      }
     }
 
     // Check student info
     const studentInfo = data.student_info;
     const requiredStudentFields = ['id', 'name', 'class', 'term', 'year'];
     for (const field of requiredStudentFields) {
-      if (!studentInfo[field]) return false;
+      if (!studentInfo[field]) {
+        return false;
+      }
     }
 
     // Check learning areas
@@ -69,14 +91,16 @@ export class ReportUtils {
     const summary = data.summary;
     const requiredSummaryFields = ['total_subjects', 'average_score', 'overall_level'];
     for (const field of requiredSummaryFields) {
-      if (summary[field] === undefined) return false;
+      if (summary[field] === undefined) {
+        return false;
+      }
     }
 
     return true;
   }
 
-  calculatePerformanceMetrics(reportData: any): any {
-    const metrics = {
+  calculatePerformanceMetrics(reportData: any): PerformanceMetrics {
+    const metrics: PerformanceMetrics = {
       total_competencies: 0,
       excellent_competencies: 0,
       good_competencies: 0,
@@ -122,7 +146,7 @@ export class ReportUtils {
 
   generateReportSummary(reportData: any): string {
     const metrics = this.calculatePerformanceMetrics(reportData);
-    const summary = [];
+    const summary: string[] = [];
 
     summary.push(`Student Performance Summary:`);
     summary.push(`- Average Score: ${metrics.average_score.toFixed(1)}%`);
@@ -132,14 +156,14 @@ export class ReportUtils {
 
     if (metrics.strengths.length > 0) {
       summary.push('\nStrengths:');
-      metrics.strengths.forEach(strength => {
+      metrics.strengths.forEach((strength: PerformanceMetricEntry) => {
         summary.push(`- ${strength.competency} (${strength.score}%)`);
       });
     }
 
     if (metrics.weaknesses.length > 0) {
       summary.push('\nAreas for Improvement:');
-      metrics.weaknesses.forEach(weakness => {
+      metrics.weaknesses.forEach((weakness: PerformanceMetricEntry) => {
         summary.push(`- ${weakness.competency} (${weakness.score}%)`);
       });
     }

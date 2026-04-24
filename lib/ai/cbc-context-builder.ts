@@ -67,7 +67,7 @@ export async function buildCBCContext({
   let resolvedLearningAreaId = learningAreaId;
   let resolvedStrandId = strandId;
   let resolvedSubStrandId = subStrandId;
-  let resolvedCompetencyId = competencyId;
+  const resolvedCompetencyId = competencyId;
 
   let classContext: CBCClassContext | null = null;
   let learningAreaContext: ContextEntity | null = null;

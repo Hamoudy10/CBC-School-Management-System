@@ -174,7 +174,9 @@ export const GET = withAuth(async (request: NextRequest, { user, params }) => {
     const laSummaryMap = new Map<string, { name: string; scores: number[] }>();
     for (const assessment of assessments ?? []) {
       const la = (assessment as any).learning_areas;
-      if (!la) continue;
+      if (!la) {
+        continue;
+      }
       if (!laSummaryMap.has(la.learning_area_id)) {
         laSummaryMap.set(la.learning_area_id, { name: la.name, scores: [] });
       }

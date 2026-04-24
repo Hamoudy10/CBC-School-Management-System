@@ -64,9 +64,15 @@ export const GET = withPermission(
         )
         .eq("school_id", user.schoolId);
 
-      if (studentId) query = query.eq("student_id", studentId);
-      if (needsType) query = query.eq("needs_type", needsType);
-      if (isActive !== undefined) query = query.eq("is_active", isActive === "true");
+      if (studentId) {
+        query = query.eq("student_id", studentId);
+      }
+      if (needsType) {
+        query = query.eq("needs_type", needsType);
+      }
+      if (isActive !== undefined) {
+        query = query.eq("is_active", isActive === "true");
+      }
 
       const { data, error } = await query.order("created_at", { ascending: false });
 

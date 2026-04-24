@@ -1,27 +1,34 @@
 'use client';
 
 import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { ReportTranslatorService } from '../services/translator.service';
+import type { ParentFriendlyTranslationRequest } from '../types/report-ai.types';
+
+interface TranslationResult {
+  original: string;
+  translated: string;
+  explanation: string;
+}
 
 interface TranslatorProps {
-  onTranslation?: (result: { original: string; translated: string; explanation: string }) => void;
+  onTranslation?: (result: TranslationResult) => void;
 }
+
+type TranslationStyle = ParentFriendlyTranslationRequest['target_language'];
 
 export function AIReportTranslator({ onTranslation }: TranslatorProps) {
   const [technicalTerm, setTechnicalTerm] = useState('');
-  const [context, setContext] = useState({
+  const [context, setContext] = useState<ParentFriendlyTranslationRequest['context']>({
     subject: '',
     grade: '',
     performance_level: '',
     learning_area: ''
   });
-  const [targetLanguage, setTargetLanguage] = useState<'simple-en' | 'swahili' | 'parent-focused'>('simple-en');
+  const [targetLanguage, setTargetLanguage] = useState<TranslationStyle>('simple-en');
   const [translatedText, setTranslatedText] = useState('');
   const [explanation, setExplanation] = useState('');
   const [isTranslating, setIsTranslating] = useState(false);
@@ -29,9 +36,15 @@ export function AIReportTranslator({ onTranslation }: TranslatorProps) {
 
   const translator = new ReportTranslatorService();
 
+  const emitResult = (original: string, translated: string, details: string) => {
+    if (onTranslation) {
+      onTranslation({ original, translated, explanation: details });
+    }
+  };
+
   const handleTranslate = async () => {
     if (!technicalTerm.trim()) {
-      setError('Please enter a technical term to translate');
+      setError('Please enter a technical term to translate.');
       return;
     }
 
@@ -39,24 +52,22 @@ export function AIReportTranslator({ onTranslation }: TranslatorProps) {
     setError(null);
 
     try {
-      const response = await translator.translateToParentFriendly(technicalTerm, context);
-      
-      if (response.success) {
-        setTranslatedText(response.data);
-        setExplanation(`Technical term "${technicalTerm}" translated to parent-friendly language.`);
-        
-        if (onTranslation) {
-          onTranslation({
-            original: technicalTerm,
-            translated: response.data,
-            explanation: explanation
-          });
-        }
-      } else {
-        setError('Translation failed. Please try again.');
+      const response = await translator.translateToParentFriendly(technicalTerm, {
+        ...context,
+        target_language: targetLanguage
+      });
+
+      if (!response.success) {
+        setError(response.warnings?.[0] || 'Translation failed. Please try again.');
+        return;
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Translation failed');
+
+      const details = `Technical term "${technicalTerm}" translated to ${targetLanguage}.`;
+      setTranslatedText(response.data);
+      setExplanation(details);
+      emitResult(technicalTerm, response.data, details);
+    } catch (translateError) {
+      setError(translateError instanceof Error ? translateError.message : 'Translation failed.');
     } finally {
       setIsTranslating(false);
     }
@@ -64,7 +75,7 @@ export function AIReportTranslator({ onTranslation }: TranslatorProps) {
 
   const handleTranslateComment = async () => {
     if (!technicalTerm.trim()) {
-      setError('Please enter a comment to translate');
+      setError('Please enter a comment to translate.');
       return;
     }
 
@@ -72,24 +83,21 @@ export function AIReportTranslator({ onTranslation }: TranslatorProps) {
     setError(null);
 
     try {
-      const response = await translator.translateReportComment(technicalTerm, context);
-      
-      if (response) {
-        setTranslatedText(response);
-        setExplanation('Teacher comment translated to parent-friendly language.');
-        
-        if (onTranslation) {
-          onTranslation({
-            original: technicalTerm,
-            translated: response,
-            explanation: explanation
-          });
-        }
-      } else {
-        setError('Translation failed. Please try again.');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Translation failed');
+      const translated = await translator.translateReportComment(technicalTerm, {
+        competency_name: context.learning_area || 'General competency',
+        score: 0,
+        level: context.performance_level || 'Not provided',
+        subject: context.subject,
+        grade: context.grade,
+        learning_area: context.learning_area
+      });
+
+      const details = 'Teacher comment translated to parent-friendly language.';
+      setTranslatedText(translated);
+      setExplanation(details);
+      emitResult(technicalTerm, translated, details);
+    } catch (translateError) {
+      setError(translateError instanceof Error ? translateError.message : 'Translation failed.');
     } finally {
       setIsTranslating(false);
     }
@@ -123,98 +131,80 @@ export function AIReportTranslator({ onTranslation }: TranslatorProps) {
         <CardHeader>
           <CardTitle>Technical Term Translator</CardTitle>
           <CardDescription>
-            Translate educational jargon into parent-friendly language
+            Translate educational jargon into parent-friendly language.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div>
-              <Label htmlFor="technical-term">Technical Term/Comment</Label>
-              <Textarea
+            <div className="space-y-1.5">
+              <label htmlFor="technical-term" className="text-sm font-medium text-secondary-700">
+                Technical Term/Comment
+              </label>
+              <textarea
                 id="technical-term"
                 placeholder="Enter educational term or teacher comment..."
                 value={technicalTerm}
-                onChange={(e) => setTechnicalTerm(e.target.value)}
-                className="min-h-[80px]"
+                onChange={(event) => setTechnicalTerm(event.target.value)}
+                className="min-h-[80px] w-full rounded-lg border border-secondary-300 px-3 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="subject">Subject</Label>
-                <Input
-                  id="subject"
-                  placeholder="e.g., Mathematics"
-                  value={context.subject}
-                  onChange={(e) => setContext({ ...context, subject: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="grade">Grade Level</Label>
-                <Input
-                  id="grade"
-                  placeholder="e.g., Grade 5"
-                  value={context.grade}
-                  onChange={(e) => setContext({ ...context, grade: e.target.value })}
-                />
-              </div>
+              <Input
+                id="subject"
+                label="Subject"
+                placeholder="e.g., Mathematics"
+                value={context.subject}
+                onChange={(event) => setContext({ ...context, subject: event.target.value })}
+              />
+              <Input
+                id="grade"
+                label="Grade Level"
+                placeholder="e.g., Grade 5"
+                value={context.grade}
+                onChange={(event) => setContext({ ...context, grade: event.target.value })}
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="performance-level">Performance Level</Label>
-                <Input
-                  id="performance-level"
-                  placeholder="e.g., Exceeding Expectations"
-                  value={context.performance_level}
-                  onChange={(e) => setContext({ ...context, performance_level: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="learning-area">Learning Area</Label>
-                <Input
-                  id="learning-area"
-                  placeholder="e.g., Environmental"
-                  value={context.learning_area}
-                  onChange={(e) => setContext({ ...context, learning_area: e.target.value })}
-                />
-              </div>
+              <Input
+                id="performance-level"
+                label="Performance Level"
+                placeholder="e.g., Meeting Expectations"
+                value={context.performance_level}
+                onChange={(event) => setContext({ ...context, performance_level: event.target.value })}
+              />
+              <Input
+                id="learning-area"
+                label="Learning Area"
+                placeholder="e.g., Environmental Activities"
+                value={context.learning_area}
+                onChange={(event) => setContext({ ...context, learning_area: event.target.value })}
+              />
             </div>
 
-            <div>
-              <Label htmlFor="target-language">Target Language Style</Label>
-              <Select value={targetLanguage} onValueChange={(value: any) => setTargetLanguage(value)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="simple-en">Simple English</SelectItem>
-                  <SelectItem value="swahili">Swahili Translation</SelectItem>
-                  <SelectItem value="parent-focused">Parent-Focused</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Select
+              id="target-language"
+              label="Target Language Style"
+              value={targetLanguage}
+              onChange={(event) => setTargetLanguage(event.target.value as TranslationStyle)}
+            >
+              <option value="simple-en">Simple English</option>
+              <option value="swahili">Swahili Translation</option>
+              <option value="parent-focused">Parent-Focused</option>
+            </Select>
 
             <div className="flex gap-2">
-              <Button 
-                onClick={handleTranslate}
-                disabled={isTranslating}
-                className="flex-1"
-              >
+              <Button onClick={handleTranslate} disabled={isTranslating} className="flex-1">
                 {isTranslating ? 'Translating...' : 'Translate Term'}
               </Button>
-              <Button 
-                onClick={handleTranslateComment}
-                disabled={isTranslating}
-                variant="outline"
-                className="flex-1"
-              >
+              <Button onClick={handleTranslateComment} disabled={isTranslating} variant="outline" className="flex-1">
                 {isTranslating ? 'Translating...' : 'Translate Comment'}
               </Button>
             </div>
 
             {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3">
                 <p className="text-sm text-red-600">{error}</p>
               </div>
             )}
@@ -230,22 +220,22 @@ export function AIReportTranslator({ onTranslation }: TranslatorProps) {
           <CardContent>
             <div className="space-y-4">
               <div>
-                <Label className="text-sm font-medium text-gray-500">Original</Label>
-                <div className="p-3 bg-gray-50 rounded-lg border">
+                <p className="text-sm font-medium text-gray-500">Original</p>
+                <div className="rounded-lg border bg-gray-50 p-3">
                   <p className="text-sm">{technicalTerm}</p>
                 </div>
               </div>
 
               <div>
-                <Label className="text-sm font-medium text-gray-500">Parent-Friendly Translation</Label>
-                <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                <p className="text-sm font-medium text-gray-500">Parent-Friendly Translation</p>
+                <div className="rounded-lg border border-green-200 bg-green-50 p-3">
                   <p className="text-sm text-green-800">{translatedText}</p>
                 </div>
               </div>
 
               <div>
-                <Label className="text-sm font-medium text-gray-500">Explanation</Label>
-                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-sm font-medium text-gray-500">Explanation</p>
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
                   <p className="text-sm text-blue-700">{explanation}</p>
                 </div>
               </div>
@@ -262,21 +252,26 @@ export function AIReportTranslator({ onTranslation }: TranslatorProps) {
         <CardHeader>
           <CardTitle>Common Terms to Translate</CardTitle>
           <CardDescription>
-            Click on any term to quickly translate it
+            Click on any term to quickly load it into the translator.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {commonTechnicalTerms.map((term, index) => (
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+            {commonTechnicalTerms.map((term, index: number) => (
               <Button
-                key={index}
+                key={`${term}-${index}`}
                 variant="outline"
                 size="sm"
                 onClick={() => {
                   setTechnicalTerm(term);
-                  setContext({ ...context, subject: '', grade: '', performance_level: '', learning_area: '' });
+                  setContext({
+                    subject: '',
+                    grade: '',
+                    performance_level: '',
+                    learning_area: ''
+                  });
                 }}
-                className="text-xs h-fit"
+                className="h-fit text-xs"
               >
                 {term}
               </Button>

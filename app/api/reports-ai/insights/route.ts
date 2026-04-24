@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
 
     if (!insightsResponse.success) {
       return NextResponse.json(
-        { error: insightsResponse.error || 'Failed to generate insights' },
+        { error: insightsResponse.warnings?.[0] || 'Failed to generate insights' },
         { status: 500 }
       );
     }

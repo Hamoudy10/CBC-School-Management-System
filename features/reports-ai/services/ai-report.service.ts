@@ -3,8 +3,7 @@ import type { AIResponse } from '../../../lib/ai/ai.types';
 import type { 
   AIReportGenerationRequest, 
   CBCReportData,
-  ReportInsights,
-  AIReportComment 
+  ReportInsights 
 } from '../types/report-ai.types';
 
 export class AIReportService {
@@ -19,8 +18,6 @@ export class AIReportService {
 
   async generateAIReport(request: AIReportGenerationRequest): Promise<AIResponse<CBCReportData>> {
     try {
-      const startTime = Date.now();
-      
       // Build CBC context
       const cbcContext = await this.buildCBCContext(request);
       
@@ -51,13 +48,7 @@ export class AIReportService {
       };
     } catch (error) {
       console.error('AI Report Generation Error:', error);
-      return {
-        success: false,
-        data: null,
-        confidence: 0,
-        reasoning: "Failed to generate AI-powered report",
-        warnings: [error instanceof Error ? error.message : "Unknown error"]
-      };
+      throw new Error(error instanceof Error ? error.message : 'Failed to generate AI-powered report');
     }
   }
 
@@ -344,7 +335,7 @@ Return only the translated text.
     } catch (error) {
       return {
         success: false,
-        data: null,
+        data: technicalTerm,
         confidence: 0,
         reasoning: "Failed to translate term",
         warnings: [error instanceof Error ? error.message : "Unknown error"]

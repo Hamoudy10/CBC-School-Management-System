@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
 
     if (!response.success) {
       return NextResponse.json(
-        { error: response.error || 'Failed to translate term' },
+        { error: response.warnings?.[0] || 'Failed to translate term' },
         { status: 500 }
       );
     }

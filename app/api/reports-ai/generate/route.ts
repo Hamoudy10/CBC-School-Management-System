@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
 
     if (!response.success) {
       return NextResponse.json(
-        { error: response.error || 'Failed to generate AI report' },
+        { error: response.warnings?.[0] || 'Failed to generate AI report' },
         { status: 500 }
       );
     }

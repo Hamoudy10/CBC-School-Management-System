@@ -1,4 +1,5 @@
 import { AIReportService } from './ai-report.service';
+import type { AIResponse } from '@/lib/ai/ai.types';
 
 export class ReportTranslatorService {
   private aiService: AIReportService;
@@ -7,7 +8,14 @@ export class ReportTranslatorService {
     this.aiService = AIReportService.getInstance();
   }
 
-    async translateTechnicalTerm(technicalTerm: string, context: any): Promise<string> {
+  async translateToParentFriendly(
+    technicalTerm: string,
+    context: Record<string, unknown>
+  ): Promise<AIResponse<string>> {
+    return this.aiService.translateToParentFriendly(technicalTerm, context);
+  }
+
+  async translateTechnicalTerm(technicalTerm: string, context: Record<string, unknown>): Promise<string> {
     const response = await this.aiService.translateToParentFriendly(technicalTerm, context);
     return response.success ? (response.data as string) || technicalTerm : technicalTerm;
   }
@@ -15,11 +23,14 @@ export class ReportTranslatorService {
   async translateReportComment(
     comment: string,
     context: {
-      competency_name: string;
-      score: number;
-      level: string;
+      competency_name?: string;
+      score?: number;
+      level?: string;
       subject?: string;
       grade?: string;
+      performance_level?: string;
+      learning_area?: string;
+      [key: string]: unknown;
     }
   ): Promise<string> {
     const prompt = `
@@ -38,7 +49,7 @@ Requirements:
 
     try {
       const response = await this.aiService.translateToParentFriendly(comment, context);
-      return response.success ? response.data! : comment;
+      return response.success ? response.data : comment;
     } catch (error) {
       console.error('Translation failed:', error);
       return comment;
@@ -60,10 +71,18 @@ Requirements:
   async translateScoreToParentFriendly(score: number, maxScore: number = 100): Promise<string> {
     const percentage = (score / maxScore) * 100;
     
-    if (percentage >= 90) return 'Excellent - performing very well';
-    if (percentage >= 75) return 'Good - meeting expectations';
-    if (percentage >= 60) return 'Satisfactory - making good progress';
-    if (percentage >= 40) return 'Developing - needs some support';
+    if (percentage >= 90) {
+      return 'Excellent - performing very well';
+    }
+    if (percentage >= 75) {
+      return 'Good - meeting expectations';
+    }
+    if (percentage >= 60) {
+      return 'Satisfactory - making good progress';
+    }
+    if (percentage >= 40) {
+      return 'Developing - needs some support';
+    }
     return 'Needs support - requires additional help';
   }
 }
