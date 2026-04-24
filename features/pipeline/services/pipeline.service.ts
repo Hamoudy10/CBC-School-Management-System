@@ -4,9 +4,9 @@
  */
 import { logger } from '@/lib/logger';
 import { createSupabaseServerClient } from '../../../lib/supabase/server';
-import { computeClassAveragesJob } from './jobs/computeClassAveragesJob';
-import { computeAttendanceTrendsJob } from './jobs/computeAttendanceTrendsJob';
-import { computeRiskScoresJob } from './jobs/computeRiskScoresJob';
+import { computeClassAveragesJob } from '../jobs/computeClassAveragesJob';
+import { computeAttendanceTrendsJob } from '../jobs/computeAttendanceTrendsJob';
+import { computeRiskScoresJob } from '../jobs/computeRiskScoresJob';
 
 /**
  * Run all daily pipeline jobs
@@ -40,11 +40,13 @@ export async function runDailyPipelineJobs(): Promise<void> {
       source: 'pipeline.service'
     });
   } catch (error) {
+    const normalizedError = error instanceof Error ? error : new Error('Unknown error');
+
     logger.error('Failed to run daily pipeline jobs', {
       source: 'pipeline.service',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: normalizedError
     });
-    throw error;
+    throw normalizedError;
   }
 }
 
@@ -78,11 +80,13 @@ export async function runPipelineJob(jobName: string): Promise<void> {
       source: 'pipeline.service'
     });
   } catch (error) {
+    const normalizedError = error instanceof Error ? error : new Error('Unknown error');
+
     logger.error(`Failed to run pipeline job: ${jobName}`, {
       source: 'pipeline.service',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: normalizedError
     });
-    throw error;
+    throw normalizedError;
   }
 }
 

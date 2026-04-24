@@ -4,6 +4,30 @@
  */
 import { logger } from '../../../lib/logger';
 
+interface AttendanceRecord {
+  date: string;
+  status: string;
+}
+
+interface AssessmentRecord {
+  score: number;
+  assessment_date: string;
+}
+
+interface StudentWithMetrics {
+  id: number | string;
+  user_id: string | null;
+  current_class_id: number | string | null;
+  attendance: AttendanceRecord[] | null;
+  assessments: AssessmentRecord[] | null;
+}
+
+interface RiskFactor {
+  factor: 'attendance' | 'academic_performance';
+  value: number | null;
+  risk_contribution: number;
+}
+
 /**
  * Compute student risk scores and store in student_risk_scores table
  * @param {SupabaseClient} supabase - Supabase client instance
@@ -15,7 +39,7 @@ export async function computeRiskScoresJob(supabase: any): Promise<void> {
     });
 
     // Get all students with their recent attendance and assessments
-    const { data: students, error: studentsError } = await supabase
+    const { data: students, error: studentsError }: { data: StudentWithMetrics[] | null; error: unknown } = await supabase
       .from('students')
       .select(`
         id,
@@ -31,7 +55,16 @@ export async function computeRiskScoresJob(supabase: any): Promise<void> {
         )
       `);
 
-    if (studentsError) throw studentsError;
+    if (studentsError) {
+      throw studentsError;
+    }
+
+    if (!students || students.length === 0) {
+      logger.info('No students found for risk score computation', {
+        source: 'pipeline.jobs.computeRiskScores'
+      });
+      return;
+    }
 
     // Process each student
     for (const student of students) {
@@ -42,25 +75,25 @@ export async function computeRiskScoresJob(supabase: any): Promise<void> {
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       
       const recentAttendance = student.attendance
-        ? student.attendance.filter(record => 
+        ? student.attendance.filter((record: AttendanceRecord) =>
             new Date(record.date) >= thirtyDaysAgo
           )
         : [];
       
       // Get assessments from last 30 days
       const recentAssessments = student.assessments
-        ? student.assessments.filter(record => 
+        ? student.assessments.filter((record: AssessmentRecord) =>
             new Date(record.assessment_date) >= thirtyDaysAgo
           )
         : [];
 
       // Calculate risk factors
-      const riskFactors = [];
+      const riskFactors: RiskFactor[] = [];
       let riskScore = 0; // 0-100 scale, higher = higher risk
       
       // Attendance risk factor (weight: 40%)
       if (recentAttendance.length > 0) {
-        const attendanceRate = (recentAttendance.filter(r => r.status === 'present').length / recentAttendance.length) * 100;
+        const attendanceRate = (recentAttendance.filter((attendance: AttendanceRecord) => attendance.status === 'present').length / recentAttendance.length) * 100;
         const attendanceRisk = Math.max(0, 100 - attendanceRate); // Invert so lower attendance = higher risk
         riskFactors.push({
           factor: 'attendance',
@@ -80,7 +113,7 @@ export async function computeRiskScoresJob(supabase: any): Promise<void> {
       
       // Academic performance risk factor (weight: 40%)
       if (recentAssessments.length > 0) {
-        const avgScore = recentAssessments.reduce((sum, assessment) => sum + assessment.score, 0) / recentAssessments.length;
+        const avgScore = recentAssessments.reduce((sum: number, assessment: AssessmentRecord) => sum + assessment.score, 0) / recentAssessments.length;
         const performanceRisk = Math.max(0, 100 - avgScore); // Invert so lower scores = higher risk
         riskFactors.push({
           factor: 'academic_performance',
@@ -128,7 +161,9 @@ export async function computeRiskScoresJob(supabase: any): Promise<void> {
           onConflict: 'student_id'
         });
 
-      if (upsertError) throw upsertError;
+      if (upsertError) {
+        throw upsertError;
+      }
 
       logger.debug(`Computed and stored risk score for student ${studentId}`, {
         source: 'pipeline.jobs.computeRiskScores',
@@ -143,11 +178,13 @@ export async function computeRiskScoresJob(supabase: any): Promise<void> {
       source: 'pipeline.jobs.computeRiskScores'
     });
   } catch (error) {
+    const normalizedError = error instanceof Error ? error : new Error('Unknown error');
+
     logger.error('Failed to compute risk scores job', {
       source: 'pipeline.jobs.computeRiskScores',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: normalizedError
     });
-    throw error;
+    throw normalizedError;
   }
 }
 

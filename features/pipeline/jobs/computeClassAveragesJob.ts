@@ -4,6 +4,29 @@
  */
 import { logger } from '../../../lib/logger';
 
+interface CompetencyReference {
+  learning_area_id: number;
+}
+
+interface AssessmentRecord {
+  id: number | string;
+  score: number;
+  competency_id: number | null;
+  competencies: CompetencyReference | null;
+}
+
+interface StudentWithAssessments {
+  id: number | string;
+  assessments: AssessmentRecord[] | null;
+}
+
+interface ClassWithAssessments {
+  id: number | string;
+  name: string;
+  grade_level: number | string | null;
+  students: StudentWithAssessments[] | null;
+}
+
 /**
  * Compute class averages and store in analytics_snapshots table
  * @param {SupabaseClient} supabase - Supabase client instance
@@ -15,7 +38,7 @@ export async function computeClassAveragesJob(supabase: any): Promise<void> {
     });
 
     // Get all classes with their students and assessments
-    const { data: classes, error: classesError } = await supabase
+    const { data: classes, error: classesError }: { data: ClassWithAssessments[] | null; error: unknown } = await supabase
       .from('classes')
       .select(`
         id,
@@ -34,17 +57,27 @@ export async function computeClassAveragesJob(supabase: any): Promise<void> {
         )
       `);
 
-    if (classesError) throw classesError;
+    if (classesError) {
+      throw classesError;
+    }
+
+    if (!classes || classes.length === 0) {
+      logger.info('No classes found for class average computation', {
+        source: 'pipeline.jobs.computeClassAverages'
+      });
+      return;
+    }
 
     // Process each class
     for (const classItem of classes) {
       const classId = classItem.id;
       const className = classItem.name;
       const gradeLevel = classItem.grade_level;
+      const students = classItem.students ?? [];
       
       // Get all assessments for students in this class
-      const allAssessments = [];
-      for (const student of classItem.students) {
+      const allAssessments: AssessmentRecord[] = [];
+      for (const student of students) {
         if (student.assessments) {
           allAssessments.push(...student.assessments);
         }
@@ -87,7 +120,7 @@ export async function computeClassAveragesJob(supabase: any): Promise<void> {
         grade_level: gradeLevel,
         overall_average: overallAverage,
         total_assessments: allAssessments.length,
-        total_students: classItem.students.length,
+        total_students: students.length,
         learning_area_averages: learningAreaAverages,
         calculated_at: new Date().toISOString(),
         date: new Date().toISOString().split('T')[0] // Just the date part
@@ -107,7 +140,9 @@ export async function computeClassAveragesJob(supabase: any): Promise<void> {
           onConflict: 'class_id,snapshot_type,date'
         });
 
-      if (upsertError) throw upsertError;
+      if (upsertError) {
+        throw upsertError;
+      }
 
       logger.debug(`Computed and stored analytics for class ${classId}`, {
         source: 'pipeline.jobs.computeClassAverages',
@@ -120,11 +155,13 @@ export async function computeClassAveragesJob(supabase: any): Promise<void> {
       source: 'pipeline.jobs.computeClassAverages'
     });
   } catch (error) {
+    const normalizedError = error instanceof Error ? error : new Error('Unknown error');
+
     logger.error('Failed to compute class averages job', {
       source: 'pipeline.jobs.computeClassAverages',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: normalizedError
     });
-    throw error;
+    throw normalizedError;
   }
 }
 

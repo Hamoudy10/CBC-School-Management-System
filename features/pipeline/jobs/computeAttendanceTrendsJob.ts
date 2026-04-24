@@ -4,6 +4,33 @@
  */
 import { logger } from '../../../lib/logger';
 
+type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused' | string;
+
+interface AttendanceRecord {
+  id: number | string;
+  date: string;
+  status: AttendanceStatus;
+}
+
+interface StudentWithAttendance {
+  id: number | string;
+  attendance: AttendanceRecord[] | null;
+}
+
+interface ClassWithStudents {
+  id: number | string;
+  name: string;
+  grade_level: number | string | null;
+  students: StudentWithAttendance[] | null;
+}
+
+interface DailyAttendanceTrend {
+  date: string;
+  total_records: number;
+  present_count: number;
+  attendance_rate: number;
+}
+
 /**
  * Compute attendance trends and store in analytics_snapshots table
  * @param {SupabaseClient} supabase - Supabase client instance
@@ -15,7 +42,7 @@ export async function computeAttendanceTrendsJob(supabase: any): Promise<void> {
     });
 
     // Get all classes with their students and attendance records
-    const { data: classes, error: classesError } = await supabase
+    const { data: classes, error: classesError }: { data: ClassWithStudents[] | null; error: unknown } = await supabase
       .from('classes')
       .select(`
         id,
@@ -31,26 +58,35 @@ export async function computeAttendanceTrendsJob(supabase: any): Promise<void> {
         )
       `);
 
-    if (classesError) throw classesError;
+    if (classesError) {
+      throw classesError;
+    }
+
+    if (!classes || classes.length === 0) {
+      logger.info('No classes found for attendance trend computation', {
+        source: 'pipeline.jobs.computeAttendanceTrends'
+      });
+      return;
+    }
 
     // Process each class
     for (const classItem of classes) {
       const classId = classItem.id;
       const className = classItem.name;
       const gradeLevel = classItem.grade_level;
+      const students = classItem.students ?? [];
       
       // Get all attendance records for students in this class (last 30 days)
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       
-      const allAttendance = [];
-      for (const student of classItem.students) {
-        if (student.attendance) {
-          const recentAttendance = student.attendance.filter(record => 
-            new Date(record.date) >= thirtyDaysAgo
-          );
-          allAttendance.push(...recentAttendance);
-        }
+      const allAttendance: AttendanceRecord[] = [];
+      for (const student of students) {
+        const attendanceRecords = student.attendance ?? [];
+        const recentAttendance = attendanceRecords.filter((record: AttendanceRecord) =>
+          new Date(record.date) >= thirtyDaysAgo
+        );
+        allAttendance.push(...recentAttendance);
       }
 
       if (allAttendance.length === 0) {
@@ -72,7 +108,7 @@ export async function computeAttendanceTrendsJob(supabase: any): Promise<void> {
       const punctualityRate = ((presentCount + lateCount) / totalRecords) * 100;
 
       // Calculate daily attendance trends (last 7 days)
-      const dailyTrends = [];
+      const dailyTrends: DailyAttendanceTrend[] = [];
       for (let i = 0; i < 7; i++) {
         const date = new Date();
         date.setDate(date.getDate() - i);
@@ -125,7 +161,9 @@ export async function computeAttendanceTrendsJob(supabase: any): Promise<void> {
           onConflict: 'class_id,snapshot_type,date'
         });
 
-      if (upsertError) throw upsertError;
+      if (upsertError) {
+        throw upsertError;
+      }
 
       logger.debug(`Computed and stored attendance analytics for class ${classId}`, {
         source: 'pipeline.jobs.computeAttendanceTrends',
@@ -138,11 +176,13 @@ export async function computeAttendanceTrendsJob(supabase: any): Promise<void> {
       source: 'pipeline.jobs.computeAttendanceTrends'
     });
   } catch (error) {
+    const normalizedError = error instanceof Error ? error : new Error('Unknown error');
+
     logger.error('Failed to compute attendance trends job', {
       source: 'pipeline.jobs.computeAttendanceTrends',
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: normalizedError
     });
-    throw error;
+    throw normalizedError;
   }
 }
 

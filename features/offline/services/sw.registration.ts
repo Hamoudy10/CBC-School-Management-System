@@ -109,7 +109,12 @@ export async function isOfflineSWActive(): Promise<boolean> {
  * @returns {Promise<any>} Response from service worker
  */
 export async function messageOfflineSW(message: any): Promise<any> {
-  if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
+  if (!('serviceWorker' in navigator)) {
+    throw new Error('No active service worker to message');
+  }
+
+  const controller = navigator.serviceWorker.controller;
+  if (!controller) {
     throw new Error('No active service worker to message');
   }
 
@@ -124,7 +129,7 @@ export async function messageOfflineSW(message: any): Promise<any> {
       }
     };
 
-    navigator.serviceWorker.controller.postMessage(message, [messageChannel.port2]);
+    controller.postMessage(message, [messageChannel.port2]);
   });
 }
 
