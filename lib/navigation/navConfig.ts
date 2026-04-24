@@ -13,9 +13,12 @@ import {
   ShieldAlert,
   MessageSquare,
   BarChart3,
+  LineChart,
   Library,
   UserCog,
   Settings,
+  Sparkles,
+  Brain,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -36,6 +39,8 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Staff', href: '/staff', icon: Users, module: 'teachers', category: 'academic' },
   { label: 'Classes', href: '/classes', icon: Building2, module: 'classes', category: 'academic' },
   { label: 'Academics', href: '/academics', icon: BookOpen, module: 'academics', category: 'academic' },
+  { label: 'CBC Copilot', href: '/cbc-copilot', icon: Sparkles, module: 'academics', category: 'academic' },
+  { label: 'Teacher AI', href: '/teacher-ai', icon: Brain, module: 'assessments', category: 'academic' },
   { label: 'Assessments', href: '/assessments', icon: ClipboardCheck, module: 'assessments', category: 'academic' },
   { label: 'Exam Bank', href: '/exams', icon: FileText, module: 'exams', category: 'academic' },
   { label: 'Attendance', href: '/attendance', icon: CheckCircle2, module: 'attendance', category: 'academic' },
@@ -46,6 +51,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Discipline', href: '/discipline', icon: ShieldAlert, module: 'compliance', category: 'admin' },
   { label: 'Communication', href: '/communication', icon: MessageSquare, module: 'communication', category: 'admin' },
   { label: 'Reports', href: '/reports', icon: BarChart3, module: 'reports', category: 'admin' },
+  { label: 'Analytics AI', href: '/analytics', icon: LineChart, module: 'analytics', category: 'admin' },
 
   // Support
   { label: 'Library', href: '/library', icon: Library, module: 'library', category: 'support' },
@@ -79,6 +85,8 @@ const ROUTE_MODULES: { prefix: string; module: ModuleName }[] = [
   { prefix: '/teachers', module: 'teachers' },
   { prefix: '/classes', module: 'classes' },
   { prefix: '/academics', module: 'academics' },
+  { prefix: '/cbc-copilot', module: 'academics' },
+  { prefix: '/teacher-ai', module: 'assessments' },
   { prefix: '/assessments', module: 'assessments' },
   { prefix: '/exams', module: 'exams' },
   { prefix: '/attendance', module: 'attendance' },

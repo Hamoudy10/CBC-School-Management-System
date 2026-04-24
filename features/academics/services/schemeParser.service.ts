@@ -901,16 +901,20 @@ export async function importSchemeToDatabase(
     try {
       // Try to create or get the learning area
       // First do an insert with ON CONFLICT DO NOTHING for the id
-      const { error: insertError } = await supabase
+      await supabase
         .from("learning_areas")
-        .insert({
-          name: parsed.header.learningArea,
-          description: `${parsed.header.grade} - ${parsed.header.learningArea} - ${parsed.header.term} ${parsed.header.year}`,
-          school_id: schoolId,
-          applicable_grades: [parsed.header.grade],
-        })
-        .onConflict('school_id,name')
-        .ignore();
+        .upsert(
+          {
+            name: parsed.header.learningArea,
+            description: `${parsed.header.grade} - ${parsed.header.learningArea} - ${parsed.header.term} ${parsed.header.year}`,
+            school_id: schoolId,
+            applicable_grades: [parsed.header.grade],
+          },
+          {
+            onConflict: "school_id,name",
+            ignoreDuplicates: true,
+          },
+        );
 
       // Now fetch the learning area ID regardless of insert outcome
       const { data: areaData, error: selectError } = await supabase
