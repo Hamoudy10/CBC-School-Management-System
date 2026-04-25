@@ -119,6 +119,23 @@ interface CBCHierarchy {
   competencies: Competency[];
 }
 
+interface AssessmentOverviewRow {
+  assessmentId: string;
+  studentId: string;
+  studentName: string;
+  studentAdmissionNo: string;
+  learningAreaId: string;
+  learningAreaName: string;
+  competencyId: string;
+  competencyName: string;
+  score: PerformanceLevel | null;
+  levelLabel: PerformanceLevelName | null;
+  remarks: string | null;
+  assessmentDate: string;
+  termName: string;
+  academicYear: string;
+}
+
 // ─── Constants ───────────────────────────────────────────────
 const PERFORMANCE_LEVELS: {
   value: PerformanceLevel;
@@ -173,12 +190,51 @@ function getLevelConfig(score: PerformanceLevel | null) {
   return PERFORMANCE_LEVELS.find((l) => l.value === score);
 }
 
+function getLevelConfigByName(name: string | null | undefined) {
+  if (!name) {return null;}
+  return PERFORMANCE_LEVELS.find((l) => l.name === name);
+}
+
 function getLevelColor(score: number | null): string {
   if (!score) {return 'text-gray-400';}
   if (score >= 3.5) {return 'text-green-600';}
   if (score >= 2.5) {return 'text-blue-600';}
   if (score >= 1.5) {return 'text-amber-600';}
   return 'text-red-600';
+}
+
+function formatDisplayDate(value: string): string {
+  if (!value) {return '-';}
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {return value;}
+  return date.toLocaleDateString();
+}
+
+function toPerformanceLevelScore(score: unknown): PerformanceLevel | null {
+  const numeric = Number(score);
+  if (numeric === 1 || numeric === 2 || numeric === 3 || numeric === 4) {
+    return numeric as PerformanceLevel;
+  }
+  return null;
+}
+
+function normalizeOverviewRow(raw: any): AssessmentOverviewRow {
+  return {
+    assessmentId: raw.assessmentId ?? raw.assessment_id ?? '',
+    studentId: raw.studentId ?? raw.student_id ?? '',
+    studentName: raw.studentName ?? raw.student_name ?? 'Unknown Student',
+    studentAdmissionNo: raw.studentAdmissionNo ?? raw.student_admission_no ?? '',
+    learningAreaId: raw.learningAreaId ?? raw.learning_area_id ?? '',
+    learningAreaName: raw.learningAreaName ?? raw.learning_area_name ?? 'Unknown Learning Area',
+    competencyId: raw.competencyId ?? raw.competency_id ?? '',
+    competencyName: raw.competencyName ?? raw.competency_name ?? 'Unknown Competency',
+    score: toPerformanceLevelScore(raw.score),
+    levelLabel: (raw.levelLabel ?? raw.level_label ?? null) as PerformanceLevelName | null,
+    remarks: raw.remarks ?? null,
+    assessmentDate: raw.assessmentDate ?? raw.assessment_date ?? '',
+    termName: raw.termName ?? raw.term_name ?? '',
+    academicYear: String(raw.academicYear ?? raw.academic_year ?? ''),
+  };
 }
 
 // ─── Stat Card Component ─────────────────────────────────────
@@ -710,6 +766,12 @@ export default function AssessmentsPage() {
   const [isLoadingStudents, setIsLoadingStudents] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [overviewRows, setOverviewRows] = useState<AssessmentOverviewRow[]>([]);
+  const [overviewSearchTerm, setOverviewSearchTerm] = useState('');
+  const [overviewLearningAreaFilter, setOverviewLearningAreaFilter] = useState('');
+  const [overviewCompetencyFilter, setOverviewCompetencyFilter] = useState('');
+  const [isOverviewLoading, setIsOverviewLoading] = useState(false);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('entry');
@@ -735,6 +797,80 @@ export default function AssessmentsPage() {
       })),
     [referenceClasses],
   );
+  const selectedClass = useMemo(
+    () => classes.find((classOption) => classOption.classId === selectedClassId) ?? null,
+    [classes, selectedClassId],
+  );
+
+  const deferredOverviewSearchTerm = useDeferredValue(overviewSearchTerm);
+
+  const filteredOverviewRows = useMemo(() => {
+    const search = deferredOverviewSearchTerm.trim().toLowerCase();
+
+    return overviewRows.filter((row) => {
+      const matchesLearningArea =
+        !overviewLearningAreaFilter || row.learningAreaId === overviewLearningAreaFilter;
+      const matchesCompetency =
+        !overviewCompetencyFilter || row.competencyId === overviewCompetencyFilter;
+      const matchesSearch =
+        !search ||
+        row.studentName.toLowerCase().includes(search) ||
+        row.studentAdmissionNo.toLowerCase().includes(search) ||
+        row.learningAreaName.toLowerCase().includes(search) ||
+        row.competencyName.toLowerCase().includes(search) ||
+        (row.remarks ?? '').toLowerCase().includes(search);
+
+      return matchesLearningArea && matchesCompetency && matchesSearch;
+    });
+  }, [
+    overviewRows,
+    overviewLearningAreaFilter,
+    overviewCompetencyFilter,
+    deferredOverviewSearchTerm,
+  ]);
+
+  const overviewLearningAreaOptions = useMemo(() => {
+    const optionMap = new Map<string, string>();
+    for (const row of overviewRows) {
+      if (row.learningAreaId) {
+        optionMap.set(row.learningAreaId, row.learningAreaName);
+      }
+    }
+
+    return Array.from(optionMap.entries())
+      .map(([learningAreaId, name]) => ({ learningAreaId, name }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }, [overviewRows]);
+
+  const overviewCompetencyOptions = useMemo(() => {
+    const optionMap = new Map<string, string>();
+    for (const row of overviewRows) {
+      if (
+        row.competencyId &&
+        (!overviewLearningAreaFilter || row.learningAreaId === overviewLearningAreaFilter)
+      ) {
+        optionMap.set(row.competencyId, row.competencyName);
+      }
+    }
+
+    return Array.from(optionMap.entries())
+      .map(([competencyId, name]) => ({ competencyId, name }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }, [overviewRows, overviewLearningAreaFilter]);
+
+  const overviewStats = useMemo(() => {
+    const scoredRows = filteredOverviewRows.filter((row) => row.score !== null);
+    const studentsAssessed = new Set(filteredOverviewRows.map((row) => row.studentId));
+    const competenciesCovered = new Set(filteredOverviewRows.map((row) => row.competencyId));
+    const totalScore = scoredRows.reduce((sum, row) => sum + Number(row.score ?? 0), 0);
+
+    return {
+      totalAssessments: filteredOverviewRows.length,
+      studentsAssessed: studentsAssessed.size,
+      competenciesCovered: competenciesCovered.size,
+      averageScore: scoredRows.length > 0 ? totalScore / scoredRows.length : 0,
+    };
+  }, [filteredOverviewRows]);
 
   const availableTabs = useMemo(() => {
     const tabs: string[] = [];
@@ -866,6 +1002,71 @@ export default function AssessmentsPage() {
     }
   }, [activeTerm?.id, activeYear?.id, selectedClassId, selectedCompetencyId, success, error]);
 
+  const fetchOverviewRows = useCallback(async () => {
+    if (!selectedClassId) {
+      setOverviewRows([]);
+      setOverviewError(null);
+      return;
+    }
+
+    setIsOverviewLoading(true);
+    setOverviewError(null);
+
+    try {
+      const allRows: AssessmentOverviewRow[] = [];
+      let currentPage = 1;
+      let totalPages = 1;
+
+      do {
+        const params = new URLSearchParams({
+          classId: selectedClassId,
+          page: String(currentPage),
+          pageSize: '100',
+        });
+
+        if (activeYear?.id) {
+          params.set('academicYearId', activeYear.id);
+        }
+
+        if (activeTerm?.id) {
+          params.set('termId', activeTerm.id);
+        }
+
+        const response = await fetch(`/api/assessments?${params.toString()}`, {
+          credentials: 'include',
+        });
+        const payload = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          throw new Error(payload?.error || payload?.message || 'Failed to load assessments overview.');
+        }
+
+        const pageRows = Array.isArray(payload?.data) ? payload.data : [];
+        allRows.push(...pageRows.map(normalizeOverviewRow));
+
+        totalPages = Number(payload?.meta?.totalPages ?? 1);
+        currentPage += 1;
+      } while (currentPage <= totalPages);
+
+      setOverviewRows(
+        allRows.sort((left, right) => {
+          if (left.assessmentDate === right.assessmentDate) {
+            return left.studentName.localeCompare(right.studentName);
+          }
+          return right.assessmentDate.localeCompare(left.assessmentDate);
+        }),
+      );
+    } catch (fetchError) {
+      const message =
+        fetchError instanceof Error
+          ? fetchError.message
+          : 'Failed to load class overview assessments.';
+      setOverviewError(message);
+    } finally {
+      setIsOverviewLoading(false);
+    }
+  }, [activeTerm?.id, activeYear?.id, selectedClassId]);
+
   // ─── Effects ───────────────────────────────────────────────
   useEffect(() => {
     const loadData = async () => {
@@ -886,6 +1087,18 @@ export default function AssessmentsPage() {
       fetchStudents();
     }
   }, [selectedClassId, selectedCompetencyId, fetchStudents]);
+
+  useEffect(() => {
+    if (activeTab === 'overview' && selectedClassId) {
+      fetchOverviewRows();
+    }
+  }, [activeTab, selectedClassId, fetchOverviewRows]);
+
+  useEffect(() => {
+    setOverviewLearningAreaFilter('');
+    setOverviewCompetencyFilter('');
+    setOverviewSearchTerm('');
+  }, [selectedClassId]);
 
   // Reset cascading selections
   useEffect(() => {
@@ -925,7 +1138,7 @@ export default function AssessmentsPage() {
     setHasChanges(true);
   };
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!selectedClassId || !selectedCompetencyId || students.length === 0) {return;}
     if (!activeYear?.id || !activeTerm?.id) {
       error(
@@ -979,13 +1192,16 @@ export default function AssessmentsPage() {
 
       setHasChanges(false);
       fetchStudents(); // Refresh to get updated data
+      if (activeTab === 'overview') {
+        fetchOverviewRows();
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to save assessments. Please try again.';
       error('Error', message);
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [activeTab, activeTerm?.id, activeYear?.id, error, fetchOverviewRows, fetchStudents, selectedClassId, selectedCompetencyId, selectedLearningAreaId, students, success]);
 
   // ─── Render ────────────────────────────────────────────────
   if (loading) {
@@ -1260,17 +1476,215 @@ export default function AssessmentsPage() {
         {availableTabs.includes('overview') && (
           <TabContent value="overview" className="mt-6">
           {selectedClassId ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Class Assessment Overview</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Alert variant="info" title="Coming Soon">
-                  The class overview feature showing assessment progress across all
-                  learning areas and competencies will be available in a future update.
+            <div className="space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <StatCard
+                  title="Total Assessments"
+                  value={overviewStats.totalAssessments}
+                  subtitle={selectedClass?.name ? `${selectedClass.name} class` : undefined}
+                  icon={<ClipboardList className="h-5 w-5" />}
+                  color="blue"
+                />
+                <StatCard
+                  title="Students Assessed"
+                  value={overviewStats.studentsAssessed}
+                  subtitle="Unique students"
+                  icon={<Users className="h-5 w-5" />}
+                  color="green"
+                />
+                <StatCard
+                  title="Competencies Covered"
+                  value={overviewStats.competenciesCovered}
+                  subtitle="Distinct competencies"
+                  icon={<Target className="h-5 w-5" />}
+                  color="amber"
+                />
+                <StatCard
+                  title="Average Score"
+                  value={overviewStats.averageScore.toFixed(2)}
+                  subtitle={
+                    activeTerm?.name && activeYear?.year
+                      ? `${activeTerm.name} ${activeYear.year}`
+                      : 'Current context'
+                  }
+                  icon={<BarChart3 className="h-5 w-5" />}
+                  color="purple"
+                />
+              </div>
+
+              <Card>
+                <CardContent className="space-y-4 pt-6">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="relative md:col-span-2">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <Input
+                        placeholder="Search by student, admission, learning area, competency, or remarks..."
+                        value={overviewSearchTerm}
+                        onChange={(event) => setOverviewSearchTerm(event.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+
+                    <Select
+                      value={overviewLearningAreaFilter}
+                      onChange={(event) => {
+                        setOverviewLearningAreaFilter(event.target.value);
+                        setOverviewCompetencyFilter('');
+                      }}
+                    >
+                      <option value="">All learning areas</option>
+                      {overviewLearningAreaOptions.map((option) => (
+                        <option key={option.learningAreaId} value={option.learningAreaId}>
+                          {option.name}
+                        </option>
+                      ))}
+                    </Select>
+
+                    <Select
+                      value={overviewCompetencyFilter}
+                      onChange={(event) => setOverviewCompetencyFilter(event.target.value)}
+                    >
+                      <option value="">All competencies</option>
+                      {overviewCompetencyOptions.map((option) => (
+                        <option key={option.competencyId} value={option.competencyId}>
+                          {option.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm text-gray-500">
+                      Showing {filteredOverviewRows.length} of {overviewRows.length} saved assessments.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={fetchOverviewRows}
+                      loading={isOverviewLoading}
+                    >
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Refresh
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {isOverviewLoading ? (
+                <div className="flex items-center justify-center rounded-lg border border-gray-200 bg-white py-12">
+                  <Spinner size="lg" />
+                </div>
+              ) : overviewError ? (
+                <Alert variant="destructive">
+                  Failed to load class overview: {overviewError}
                 </Alert>
-              </CardContent>
-            </Card>
+              ) : filteredOverviewRows.length > 0 ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">All Saved Assessments</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto rounded-lg border border-gray-200">
+                      <table className="w-full min-w-[980px]">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                              Student
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                              Learning Area
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                              Competency
+                            </th>
+                            <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">
+                              Score
+                            </th>
+                            <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-500">
+                              Level
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                              Date
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                              Remarks
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 bg-white">
+                          {filteredOverviewRows.map((row, index) => {
+                            const levelConfig =
+                              getLevelConfigByName(row.levelLabel) ?? getLevelConfig(row.score);
+
+                            return (
+                              <tr
+                                key={row.assessmentId || `${row.studentId}-${row.competencyId}-${index}`}
+                                className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'}
+                              >
+                                <td className="px-4 py-3">
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {row.studentName}
+                                  </p>
+                                  <p className="text-xs text-gray-500">{row.studentAdmissionNo}</p>
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-700">
+                                  {row.learningAreaName}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-700">
+                                  {row.competencyName}
+                                </td>
+                                <td className="px-4 py-3 text-center text-sm font-semibold text-gray-900">
+                                  {row.score ?? '-'}
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  {levelConfig ? (
+                                    <span
+                                      className={cn(
+                                        'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium',
+                                        levelConfig.bgColor.split(' ')[0],
+                                        levelConfig.color,
+                                      )}
+                                    >
+                                      {levelConfig.shortLabel}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-gray-400">-</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-700">
+                                  {formatDisplayDate(row.assessmentDate)}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-700">
+                                  {row.remarks ? (
+                                    <span title={row.remarks} className="line-clamp-2">
+                                      {row.remarks}
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-400">No remarks</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <Info className="h-10 w-10 text-gray-300" />
+                    <h3 className="mt-4 text-lg font-semibold text-gray-900">
+                      No Assessments Found
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      No saved assessments match your selected filters for this class.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           ) : (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
@@ -1279,7 +1693,7 @@ export default function AssessmentsPage() {
                   Select a Class
                 </h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  Choose a class to view assessment overview.
+                  Choose a class to view all saved assessments and progress overview.
                 </p>
               </CardContent>
             </Card>
