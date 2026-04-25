@@ -958,16 +958,24 @@ export default function AssessmentsPage() {
           assessments,
         }),
       });
+      const payload = await response.json().catch(() => null);
 
       if (!response.ok) {
-        const data = await response.json();
-        const message = data.details 
-          ? JSON.stringify(data.details) 
-          : (data.error || data.message || 'Failed to save assessments');
+        const message = payload?.details 
+          ? JSON.stringify(payload.details) 
+          : (payload?.error || payload?.message || payload?.data?.message || 'Failed to save assessments');
         throw new Error(message);
       }
 
-      success('Assessments Saved', `${assessments.length} student assessments have been recorded.`);
+      const serverMessage =
+        payload?.data?.message ??
+        `Saved ${assessments.length} assessments successfully.`;
+      const failedCount = Number(payload?.data?.failed ?? 0);
+      if (failedCount > 0) {
+        error('Assessments Partially Saved', serverMessage);
+      } else {
+        success('Assessments Saved', serverMessage);
+      }
 
       setHasChanges(false);
       fetchStudents(); // Refresh to get updated data

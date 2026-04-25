@@ -750,7 +750,6 @@ export async function bulkCreateAssessments(
       .from("assessments")
       .select("assessment_id, student_id")
       .eq("school_id", schoolId)
-      .eq("class_id", payload.classId)
       .eq("competency_id", payload.competencyId)
       .eq("academic_year_id", academicYearId)
       .eq("term_id", termId)
@@ -773,13 +772,26 @@ export async function bulkCreateAssessments(
     let created = 0;
     let updated = 0;
     let failed = 0;
+    const failureReasons: string[] = [];
 
     for (const entry of payload.assessments) {
       if (entry.score === null) {
         failed += 1;
+        failureReasons.push(
+          `Student ${entry.studentId}: score is required before saving.`,
+        );
         continue;
       }
+
       const levelId = levelIds.get(entry.score);
+      if (!levelId) {
+        failed += 1;
+        failureReasons.push(
+          `Student ${entry.studentId}: no performance level mapping found for score ${entry.score}.`,
+        );
+        continue;
+      }
+
       const assessmentPayload = {
         score: entry.score,
         level_id: levelId,
@@ -787,6 +799,8 @@ export async function bulkCreateAssessments(
         assessment_date: new Date().toISOString().slice(0, 10),
         assessed_by: currentUser.id,
         updated_by: currentUser.id,
+        class_id: payload.classId,
+        learning_area_id: payload.learningAreaId,
       };
 
       if (existingMap.has(entry.studentId)) {
@@ -798,6 +812,7 @@ export async function bulkCreateAssessments(
 
         if (error) {
           failed += 1;
+          failureReasons.push(`Student ${entry.studentId}: ${error.message}`);
         } else {
           updated += 1;
         }
@@ -820,17 +835,23 @@ export async function bulkCreateAssessments(
 
         if (error) {
           failed += 1;
+          failureReasons.push(`Student ${entry.studentId}: ${error.message}`);
         } else {
           created += 1;
         }
       }
     }
 
+    const sampledReasons =
+      failureReasons.length > 0
+        ? ` First error: ${failureReasons[0]}`
+        : "";
+
     return {
       success: failed < payload.assessments.length,
       message:
         failed > 0
-          ? `Saved ${created + updated} assessments with ${failed} failure(s).`
+          ? `Saved ${created + updated} assessments with ${failed} failure(s).${sampledReasons}`
           : `Saved ${created + updated} assessments successfully.`,
       created,
       updated,
