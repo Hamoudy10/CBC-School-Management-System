@@ -14,13 +14,15 @@ const scoreField = z.coerce
   .number()
   .int("Score must be a whole number")
   .min(1, "Score must be at least 1")
-  .max(4, "Score cannot exceed 4");
+  .max(4, "Score cannot exceed 4")
+  .nullable();
 
 const remarksField = z
   .string()
   .max(1000, "Remarks must be under 1000 characters")
   .optional()
-  .or(z.literal(""));
+  .or(z.literal(""))
+  .nullable();
 
 const dateField = z
   .string()
