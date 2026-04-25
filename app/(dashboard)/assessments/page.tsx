@@ -960,7 +960,8 @@ export default function AssessmentsPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to save assessments');
+        const data = await response.json();
+        throw new Error(data.error || data.message || 'Failed to save assessments');
       }
 
       success('Assessments Saved', `${assessments.length} student assessments have been recorded.`);
@@ -968,7 +969,8 @@ export default function AssessmentsPage() {
       setHasChanges(false);
       fetchStudents(); // Refresh to get updated data
     } catch (err) {
-      error('Error', 'Failed to save assessments. Please try again.');
+      const message = err instanceof Error ? err.message : 'Failed to save assessments. Please try again.';
+      error('Error', message);
     } finally {
       setIsSaving(false);
     }
