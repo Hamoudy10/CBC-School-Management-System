@@ -124,16 +124,28 @@ export async function getPerformanceLevelByLabel(
 ): Promise<PerformanceLevel | null> {
   const supabase = await createSupabaseServerClient();
 
-  let query = supabase
+  // First try school-specific, then fall back to global (null school_id)
+  let { data, error } = await supabase
     .from("performance_levels")
     .select("*")
-    .eq("label", label);
+    .eq("label", label)
+    .eq("school_id", currentUser.schoolId!)
+    .maybeSingle();
 
-  if (currentUser.role !== "super_admin") {
-    query = query.eq("school_id", currentUser.schoolId!);
+  if (!data) {
+    // Fall back to global performance levels
+    const global = await supabase
+      .from("performance_levels")
+      .select("*")
+      .eq("label", label)
+      .is("school_id", null)
+      .maybeSingle();
+    
+    if (global) {
+      data = global;
+      error = null;
+    }
   }
-
-  const { data, error } = await query.single();
 
   if (error || !data) return null;
 
