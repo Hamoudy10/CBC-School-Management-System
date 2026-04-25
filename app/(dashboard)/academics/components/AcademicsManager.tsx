@@ -162,6 +162,10 @@ export function AcademicsManager({ initialLearningAreas }: AcademicsManagerProps
   }, []);
 
   useEffect(() => {
+    loadLearningAreas();
+  }, [loadLearningAreas]);
+
+  useEffect(() => {
     loadHierarchy();
   }, [loadHierarchy]);
 

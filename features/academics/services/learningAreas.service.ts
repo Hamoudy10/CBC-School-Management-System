@@ -52,7 +52,7 @@ export async function listLearningAreas(
   }
 
   const items: LearningArea[] = (data || []).map((row: any) => ({
-    learningAreaId: row.learning_area_id,
+    learningAreaId: row.id,
     schoolId: row.school_id,
     name: row.name,
     description: row.description,
@@ -83,7 +83,7 @@ export async function getLearningAreaById(
   const supabase = await createSupabaseServerClient();
   const learningAreasTable = () => supabase.from("learning_areas") as any;
 
-  let query = learningAreasTable().select("*").eq("learning_area_id", id);
+  let query = learningAreasTable().select("*").eq("id", id);
 
   if (currentUser.role !== "super_admin") {
     query = query.eq("school_id", currentUser.schoolId!);
@@ -95,7 +95,7 @@ export async function getLearningAreaById(
 
   const row = data as any;
   return {
-    learningAreaId: row.learning_area_id,
+    learningAreaId: row.id,
     schoolId: row.school_id,
     name: row.name,
     description: row.description,
@@ -122,8 +122,8 @@ export async function createLearningArea(
   }
 
   // Check duplicate name within school
-  const { data: existing } = await learningAreasTable()
-    .select("learning_area_id")
+const { data: existing } = await learningAreasTable()
+    .select("id")
     .eq("school_id", schoolId!)
     .eq("name", payload.name)
     .maybeSingle();
@@ -143,7 +143,7 @@ export async function createLearningArea(
       is_core: payload.isCore ?? true,
       applicable_grades: payload.applicableGrades || [],
     })
-    .select("learning_area_id")
+    .select("id")
     .single();
 
   if (error) {
@@ -216,7 +216,7 @@ export async function deleteLearningArea(
     };
   }
 
-  let query = learningAreasTable().delete().eq("learning_area_id", id);
+  let query = learningAreasTable().delete().eq("id", id);
 
   if (currentUser.role !== "super_admin") {
     query = query.eq("school_id", currentUser.schoolId!);

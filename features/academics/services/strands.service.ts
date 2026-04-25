@@ -29,7 +29,7 @@ export async function listStrands(
       learning_areas (
         name
       )
-    `,
+    `
     )
     .eq("learning_area_id", learningAreaId);
 
@@ -46,7 +46,7 @@ export async function listStrands(
   }
 
   return (data || []).map((row: any) => ({
-    strandId: row.strand_id,
+    strandId: row.id,
     schoolId: row.school_id,
     learningAreaId: row.learning_area_id,
     learningAreaName: row.learning_areas?.name || null,
@@ -74,7 +74,7 @@ export async function getStrandById(
       learning_areas (
         name
       )
-    `,
+    `
     )
     .eq("strand_id", strandId);
 
@@ -88,7 +88,7 @@ export async function getStrandById(
 
   const row = data as any;
   return {
-    strandId: row.strand_id,
+    strandId: row.id,
     schoolId: row.school_id,
     learningAreaId: row.learning_area_id,
     learningAreaName: row.learning_areas?.name || null,
