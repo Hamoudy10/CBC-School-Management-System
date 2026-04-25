@@ -775,6 +775,10 @@ export async function bulkCreateAssessments(
     let failed = 0;
 
     for (const entry of payload.assessments) {
+      if (entry.score === null) {
+        failed += 1;
+        continue;
+      }
       const levelId = levelIds.get(entry.score);
       const assessmentPayload = {
         score: entry.score,
