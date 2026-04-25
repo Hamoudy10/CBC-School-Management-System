@@ -507,6 +507,13 @@ export async function createAssessment(
   currentUser: AuthUser,
 ): Promise<{ success: boolean; message: string; assessmentId?: string }> {
   try {
+    if (payload.score === null) {
+      return {
+        success: false,
+        message: "Score is required.",
+      };
+    }
+
     const schoolId = getSchoolId(currentUser);
     const { academicYearId, termId } = await resolveAcademicContext(schoolId, {
       academicYearId: payload.academicYearId,
