@@ -829,14 +829,14 @@ export default function AssessmentsPage() {
         const json = await response.json();
         setStudents(
           (json.data || []).map((s: any) => ({
-            studentId: s.student_id || s.studentId,
-            fullName: s.full_name || s.fullName || `${s.first_name} ${s.last_name}`,
-            admissionNumber: s.admission_number || s.admissionNumber,
-            photoUrl: s.photo_url || s.photoUrl,
-            score: s.score || null,
-            remarks: s.remarks || null,
-            assessmentId: s.assessment_id || s.assessmentId || null,
-            lastUpdated: s.updated_at || s.updatedAt || null,
+            studentId: s.student_id ?? s.studentId,
+            fullName: s.full_name ?? s.fullName ?? `${s.first_name} ${s.last_name}`,
+            admissionNumber: s.admission_number ?? s.admissionNumber,
+            photoUrl: s.photo_url ?? s.photoUrl,
+            score: s.score ?? null,
+            remarks: s.remarks ?? null,
+            assessmentId: s.assessment_id ?? s.assessmentId ?? null,
+            lastUpdated: s.updated_at ?? s.updatedAt ?? null,
           }))
         );
         
