@@ -627,7 +627,7 @@ export async function updateAssessment(
       updated_by: currentUser.id,
     };
 
-    if (payload.score !== undefined) {
+    if (payload.score !== undefined && payload.score !== null) {
       const levelId = await getLevelIdForScore(payload.score, currentUser);
 
       if (!levelId) {
