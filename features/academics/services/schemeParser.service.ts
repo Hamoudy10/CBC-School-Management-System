@@ -377,23 +377,31 @@ function parseTabDelimited(lines: string[], warnings: string[]): ParseResult {
       /^\d{1,2}\s*$/.test(line.trim()) ||
       /^\d{1,2}\s+\d{1,2}/.test(line.trim())
     ) {
-      if (buffer.trim()) allDataLines.push(buffer.trim());
+      if (buffer.trim()) {
+        allDataLines.push(buffer.trim());
+      }
       buffer = line;
     } else {
       buffer += ` ${line}`;
     }
   }
-  if (buffer.trim()) allDataLines.push(buffer.trim());
+  if (buffer.trim()) {
+    allDataLines.push(buffer.trim());
+  }
 
   for (const row of allDataLines) {
     const parts = row
       .split(/\t|\|/)
       .map((p) => p.trim())
       .filter((p) => p.length > 0);
-    if (parts.length < 4) continue;
+    if (parts.length < 4) {
+      continue;
+    }
 
     const weekMatch = parts[0].match(/^(\d+)/);
-    if (!weekMatch) continue;
+    if (!weekMatch) {
+      continue;
+    }
     const week = parseInt(weekMatch[1]);
 
     let lessonIdx = 1;
@@ -405,7 +413,9 @@ function parseTabDelimited(lines: string[], warnings: string[]): ParseResult {
         lessonIdx = 2;
       }
     }
-    if (lesson === 0) lesson = 1;
+    if (lesson === 0) {
+      lesson = 1;
+    }
 
     const strand = parts[lessonIdx] || "";
     const subStrand = parts[lessonIdx + 1] || "";
@@ -419,7 +429,9 @@ function parseTabDelimited(lines: string[], warnings: string[]): ParseResult {
       parts.slice(lessonIdx + 2).join(" "),
     );
 
-    if (!strand) continue;
+    if (!strand) {
+      continue;
+    }
 
     lessons.push({
       week,
@@ -519,7 +531,9 @@ function parseCellByCell(lines: string[], warnings: string[]): ParseResult {
 
   for (const line of dataLines) {
     const trimmed = line.trim();
-    if (!trimmed) continue;
+    if (!trimmed) {
+      continue;
+    }
 
     // Detect standalone numbers (week or lesson)
     if (/^\d{1,2}$/.test(trimmed)) {
@@ -627,7 +641,9 @@ function parseCellByCell(lines: string[], warnings: string[]): ParseResult {
   // Build lessons from parsed rows
   // Cell 0 = strand + sub-strand combined, need to split
   for (const row of rows) {
-    if (row.week === 0) continue;
+    if (row.week === 0) {
+      continue;
+    }
 
     // Split strand + sub-strand from combined cell
     const combinedCell = row.cells[0] || "";
@@ -644,7 +660,9 @@ function parseCellByCell(lines: string[], warnings: string[]): ParseResult {
       continue;
     }
 
-    if (!strand) continue;
+    if (!strand) {
+      continue;
+    }
 
     lessons.push({
       week: row.week,
@@ -879,114 +897,117 @@ export async function importSchemeToDatabase(
   currentUser: AuthUser,
 ): Promise<SchemeImportResult> {
   if (!currentUser.schoolId) {
-    return { 
-      success: false, 
+    return {
+      success: false,
       message: "No school context available",
       createdStrands: [],
       createdSubStrands: [],
-      createdCompetencies: []
+      createdCompetencies: [],
     };
   }
 
   const supabase = await createSupabaseServerClient();
   const schoolId = currentUser.schoolId;
+  const warnings = [...(parsed.warnings ?? [])];
+  const missingElements = [...(parsed.missingElements ?? [])];
   const createdStrands: string[] = [];
   const createdSubStrands: string[] = [];
   const createdCompetencies: string[] = [];
+  const failures: string[] = [];
+
+  const normalize = (value: string): string => value.replace(/\s+/g, " ").trim();
+  const addFailure = (message: string) => {
+    failures.push(message);
+    warnings.push(message);
+  };
 
   try {
-    // ── Step 1: Find or create learning area ────────────────────
-    let learningAreaId: string | null = null;
+    const learningAreaName = normalize(parsed.header.learningArea) || "Imported Learning Area";
+    const descriptionParts = [
+      normalize(parsed.header.grade),
+      normalize(parsed.header.term),
+      normalize(parsed.header.year),
+    ].filter(Boolean);
+    const learningAreaDescription =
+      descriptionParts.length > 0
+        ? `${descriptionParts.join(" - ")} scheme import`
+        : "Imported from scheme";
 
-    try {
-      // Try to create or get the learning area
-      // First do an insert with ON CONFLICT DO NOTHING for the id
-      await supabase
-        .from("learning_areas")
-        .upsert(
-          {
-            name: parsed.header.learningArea,
-            description: `${parsed.header.grade} - ${parsed.header.learningArea} - ${parsed.header.term} ${parsed.header.year}`,
-            school_id: schoolId,
-            applicable_grades: [parsed.header.grade],
-          },
-          {
-            onConflict: "school_id,name",
-            ignoreDuplicates: true,
-          },
-        );
+    const { error: learningAreaUpsertError } = await supabase
+      .from("learning_areas")
+      .upsert(
+        {
+          school_id: schoolId,
+          name: learningAreaName,
+          description: learningAreaDescription,
+        },
+        {
+          onConflict: "school_id,name",
+          ignoreDuplicates: true,
+        },
+      );
 
-      // Now fetch the learning area ID regardless of insert outcome
-      const { data: areaData, error: selectError } = await supabase
-        .from("learning_areas")
-        .select("id")
-        .eq("name", parsed.header.learningArea)
-        .eq("school_id", schoolId)
-        .maybeSingle();
-
-      if (selectError) {
-        console.error("Select error:", selectError);
-        return {
-          success: false,
-          message: `Error fetching learning area: ${selectError.message}`,
-          createdStrands: [],
-          createdSubStrands: [],
-          createdCompetencies: []
-        };
-      }
-
-      if (!areaData) {
-        return {
-          success: false,
-          message: "Could not find learning area after creation",
-          createdStrands: [],
-          createdSubStrands: [],
-          createdCompetencies: []
-        };
-      }
-
-      learningAreaId = areaData.id;
-      console.log("Learning area ID obtained:", learningAreaId);
-
-    } catch (err) {
-      console.error("Outer error in learning area step:", err);
+    if (learningAreaUpsertError) {
       return {
         success: false,
-        message: `Error in learning area step: ${err instanceof Error ? err.message : "Unknown error"}`,
-        createdStrands: [],
-        createdSubStrands: [],
-        createdCompetencies: []
+        message: `Failed to create or update learning area: ${learningAreaUpsertError.message}`,
+        createdStrands,
+        createdSubStrands,
+        createdCompetencies,
+        warnings,
+        missingElements,
       };
     }
 
-    console.log("Final learning area ID:", learningAreaId);
+    const { data: learningAreaData, error: learningAreaSelectError } = await supabase
+      .from("learning_areas")
+      .select("learning_area_id")
+      .eq("school_id", schoolId)
+      .eq("name", learningAreaName)
+      .maybeSingle();
 
-    if (!learningAreaId) {
+    if (learningAreaSelectError || !learningAreaData?.learning_area_id) {
       return {
         success: false,
-        message: "Could not determine learning area ID",
-        createdStrands: [],
-        createdSubStrands: [],
-        createdCompetencies: []
+        message:
+          learningAreaSelectError?.message ||
+          "Learning area could not be resolved after import.",
+        createdStrands,
+        createdSubStrands,
+        createdCompetencies,
+        warnings,
+        missingElements,
       };
     }
 
-    // ── Step 2: Extract unique strands and create them ──────────
+    const learningAreaId = learningAreaData.learning_area_id;
+
+    // Step 2: Extract unique strands and create them.
     const uniqueStrands = Array.from(
-      new Set(parsed.lessons.map((l) => l.strand.trim())),
+      new Set(parsed.lessons.map((lesson) => normalize(lesson.strand)).filter(Boolean)),
     );
     const strandIdMap = new Map<string, string>();
 
-    for (const strandName of uniqueStrands) {
-      const { data: existingStrand } = await supabase
+    if (uniqueStrands.length === 0) {
+      missingElements.push("No strands were detected in the uploaded scheme.");
+    }
+
+    for (const [strandIndex, strandName] of uniqueStrands.entries()) {
+      const { data: existingStrand, error: existingStrandError } = await supabase
         .from("strands")
-        .select("id")
+        .select("strand_id")
+        .eq("school_id", schoolId)
         .eq("name", strandName)
         .eq("learning_area_id", learningAreaId)
         .maybeSingle();
 
+      if (existingStrandError) {
+        addFailure(`Could not check strand "${strandName}": ${existingStrandError.message}`);
+        continue;
+      }
+
       if (existingStrand) {
-        strandIdMap.set(strandName, existingStrand.id);
+        strandIdMap.set(strandName, existingStrand.strand_id);
       } else {
         const { data: newStrand, error } = await supabase
           .from("strands")
@@ -995,149 +1016,231 @@ export async function importSchemeToDatabase(
             description: `Strand from ${parsed.header.term} ${parsed.header.year} scheme`,
             learning_area_id: learningAreaId,
             school_id: schoolId,
+            sort_order: strandIndex,
           })
-          .select("id")
+          .select("strand_id")
           .single();
 
-        if (error) {
-          createdStrands.push(
-            `⚠️ Failed to create "${strandName}": ${error.message}`,
-          );
-        } else {
-          strandIdMap.set(strandName, newStrand.id);
-          createdStrands.push(strandName);
+        if (error || !newStrand?.strand_id) {
+          addFailure(`Failed to create strand "${strandName}": ${error?.message ?? "Unknown error"}`);
+          continue;
         }
+
+        strandIdMap.set(strandName, newStrand.strand_id);
+        createdStrands.push(strandName);
       }
     }
 
-    // ── Step 3: Extract unique sub-strands and create them ──────
-    const uniqueSubStrands = Array.from(
-      new Set(parsed.lessons.map((l) => l.subStrand.trim()).filter(Boolean)),
+    // Step 3: Extract unique sub-strands (scoped by strand) and create them.
+    const missingSubStrands = new Set<string>();
+    const uniqueSubStrandPairs = Array.from(
+      new Map(
+        parsed.lessons
+          .map((lesson) => {
+            const strandName = normalize(lesson.strand);
+            const subStrandName = normalize(lesson.subStrand);
+
+            if (strandName && !subStrandName) {
+              missingSubStrands.add(strandName);
+            }
+
+            return {
+              key: `${strandName}|||${subStrandName}`,
+              strandName,
+              subStrandName,
+            };
+          })
+          .filter((pair) => Boolean(pair.strandName) && Boolean(pair.subStrandName))
+          .map((pair) => [pair.key, pair]),
+      ).values(),
     );
+
+    if (missingSubStrands.size > 0) {
+      missingElements.push(
+        `Some lessons are missing sub-strands under: ${Array.from(missingSubStrands).join(", ")}`,
+      );
+    }
+
     const subStrandIdMap = new Map<string, string>();
 
-    for (const subStrandName of uniqueSubStrands) {
-      // Find parent strand for this sub-strand
-      const parentLesson = parsed.lessons.find(
-        (l) => l.subStrand.trim() === subStrandName,
-      );
-      const parentStrandName = parentLesson?.strand.trim() || uniqueStrands[0];
-      const parentStrandId = strandIdMap.get(parentStrandName);
+    for (const [subIndex, pair] of uniqueSubStrandPairs.entries()) {
+      const parentStrandId = strandIdMap.get(pair.strandName);
 
       if (!parentStrandId) {
+        addFailure(
+          `Could not create sub-strand "${pair.subStrandName}" because strand "${pair.strandName}" was not available.`,
+        );
         continue;
       }
 
-      const { data: existingSub } = await supabase
+      const { data: existingSub, error: existingSubError } = await supabase
         .from("sub_strands")
-        .select("id")
-        .eq("name", subStrandName)
+        .select("sub_strand_id")
+        .eq("school_id", schoolId)
+        .eq("name", pair.subStrandName)
         .eq("strand_id", parentStrandId)
         .maybeSingle();
 
+      if (existingSubError) {
+        addFailure(`Could not check sub-strand "${pair.subStrandName}": ${existingSubError.message}`);
+        continue;
+      }
+
       if (existingSub) {
-        subStrandIdMap.set(subStrandName, existingSub.id);
+        subStrandIdMap.set(pair.key, existingSub.sub_strand_id);
       } else {
         const { data: newSub, error } = await supabase
           .from("sub_strands")
           .insert({
-            name: subStrandName,
+            name: pair.subStrandName,
             description: `Sub-strand from ${parsed.header.term} ${parsed.header.year} scheme`,
             strand_id: parentStrandId,
             school_id: schoolId,
+            sort_order: subIndex,
           })
-          .select("id")
+          .select("sub_strand_id")
           .single();
 
-        if (error) {
-          createdSubStrands.push(
-            `⚠️ Failed to create "${subStrandName}": ${error.message}`,
+        if (error || !newSub?.sub_strand_id) {
+          addFailure(
+            `Failed to create sub-strand "${pair.subStrandName}": ${error?.message ?? "Unknown error"}`,
           );
-        } else {
-          subStrandIdMap.set(subStrandName, newSub.id);
-          createdSubStrands.push(subStrandName);
+          continue;
         }
+
+        subStrandIdMap.set(pair.key, newSub.sub_strand_id);
+        createdSubStrands.push(pair.subStrandName);
       }
     }
 
-    // ── Step 4: Extract unique learning outcomes as competencies ─
-    const outcomeSet = new Set<string>();
+    // Step 4: Extract learning outcomes as competencies.
+    const seenCompetencies = new Set<string>();
+    let competencySortOrder = 0;
+
     for (const lesson of parsed.lessons) {
-      for (const outcome of lesson.learningOutcomes) {
-        const key = `${lesson.subStrand.trim()}|||${outcome}`;
-        outcomeSet.add(key);
-      }
-    }
+      const strandName = normalize(lesson.strand);
+      const subStrandName = normalize(lesson.subStrand);
+      const pairKey = `${strandName}|||${subStrandName}`;
+      const subStrandId = subStrandIdMap.get(pairKey);
 
-    for (const key of Array.from(outcomeSet)) {
-      const [subStrandName, outcomeText] = key.split("|||");
-      const subStrandId = subStrandIdMap.get(subStrandName);
-
-      if (!subStrandId) {
+      if (!subStrandName) {
         continue;
       }
 
-      // Check for similar existing competency
-      const truncated = outcomeText.substring(0, 100);
-      const { data: existingComp } = await supabase
-        .from("competencies")
-        .select("id")
-        .eq("name", truncated)
-        .eq("sub_strand_id", subStrandId)
-        .maybeSingle();
+      if (!subStrandId) {
+        addFailure(
+          `Could not attach competencies for "${subStrandName}" because its sub-strand record is missing.`,
+        );
+        continue;
+      }
 
-      if (!existingComp) {
-        const { data: newComp, error } = await supabase
+      for (const outcomeText of lesson.learningOutcomes) {
+        const normalizedOutcome = normalize(outcomeText);
+        if (!normalizedOutcome) {
+          continue;
+        }
+
+        const competencyName =
+          normalizedOutcome.length > 255
+            ? normalizedOutcome.slice(0, 255).trimEnd()
+            : normalizedOutcome;
+
+        const competencyKey = `${subStrandId}|||${competencyName.toLowerCase()}`;
+        if (seenCompetencies.has(competencyKey)) {
+          continue;
+        }
+        seenCompetencies.add(competencyKey);
+
+        const { data: existingComp, error: existingCompError } = await supabase
+          .from("competencies")
+          .select("competency_id")
+          .eq("school_id", schoolId)
+          .eq("name", competencyName)
+          .eq("sub_strand_id", subStrandId)
+          .maybeSingle();
+
+        if (existingCompError) {
+          addFailure(`Could not check competency "${competencyName}": ${existingCompError.message}`);
+          continue;
+        }
+
+        if (existingComp) {
+          continue;
+        }
+
+        const { error: competencyInsertError } = await supabase
           .from("competencies")
           .insert({
-            name: truncated,
-            description: outcomeText,
+            name: competencyName,
+            description: normalizedOutcome,
             sub_strand_id: subStrandId,
             school_id: schoolId,
-            term: parsed.header.term,
-            academic_year: parsed.header.year,
-            assessment_type: "observation",
-          })
-          .select("id")
-          .single();
+            sort_order: competencySortOrder++,
+          });
 
-        if (error) {
-          createdCompetencies.push(
-            `⚠️ Failed to create competency: ${error.message}`,
+        if (competencyInsertError) {
+          addFailure(
+            `Failed to create competency "${competencyName}": ${competencyInsertError.message}`,
           );
-        } else {
-          createdCompetencies.push(`${truncated.substring(0, 60)}...`);
+          continue;
         }
+
+        createdCompetencies.push(
+          competencyName.length > 60 ? `${competencyName.slice(0, 60)}...` : competencyName,
+        );
       }
     }
 
     const totalCreated =
-      createdStrands.length +
-      createdSubStrands.length +
-      createdCompetencies.length;
-    const totalFailed =
-      createdStrands.filter((s) => s.startsWith("⚠️")).length +
-      createdSubStrands.filter((s) => s.startsWith("⚠️")).length +
-      createdCompetencies.filter((c) => c.startsWith("⚠️")).length;
+      createdStrands.length + createdSubStrands.length + createdCompetencies.length;
+    const baseMessage =
+      `Imported scheme: ${learningAreaName} (${parsed.header.term || "Unknown term"} ${parsed.header.year || "Unknown year"}). ` +
+      `Created ${createdStrands.length} strand(s), ${createdSubStrands.length} sub-strand(s), ` +
+      `${createdCompetencies.length} competenc${createdCompetencies.length === 1 ? "y" : "ies"}.`;
+
+    if (failures.length > 0) {
+      const preview =
+        failures.length > 3
+          ? `${failures.slice(0, 3).join(" | ")} | ...`
+          : failures.join(" | ");
+
+      return {
+        success: false,
+        message: `${baseMessage} Encountered ${failures.length} issue(s): ${preview}`,
+        parsed,
+        createdStrands,
+        createdSubStrands,
+        createdCompetencies,
+        warnings,
+        missingElements,
+      };
+    }
+
+    if (totalCreated === 0) {
+      warnings.push(
+        "No new records were created. The scheme may already exist in the database or lacked importable entries.",
+      );
+    }
 
     return {
       success: true,
-      message: `Imported scheme: ${parsed.header.learningArea} - ${parsed.header.term} ${parsed.header.year}. Created ${createdStrands.filter((s) => !s.startsWith("⚠️")).length} strand(s), ${createdSubStrands.filter((s) => !s.startsWith("⚠️")).length} sub-strand(s), ${createdCompetencies.filter((c) => !c.startsWith("⚠️")).length} competenc${createdCompetencies.filter((c) => !c.startsWith("⚠️")).length === 1 ? "y" : "ies"}.`,
+      message: baseMessage,
       parsed,
-      createdStrands: createdStrands.filter((s) => !s.startsWith("⚠️")),
-      createdSubStrands: createdSubStrands.filter((s) => !s.startsWith("⚠️")),
-      createdCompetencies: createdCompetencies.filter(
-        (c) => !c.startsWith("⚠️"),
-      ),
+      createdStrands,
+      createdSubStrands,
+      createdCompetencies,
+      warnings,
+      missingElements,
     };
   } catch (error) {
     return {
       success: false,
-      message:
-        error instanceof Error ? error.message : "Unknown error during import",
-      createdStrands: [],
-      createdSubStrands: [],
-      createdCompetencies: []
+      message: error instanceof Error ? error.message : "Unknown error during import",
+      createdStrands,
+      createdSubStrands,
+      createdCompetencies,
+      warnings,
+      missingElements,
     };
   }
 }
