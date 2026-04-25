@@ -961,7 +961,10 @@ export default function AssessmentsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || data.message || 'Failed to save assessments');
+        const message = data.details 
+          ? JSON.stringify(data.details) 
+          : (data.error || data.message || 'Failed to save assessments');
+        throw new Error(message);
       }
 
       success('Assessments Saved', `${assessments.length} student assessments have been recorded.`);
