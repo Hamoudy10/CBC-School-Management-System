@@ -56,7 +56,7 @@ export const POST = withAuth(async (request: NextRequest) => {
       { status: 500 },
     );
   }
-});
+}, 'ai_generation');
 
 export async function GET() {
   return NextResponse.json({

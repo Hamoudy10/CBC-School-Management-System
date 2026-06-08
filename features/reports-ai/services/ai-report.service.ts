@@ -1,5 +1,6 @@
 import { generateGroqCompletion } from '../../../lib/ai/groq.client';
 import type { AIResponse } from '../../../lib/ai/ai.types';
+import { logger } from '../../../lib/logger';
 import type { 
   AIReportGenerationRequest, 
   CBCReportData,
@@ -47,7 +48,7 @@ export class AIReportService {
         warnings: []
       };
     } catch (error) {
-      console.error('AI Report Generation Error:', error);
+      logger.error('AI Report Generation Error', { error: error instanceof Error ? error : new Error(String(error)) });
       throw new Error(error instanceof Error ? error.message : 'Failed to generate AI-powered report');
     }
   }

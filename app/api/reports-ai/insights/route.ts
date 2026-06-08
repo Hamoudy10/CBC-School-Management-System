@@ -2,13 +2,22 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { AIReportService } from '@/features/reports-ai/services/ai-report.service';
 import { validateRequest } from '@/lib/validation';
+import { checkAIGenerationRateLimit, withRateLimitHeaders } from '@/lib/api/rateLimit';
 import type { AIReportGenerationRequest } from '@/features/reports-ai/types/report-ai.types';
 
 const aiService = AIReportService.getInstance();
 
 export async function POST(request: NextRequest) {
+  const rateLimit = checkAIGenerationRateLimit(request);
+  if (!rateLimit.allowed) {
+    const response = NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      { status: 429 },
+    );
+    return withRateLimitHeaders(response, rateLimit);
+  }
+
   try {
-    // Validate request body
     const body = await request.json();
     
     const validation = validateRequest<AIReportGenerationRequest>(body, {
@@ -19,15 +28,15 @@ export async function POST(request: NextRequest) {
     });
 
     if (!validation.valid) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: validation.error },
         { status: 400 }
       );
+      return withRateLimitHeaders(response, rateLimit);
     }
 
     const request_data = validation.data;
 
-    // Generate insights only
     const insightsResponse = await aiService.generateAIReport({
       ...request_data,
       include_insights: true,
@@ -35,13 +44,14 @@ export async function POST(request: NextRequest) {
     });
 
     if (!insightsResponse.success) {
-      return NextResponse.json(
+      const response = NextResponse.json(
         { error: insightsResponse.warnings?.[0] || 'Failed to generate insights' },
         { status: 500 }
       );
+      return withRateLimitHeaders(response, rateLimit);
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       data: {
         insights: insightsResponse.data?.insights,
@@ -52,12 +62,14 @@ export async function POST(request: NextRequest) {
         ai_confidence: insightsResponse.confidence
       }
     });
+    return withRateLimitHeaders(response, rateLimit);
   } catch (error) {
     console.error('Insights Generation Error:', error);
-    return NextResponse.json(
+    const response = NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     );
+    return withRateLimitHeaders(response, rateLimit);
   }
 }
 

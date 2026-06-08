@@ -1,5 +1,6 @@
 import { AIReportService } from './ai-report.service';
 import type { AIResponse } from '@/lib/ai/ai.types';
+import { logger } from '@/lib/logger';
 
 export class ReportTranslatorService {
   private aiService: AIReportService;
@@ -51,7 +52,7 @@ Requirements:
       const response = await this.aiService.translateToParentFriendly(comment, context);
       return response.success ? response.data : comment;
     } catch (error) {
-      console.error('Translation failed:', error);
+      logger.error('Translation failed', { error: error instanceof Error ? error : new Error(String(error)) });
       return comment;
     }
   }

@@ -58,7 +58,7 @@ export const POST = withPermission('reports', 'view', async (request: NextReques
       { status: 500 },
     );
   }
-});
+}, 'ai_generation');
 
 export async function GET() {
   return NextResponse.json({

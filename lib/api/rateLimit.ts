@@ -46,6 +46,8 @@ export const ENDPOINT_RATE_LIMITS: Record<string, RateLimitConfig> = {
   report_generation: { maxRequests: 20, windowMs: 60 * 60 * 1000 },
   payment: { maxRequests: 10, windowMs: 60 * 1000 },
   file_upload: { maxRequests: 30, windowMs: 60 * 60 * 1000 },
+  ai_generation: { maxRequests: 10, windowMs: 60 * 1000 },
+  chatbot: { maxRequests: 5, windowMs: 60 * 1000 },
   default: { maxRequests: 100, windowMs: 60 * 1000 },
 };
 
@@ -170,6 +172,19 @@ export function checkFileUploadRateLimit(
   userId: string,
 ): RateLimitResult {
   return checkRateLimit(request, ENDPOINT_RATE_LIMITS.file_upload, userId);
+}
+
+export function checkAIGenerationRateLimit(
+  request: NextRequest,
+  userId?: string,
+): RateLimitResult {
+  return checkRateLimit(request, ENDPOINT_RATE_LIMITS.ai_generation, userId);
+}
+
+export function checkChatbotRateLimit(
+  request: NextRequest,
+): RateLimitResult {
+  return checkRateLimit(request, ENDPOINT_RATE_LIMITS.chatbot);
 }
 
 // ============================================================

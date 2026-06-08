@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS ai_logs (
     prompt TEXT NOT NULL,
     response JSONB NOT NULL,
     cost DECIMAL(10, 6) DEFAULT 0,
-    school_id UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
     model_used VARCHAR(100) DEFAULT 'groq',
     tokens_used INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS ai_logs (
 CREATE TABLE IF NOT EXISTS student_risk_scores (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-    school_id UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
     risk_level VARCHAR(20) NOT NULL CHECK (risk_level IN ('low', 'medium', 'high')),
     risk_factors JSONB, -- Store factors contributing to risk score
     confidence_score DECIMAL(3, 2) DEFAULT 0.0 CHECK (confidence_score >= 0.0 AND confidence_score <= 1.0),
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS student_risk_scores (
 CREATE TABLE IF NOT EXISTS analytics_snapshots (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     class_id UUID REFERENCES classes(id) ON DELETE SET NULL,
-    school_id UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
     metrics_json JSONB NOT NULL, -- Store various computed metrics
     snapshot_type VARCHAR(50) NOT NULL CHECK (snapshot_type IN (
         'class_performance', 
@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS ai_cache (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     hash VARCHAR(64) UNIQUE NOT NULL, -- SHA-256 hash of the prompt + context
     response JSONB NOT NULL,
-    school_id UUID REFERENCES schools(id) ON DELETE SET NULL,
+    school_id UUID REFERENCES schools(school_id) ON DELETE SET NULL,
     class_id UUID REFERENCES classes(id) ON DELETE SET NULL,
     subject VARCHAR(100),
     prompt_text TEXT, -- Store original prompt for debugging/transparency

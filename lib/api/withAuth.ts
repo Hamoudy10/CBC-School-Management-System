@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, authorizeRequest } from "@/lib/auth/api-guard";
-import { checkRateLimit } from "./rateLimit";
+import { checkRateLimit, ENDPOINT_RATE_LIMITS } from "./rateLimit";
 import {
   forbiddenResponse,
   rateLimitResponse,
@@ -58,16 +58,22 @@ async function callHandler(
   return await (handler as any)(request, handlerContext);
 }
 
+function resolveRateLimitConfig(rateLimitPreset?: keyof typeof ENDPOINT_RATE_LIMITS) {
+  return rateLimitPreset ? ENDPOINT_RATE_LIMITS[rateLimitPreset] : undefined;
+}
+
 // ============================================================
 // withAuth - Require Authentication Only
 // ============================================================
-export function withAuth(handler: AuthenticatedHandler) {
+export function withAuth(
+  handler: AuthenticatedHandler,
+  rateLimitPreset?: keyof typeof ENDPOINT_RATE_LIMITS,
+) {
   return async (
     request: NextRequest,
     { params }: RouteParams = { params: {} },
   ): Promise<NextResponse> => {
     try {
-      // Rate limiting
       const authResult = await authenticateRequest();
 
       if (!authResult.authenticated) {
@@ -76,8 +82,7 @@ export function withAuth(handler: AuthenticatedHandler) {
 
       const { user } = authResult;
 
-      // Check rate limit
-      const rateLimit = checkRateLimit(request, undefined, user.id);
+      const rateLimit = checkRateLimit(request, resolveRateLimitConfig(rateLimitPreset), user.id);
       if (!rateLimit.allowed) {
         return rateLimitResponse();
       }
@@ -99,6 +104,7 @@ export function withPermission(
     | { module: ModuleName; action: ActionName | "edit" },
   actionOrHandler: ActionName | "edit" | AuthenticatedHandler,
   maybeHandler?: AuthenticatedHandler,
+  rateLimitPreset?: keyof typeof ENDPOINT_RATE_LIMITS,
 ) {
   const moduleName =
     typeof moduleOrConfig === "object" ? moduleOrConfig.module : moduleOrConfig;
@@ -126,8 +132,7 @@ export function withPermission(
 
       const { user } = authResult;
 
-      // Check rate limit
-      const rateLimit = checkRateLimit(request, undefined, user.id);
+      const rateLimit = checkRateLimit(request, resolveRateLimitConfig(rateLimitPreset), user.id);
       if (!rateLimit.allowed) {
         return rateLimitResponse();
       }
@@ -146,6 +151,7 @@ export function withPermission(
 export function withRoles(
   allowedRoles: string[],
   handler: AuthenticatedHandler,
+  rateLimitPreset?: keyof typeof ENDPOINT_RATE_LIMITS,
 ) {
   return async (
     request: NextRequest,
@@ -166,8 +172,7 @@ export function withRoles(
         );
       }
 
-      // Check rate limit
-      const rateLimit = checkRateLimit(request, undefined, user.id);
+      const rateLimit = checkRateLimit(request, resolveRateLimitConfig(rateLimitPreset), user.id);
       if (!rateLimit.allowed) {
         return rateLimitResponse();
       }

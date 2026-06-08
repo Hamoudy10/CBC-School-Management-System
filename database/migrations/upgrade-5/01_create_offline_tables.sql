@@ -6,7 +6,7 @@
 CREATE TABLE IF NOT EXISTS offline_sync_queue (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    school_id UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
     table_name VARCHAR(100) NOT NULL, -- Name of the table being synced
     record_id UUID NOT NULL, -- ID of the record in the target table
     operation_type VARCHAR(20) NOT NULL CHECK (operation_type IN ('INSERT', 'UPDATE', 'DELETE')),
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS offline_metadata (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     device_id VARCHAR(255) NOT NULL, -- Unique device identifier
-    school_id UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
+    school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
     last_sync TIMESTAMP WITH TIME ZONE, -- Last successful sync timestamp
     sync_in_progress BOOLEAN DEFAULT FALSE,
     last_error TEXT,
