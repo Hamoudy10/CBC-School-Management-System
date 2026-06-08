@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/timetable/teacher/[id]/route.ts
 // ============================================================
 // GET /api/timetable/teacher/:id - Get teacher-specific weekly timetable

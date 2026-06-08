@@ -1,21 +1,16 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { withPermission } from '@/lib/api/withAuth';
+import {
+  successResponse,
+  errorResponse,
+} from '@/lib/api/response';
 import { createSupabaseAdminClient, createSupabaseServerClient } from '@/lib/supabase/server';
 import { getCurrentAcademicContext, normalizeStudent } from '@/app/api/students/_utils';
 import { ensureCurrentMandatoryFeesForStudent } from '@/lib/finance/ensureStudentFees';
 import { getCurrentFinanceSnapshot } from '@/lib/finance/currentObligations';
 import { z } from 'zod';
-
-// ─── Response Helpers ─────────────────────────────────────────────────────────
-
-function successResponse(data: unknown, message: string, status: number = 200) {
-  return NextResponse.json({ success: true, message, data }, { status });
-}
-
-function errorResponse(message: string, status: number = 400) {
-  return NextResponse.json({ success: false, message, data: null }, { status });
-}
 
 const STUDENT_WRITE_COLUMNS = [
   'first_name',
@@ -316,74 +311,14 @@ function normalizeCreateStudentBody(body: Record<string, unknown>) {
   };
 }
 
-// ─── Auth & School Helper ─────────────────────────────────────────────────────
-
-async function authenticateAndAuthorize(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  requiredRoles: string[]
-) {
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-
-  if (!authUser) {
-    return { error: errorResponse('Unauthorized', 401) };
-  }
-
-  const { data: user } = await supabase
-    .from('users')
-    .select('user_id, school_id, roles ( name )')
-    .eq('user_id', authUser.id)
-    .single();
-
-  if (!user?.school_id) {
-    return { error: errorResponse('Forbidden — no school associated', 403) };
-  }
-
-  const roleName = (user.roles as unknown as Record<string, string>)?.name ?? 'student';
-
-  if (!requiredRoles.includes(roleName)) {
-    return { error: errorResponse('Insufficient permissions', 403) };
-  }
-
-  return {
-    user,
-    roleName,
-    schoolId: user.school_id,
-    sessionUserId: authUser.id,
-  };
-}
-
 // ─── GET /api/students ────────────────────────────────────────────────────────
 
-export async function GET(req: NextRequest) {
+export const GET = withPermission('students', 'view', async (req: NextRequest, { user }) => {
   const supabase = await createSupabaseServerClient();
+  const schoolId = user.schoolId!;
+  const roleName = user.role;
 
-  // 1. Auth — all staff roles can list students; parents scoped to children
-  const readRoles = [
-    'super_admin',
-    'school_admin',
-    'principal',
-    'deputy_principal',
-    'teacher',
-    'class_teacher',
-    'subject_teacher',
-    'finance_officer',
-    'bursar',
-    'parent',
-    'ict_admin',
-  ];
-
-  const auth = await authenticateAndAuthorize(supabase, readRoles);
-  if ('error' in auth && auth.error) {return auth.error;}
-
-  const { schoolId, roleName, user } = auth as {
-    schoolId: string;
-    roleName: string;
-    user: { user_id: string; school_id: string };
-  };
-
-  // 2. Parse query params
+  // 1. Parse query params
   const { searchParams } = new URL(req.url);
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
   const pageSize = Math.min(
@@ -464,7 +399,7 @@ export async function GET(req: NextRequest) {
     const { data: guardianLinks } = await supabase
       .from('student_guardians')
       .select('student_id')
-      .eq('guardian_user_id', user.user_id);
+      .eq('guardian_user_id', user.id);
 
     const childrenIds = (guardianLinks ?? []).map((l) => l.student_id);
 
@@ -479,8 +414,7 @@ export async function GET(req: NextRequest) {
           totalPages: 0,
           page_size: pageSize,
           total_pages: 0,
-        },
-        'No linked students found'
+        }
       );
     }
 
@@ -535,8 +469,7 @@ export async function GET(req: NextRequest) {
           totalPages: 0,
           page_size: pageSize,
           total_pages: 0,
-        },
-        'No students found in this grade'
+        }
       );
     }
 
@@ -680,37 +613,18 @@ export async function GET(req: NextRequest) {
       students: transformedStudents,
       page_size: pageSize,
       total_pages: totalPages,
-    },
-    `Retrieved ${transformedStudents.length} student(s)`
+    }
   );
-}
+});
 
 // ─── POST /api/students ───────────────────────────────────────────────────────
 
-export async function POST(req: NextRequest) {
+export const POST = withPermission('students', 'create', async (req: NextRequest, { user }) => {
   const supabase = await createSupabaseServerClient();
+  const schoolId = user.schoolId!;
+  const roleName = user.role;
 
-  // 1. Auth — only admin/teacher roles can create students
-  const writeRoles = [
-    'super_admin',
-    'school_admin',
-    'principal',
-    'deputy_principal',
-    'teacher',
-    'class_teacher',
-    'ict_admin',
-  ];
-
-  const auth = await authenticateAndAuthorize(supabase, writeRoles);
-  if ('error' in auth && auth.error) {return auth.error;}
-
-  const { schoolId, roleName, user } = auth as {
-    schoolId: string;
-    roleName: string;
-    user: { user_id: string; school_id: string };
-  };
-
-  // 2. Parse and validate request body
+  // 1. Parse and validate request body
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -821,7 +735,7 @@ export async function POST(req: NextRequest) {
         writableStudentData.enrollment_date ?? new Date().toISOString().split('T')[0],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      created_by: user.user_id,
+      created_by: user.id,
     })
     .select(
       `
@@ -874,7 +788,7 @@ export async function POST(req: NextRequest) {
       guardianUserId = await ensureParentUser(
         schoolId,
         guardian as any,
-        user.user_id,
+        user.id,
       );
     } catch (error) {
       await supabase.from('students').delete().eq('student_id', newStudent.student_id);
@@ -928,7 +842,7 @@ export async function POST(req: NextRequest) {
         schoolId,
         studentId: newStudent.student_id,
         gradeId: (currentClass as any)?.grade_id ?? null,
-        userId: user.user_id,
+        userId: user.id,
         roleName,
       });
     } catch (feeAssignmentError) {
@@ -944,7 +858,6 @@ export async function POST(req: NextRequest) {
       studentId: normalizedStudent.studentId,
       admissionNumber: normalizedStudent.admissionNumber,
     },
-    'Student created successfully',
     201
   );
-}
+});

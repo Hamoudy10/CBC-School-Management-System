@@ -1,11 +1,10 @@
+export const dynamic = 'force-dynamic';
 // app/api/academics/scheme-import/route.ts
 // ============================================================
 // POST /api/academics/scheme-import — Parse and import a scheme of work
 // Accepts: { textContent: string } (pasted scheme text)
 // Returns: Parsed scheme + DB import results + warnings/missing elements
 // ============================================================
-
-export const dynamic = 'force-dynamic';
 
 import { NextRequest } from 'next/server';
 import { withPermission } from '@/lib/api/withAuth';

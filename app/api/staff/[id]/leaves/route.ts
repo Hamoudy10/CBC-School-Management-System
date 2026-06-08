@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/staff/[id]/leaves/route.ts
 // ============================================================
 // GET /api/staff/[id]/leaves - List leave requests for a staff member

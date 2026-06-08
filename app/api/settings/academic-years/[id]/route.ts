@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/settings/academic-years/[id]/route.ts
 // PUT update academic year, DELETE remove academic year
 

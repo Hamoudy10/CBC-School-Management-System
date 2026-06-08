@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/assessments/student/[id]/route.ts
 // ============================================================
 // GET /api/assessments/student/:id - Get all assessments for a specific student

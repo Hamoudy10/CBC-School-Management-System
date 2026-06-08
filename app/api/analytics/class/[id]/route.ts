@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/analytics/class/[id]/route.ts
 // ============================================================
 // GET /api/analytics/class/:id - Get class performance summary

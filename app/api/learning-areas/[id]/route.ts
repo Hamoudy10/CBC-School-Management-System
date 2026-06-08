@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { withPermission } from "@/lib/api/withAuth";
 import { validateBody, validateUuid } from "@/lib/api/validation";
 import {

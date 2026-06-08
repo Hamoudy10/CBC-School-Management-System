@@ -1,6 +1,11 @@
 export const dynamic = 'force-dynamic';
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
+import { withPermission } from '@/lib/api/withAuth';
+import {
+  successResponse,
+  errorResponse,
+} from '@/lib/api/response';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 
@@ -15,16 +20,6 @@ const generateSchema = z.object({
   regenerate_existing: z.boolean().default(false),
 });
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function successResponse(data: unknown, message: string, status: number = 200) {
-  return NextResponse.json({ success: true, message, data }, { status });
-}
-
-function errorResponse(message: string, status: number = 400) {
-  return NextResponse.json({ success: false, message, data: null }, { status });
-}
-
 /**
  * Maps a numeric average score (1–4 CBC scale) to a performance level label.
  */
@@ -37,34 +32,12 @@ function getPerformanceLevel(score: number): string {
 
 // ─── POST Handler ─────────────────────────────────────────────────────────────
 
-export async function POST(req: NextRequest) {
+export const POST = withPermission('reports', 'create', async (req: NextRequest, { user }) => {
   const supabase = await createSupabaseServerClient();
 
-  // 1. Auth check
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-  if (!authUser) {return errorResponse('Unauthorized', 401);}
+  const schoolId = user.schoolId!;
 
-  // 2. Get user with role and school
-  const { data: user } = await supabase
-    .from('users')
-    .select('user_id, school_id, roles ( name )')
-    .eq('user_id', authUser.id)
-    .single();
-
-  if (!user?.school_id) {return errorResponse('Forbidden', 403);}
-
-  const roleName = (user.roles as unknown as Record<string, string>)?.name ?? 'student';
-  const schoolId = user.school_id;
-
-  // 3. Admin-only access
-  const allowedRoles = ['super_admin', 'school_admin', 'principal', 'deputy_principal'];
-  if (!allowedRoles.includes(roleName)) {
-    return errorResponse('Insufficient permissions', 403);
-  }
-
-  // 4. Parse and validate request body
+  // 3. Parse and validate request body
   let body: unknown;
   try {
     body = await req.json();
@@ -244,7 +217,7 @@ export async function POST(req: NextRequest) {
       })),
       total_learning_areas: studentAggs.length,
       assessed_learning_areas: studentAggs.filter((a) => a.average_score > 0).length,
-      generated_by: user.user_id,
+      generated_by: user.id,
       generated_at: new Date().toISOString(),
     };
 
@@ -325,8 +298,8 @@ export async function POST(req: NextRequest) {
       skipped,
       total_students: students.length,
       errors,
+      message,
     },
-    message,
     hasErrors ? 207 : 200
   );
-}
+});

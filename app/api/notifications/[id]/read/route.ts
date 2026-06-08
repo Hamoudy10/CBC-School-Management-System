@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/notifications/[id]/read/route.ts
 // PUT mark notification as read
 

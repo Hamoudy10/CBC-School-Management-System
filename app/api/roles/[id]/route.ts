@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/roles/[id]/route.ts
 // ============================================================
 // GET    /api/roles/[id] - Fetch a single role by ID

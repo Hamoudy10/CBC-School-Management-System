@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/staff/[id]/assignments/[assignmentId]/route.ts
 // ============================================================
 // GET /api/staff/[id]/assignments/[assignmentId] - Get single assignment

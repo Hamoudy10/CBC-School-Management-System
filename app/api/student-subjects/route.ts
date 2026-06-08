@@ -1,10 +1,11 @@
+export const dynamic = 'force-dynamic';
 // app/api/student-subjects/route.ts
 // ============================================================
 // GET /api/student-subjects — List student subject mappings
 // POST /api/student-subjects — Assign subject to student
 // ============================================================
 
-export const dynamic = 'force-dynamic';
+;
 
 import { NextRequest } from 'next/server';
 import { withPermission } from '@/lib/api/withAuth';

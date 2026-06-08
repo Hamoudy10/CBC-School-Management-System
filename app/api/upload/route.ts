@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/lib/api/withAuth";
-import { errorResponse, successResponse } from "@/lib/api/response";
+import { errorResponse } from "@/lib/api/response";
 import {
   ensureStorageBucket,
   STORAGE_BUCKET,
@@ -18,6 +18,10 @@ import {
   generateStoragePath,
   getSignedUrl,
 } from "@/lib/supabase/storage";
+import {
+  isCloudinaryConfigured,
+  uploadToCloudinary,
+} from "@/lib/uploads/cloudinary";
 
 const ALLOWED_FOLDERS = new Set([
   "students",
@@ -40,6 +44,26 @@ const FOLDER_TO_CATEGORY: Record<string, string> = {
   reports: "report",
   logos: "logo",
 };
+
+function uploadSuccess(payload: {
+  url: string;
+  signedUrl?: string;
+  path: string;
+  size: number;
+  type: string;
+  provider: "supabase" | "cloudinary";
+}) {
+  return NextResponse.json(
+    {
+      success: true,
+      error: null,
+      data: payload,
+      // Backward compatibility for older clients reading top-level fields.
+      ...payload,
+    },
+    { status: 200 },
+  );
+}
 
 export const POST = withAuth(async (request: NextRequest, user) => {
   try {
@@ -68,6 +92,24 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     }
 
     const normalizedFolder = folder === "teachers" ? "staff" : folder;
+    if (isCloudinaryConfigured()) {
+      const cloudinaryResult = await uploadToCloudinary({
+        file,
+        schoolId,
+        folder: normalizedFolder,
+      });
+
+      if (cloudinaryResult.success) {
+        return uploadSuccess({
+          url: cloudinaryResult.url,
+          path: cloudinaryResult.publicId,
+          size: cloudinaryResult.bytes,
+          type: file.type,
+          provider: "cloudinary",
+        });
+      }
+    }
+
     const fileName = generateStoragePath(schoolId, normalizedFolder, file.name);
 
     const storageSetup = await ensureStorageBucket();
@@ -102,12 +144,13 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       .from(STORAGE_BUCKET)
       .getPublicUrl(fileName);
 
-    return successResponse({
+    return uploadSuccess({
       url: urlData.publicUrl,
       signedUrl,
       path: fileName,
       size: file.size,
       type: file.type,
+      provider: "supabase",
     });
   } catch (error) {
     console.error("Upload API error:", error);

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/subjects/[id]/route.ts
 // ============================================================
 // GET /api/subjects/[id] — Get single subject
@@ -5,7 +6,7 @@
 // DELETE /api/subjects/[id] — Deactivate subject
 // ============================================================
 
-export const dynamic = 'force-dynamic';
+;
 
 import { NextRequest } from 'next/server';
 import { withPermission } from '@/lib/api/withAuth';

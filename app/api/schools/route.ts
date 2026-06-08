@@ -1,10 +1,11 @@
+export const dynamic = 'force-dynamic';
 // app/api/schools/route.ts
 // ============================================================
 // GET /api/schools — List schools (super_admin only, or own school for others)
 // POST /api/schools — Create new school (super_admin only)
 // ============================================================
 
-export const dynamic = 'force-dynamic';
+;
 
 import { NextRequest } from 'next/server';
 import { withPermission } from '@/lib/api/withAuth';

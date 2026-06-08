@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/report-cards/[id]/route.ts
 // ============================================================
 // GET /api/report-cards/:id - Get report card details

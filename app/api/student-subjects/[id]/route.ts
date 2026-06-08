@@ -1,10 +1,11 @@
+export const dynamic = 'force-dynamic';
 // app/api/student-subjects/[id]/route.ts
 // ============================================================
 // GET /api/student-subjects/[id] — Get single mapping
 // DELETE /api/student-subjects/[id] — Remove mapping
 // ============================================================
 
-export const dynamic = 'force-dynamic';
+;
 
 import { NextRequest } from 'next/server';
 import { withPermission } from '@/lib/api/withAuth';

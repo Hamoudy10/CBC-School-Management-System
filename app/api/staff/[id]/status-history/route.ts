@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/staff/[id]/status-history/route.ts
 // ============================================================
 // GET /api/staff/:id/status-history - Get staff status change history

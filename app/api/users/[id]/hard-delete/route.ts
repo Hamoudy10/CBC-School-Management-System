@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/users/[id]/hard-delete/route.ts
 // ============================================================
 // DELETE /api/users/:id/hard-delete - Permanently delete user

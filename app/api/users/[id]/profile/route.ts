@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/users/[id]/profile/route.ts
 // ============================================================
 // GET /api/users/:id/profile - Get user profile

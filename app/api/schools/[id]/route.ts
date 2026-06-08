@@ -1,10 +1,11 @@
+export const dynamic = 'force-dynamic';
 // app/api/schools/[id]/route.ts
 // ============================================================
 // GET /api/schools/[id] — Get single school
 // PUT /api/schools/[id] — Update school
 // ============================================================
 
-export const dynamic = 'force-dynamic';
+;
 
 import { NextRequest } from 'next/server';
 import { withPermission } from '@/lib/api/withAuth';

@@ -163,7 +163,11 @@ export default function ProfilePage() {
     });
     if (!response.ok) {throw new Error("Upload failed");}
     const data = await response.json();
-    return data.url;
+    const uploadedUrl = data?.data?.url || data?.url;
+    if (!uploadedUrl) {
+      throw new Error("Upload succeeded but no file URL was returned");
+    }
+    return uploadedUrl;
   };
 
   const handlePhotoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {

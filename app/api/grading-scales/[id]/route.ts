@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/grading-scales/[id]/route.ts
 // ============================================================
 // GET /api/grading-scales/[id] — Get single grading scale
@@ -5,7 +6,7 @@
 // DELETE /api/grading-scales/[id] — Deactivate grading scale
 // ============================================================
 
-export const dynamic = 'force-dynamic';
+;
 
 import { NextRequest } from 'next/server';
 import { withPermission } from '@/lib/api/withAuth';

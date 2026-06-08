@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/staff/[id]/reactivate/route.ts
 // ============================================================
 // POST /api/staff/:id/reactivate - Reactivate a deactivated staff member

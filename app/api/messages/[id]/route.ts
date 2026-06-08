@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/messages/[id]/route.ts
 // GET single message, DELETE (soft) message
 

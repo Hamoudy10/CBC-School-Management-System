@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/learning-areas/[id]/hierarchy/route.ts
 // ============================================================
 // GET /api/learning-areas/:id/hierarchy - Get full CBC hierarchy

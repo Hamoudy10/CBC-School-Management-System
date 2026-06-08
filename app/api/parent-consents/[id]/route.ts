@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/parent-consents/[id]/route.ts
 // ============================================================
 // GET /api/parent-consents/:id - Get consent details

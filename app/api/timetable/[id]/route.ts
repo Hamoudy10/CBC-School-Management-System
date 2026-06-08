@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/timetable/[id]/route.ts
 // ============================================================
 // GET /api/timetable/:id - Get single timetable slot

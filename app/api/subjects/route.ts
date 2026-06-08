@@ -1,10 +1,11 @@
+export const dynamic = 'force-dynamic';
 // app/api/subjects/route.ts
 // ============================================================
 // GET /api/subjects — List subjects (paginated, filtered)
 // POST /api/subjects — Create new subject
 // ============================================================
 
-export const dynamic = 'force-dynamic';
+;
 
 import { NextRequest } from 'next/server';
 import { withPermission } from '@/lib/api/withAuth';

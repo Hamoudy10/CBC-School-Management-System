@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/communication/broadcast/[id]/route.ts
 // GET single broadcast message, DELETE broadcast message
 

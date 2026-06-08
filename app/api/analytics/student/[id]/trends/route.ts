@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/analytics/student/[id]/trends/route.ts
 // ============================================================
 // GET /api/analytics/student/:id/trends - Get student trends

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/settings/terms/[id]/route.ts
 // PUT update term, DELETE remove term
 

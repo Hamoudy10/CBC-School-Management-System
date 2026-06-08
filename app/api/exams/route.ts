@@ -1,5 +1,6 @@
-// app/api/exams/route.ts
 export const dynamic = 'force-dynamic';
+// app/api/exams/route.ts
+;
 
 import { z } from 'zod';
 import { withPermission } from '@/lib/api/withAuth';

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import {
   STUDENT_READ_ROLES,
   errorResponse,

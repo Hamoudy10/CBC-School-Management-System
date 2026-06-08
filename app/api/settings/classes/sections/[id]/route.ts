@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/settings/classes/sections/[id]/route.ts
 // PUT/DELETE class section
 

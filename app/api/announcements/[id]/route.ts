@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/announcements/[id]/route.ts
 // DEPRECATED — Redirects to /api/communication/announcements/[id]
 // Sunset date: 2026-07-01

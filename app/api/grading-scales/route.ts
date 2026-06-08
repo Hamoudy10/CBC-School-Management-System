@@ -1,10 +1,11 @@
+export const dynamic = 'force-dynamic';
 // app/api/grading-scales/route.ts
 // ============================================================
 // GET /api/grading-scales — List grading scales
 // POST /api/grading-scales — Create grading scale
 // ============================================================
 
-export const dynamic = 'force-dynamic';
+;
 
 import { NextRequest } from 'next/server';
 import { withPermission } from '@/lib/api/withAuth';

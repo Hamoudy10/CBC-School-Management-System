@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/settings/terms/[id]/activate/route.ts
 // POST set active term
 

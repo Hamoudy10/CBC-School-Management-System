@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/reports/print/[studentId]/route.ts
 // GET printable HTML report card
 

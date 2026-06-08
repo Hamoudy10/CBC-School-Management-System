@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { AIReportService } from '@/features/reports-ai/services/ai-report.service';
 import { validateRequest } from '@/lib/validation';

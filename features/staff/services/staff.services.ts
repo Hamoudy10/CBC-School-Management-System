@@ -615,8 +615,14 @@ export async function updateStaff(
   if (payload.photoUrl !== undefined) {
     const { error: profileError } = await supabase
       .from('user_profiles')
-      .update({ photo_url: payload.photoUrl || null })
-      .eq('user_id', existingStaff.userId);
+      .upsert(
+        {
+          user_id: existingStaff.userId,
+          school_id: existingStaff.schoolId,
+          photo_url: payload.photoUrl || null,
+        },
+        { onConflict: 'user_id' },
+      );
 
     if (profileError) {
       return {

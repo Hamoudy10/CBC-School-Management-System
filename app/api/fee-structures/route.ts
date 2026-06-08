@@ -1,18 +1,13 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { withPermission } from '@/lib/api/withAuth';
+import {
+  successResponse,
+  errorResponse,
+} from '@/lib/api/response';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { z } from 'zod';
-
-// ─── Response Helpers ─────────────────────────────────────────────────────────
-
-function successResponse(data: unknown, message: string, status: number = 200) {
-  return NextResponse.json({ success: true, message, data }, { status });
-}
-
-function errorResponse(message: string, status: number = 400) {
-  return NextResponse.json({ success: false, message, data: null }, { status });
-}
 
 // ─── Validation Schemas ───────────────────────────────────────────────────────
 
@@ -72,70 +67,11 @@ const createFeeStructureSchema = z.object({
   is_active: z.boolean().default(true),
 });
 
-// ─── Auth Helper ──────────────────────────────────────────────────────────────
-
-interface AuthResult {
-  userId: string;
-  schoolId: string;
-  roleName: string;
-}
-
-async function authenticate(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  allowedRoles: string[]
-): Promise<{ auth: AuthResult } | { error: NextResponse }> {
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-
-  if (!authUser) {
-    return { error: errorResponse('Unauthorized', 401) };
-  }
-
-  const { data: user } = await supabase
-    .from('users')
-    .select('user_id, school_id, roles ( name )')
-    .eq('user_id', authUser.id)
-    .single();
-
-  if (!user?.school_id) {
-    return { error: errorResponse('Forbidden — no school associated', 403) };
-  }
-
-  const roleName = (user.roles as unknown as Record<string, string>)?.name ?? 'student';
-
-  if (!allowedRoles.includes(roleName)) {
-    return { error: errorResponse('Insufficient permissions', 403) };
-  }
-
-  return {
-    auth: {
-      userId: user.user_id,
-      schoolId: user.school_id,
-      roleName,
-    },
-  };
-}
-
 // ─── GET /api/fee-structures ──────────────────────────────────────────────────
 
-export async function GET(req: NextRequest) {
+export const GET = withPermission('finance', 'view', async (req: NextRequest, { user }) => {
   const supabase = await createSupabaseServerClient();
-
-  // 1. Auth — finance and admin roles can view fee structures
-  const readRoles = [
-    'super_admin',
-    'school_admin',
-    'principal',
-    'deputy_principal',
-    'finance_officer',
-    'bursar',
-    'ict_admin',
-  ];
-
-  const result = await authenticate(supabase, readRoles);
-  if ('error' in result) {return result.error;}
-  const { schoolId } = result.auth;
+  const schoolId = user.schoolId!;
 
   // 2. Parse query params
   const { searchParams } = new URL(req.url);
@@ -240,30 +176,18 @@ export async function GET(req: NextRequest) {
       page_size: pageSize,
       total_pages: totalPages,
       summary,
-    },
-    `Retrieved ${(feeStructures ?? []).length} fee structure(s)`
+    }
   );
-}
+});
 
 // ─── POST /api/fee-structures ─────────────────────────────────────────────────
 
-export async function POST(req: NextRequest) {
+export const POST = withPermission('finance', 'create', async (req: NextRequest, { user }) => {
   const supabase = await createSupabaseServerClient();
+  const schoolId = user.schoolId!;
+  const userId = user.id;
 
-  // 1. Auth — only finance and admin roles can create fee structures
-  const writeRoles = [
-    'super_admin',
-    'school_admin',
-    'principal',
-    'finance_officer',
-    'bursar',
-  ];
-
-  const result = await authenticate(supabase, writeRoles);
-  if ('error' in result) {return result.error;}
-  const { schoolId, userId } = result.auth;
-
-  // 2. Parse and validate request body
+  // 1. Parse and validate request body
   let body: unknown;
   try {
     body = await req.json();
@@ -406,7 +330,6 @@ export async function POST(req: NextRequest) {
 
   return successResponse(
     { fee_structure: newFeeStructure },
-    'Fee structure created successfully',
     201
   );
-}
+});

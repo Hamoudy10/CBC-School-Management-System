@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/promotion-rules/[id]/route.ts
 // ============================================================
 // GET /api/promotion-rules/[id] — Get single rule
@@ -5,7 +6,7 @@
 // DELETE /api/promotion-rules/[id] — Deactivate rule
 // ============================================================
 
-export const dynamic = 'force-dynamic';
+;
 
 import { NextRequest } from 'next/server';
 import { withPermission } from '@/lib/api/withAuth';

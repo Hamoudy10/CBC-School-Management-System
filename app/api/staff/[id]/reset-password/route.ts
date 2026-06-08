@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/staff/[id]/reset-password/route.ts
 // ============================================================
 // POST /api/staff/[id]/reset-password - Reset staff password

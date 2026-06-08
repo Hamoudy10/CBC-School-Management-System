@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/settings/classes/[id]/route.ts
 // GET class detail, PUT update, DELETE deactivate
 

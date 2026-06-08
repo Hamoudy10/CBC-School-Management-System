@@ -1,10 +1,11 @@
+export const dynamic = 'force-dynamic';
 // app/api/promotion-rules/route.ts
 // ============================================================
 // GET /api/promotion-rules — List promotion rules
 // POST /api/promotion-rules — Create promotion rule
 // ============================================================
 
-export const dynamic = 'force-dynamic';
+;
 
 import { NextRequest } from 'next/server';
 import { withPermission } from '@/lib/api/withAuth';

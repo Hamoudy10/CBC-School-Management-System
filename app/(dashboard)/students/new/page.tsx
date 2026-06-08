@@ -152,9 +152,14 @@ function PhotoUpload({ value, onChange, disabled }: PhotoUploadProps) {
 
       if (response.ok) {
         const data = await response.json();
-        onChange(data.url);
+        const uploadedUrl = data?.data?.url || data?.url;
+        if (!uploadedUrl) {
+          throw new Error('Upload succeeded but no file URL was returned.');
+        }
+        onChange(uploadedUrl);
       } else {
-        throw new Error('Upload failed');
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error || payload?.message || 'Upload failed');
       }
     } catch (err) {
       console.error('Upload error:', err);

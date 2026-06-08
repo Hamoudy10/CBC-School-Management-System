@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // app/api/assessments/templates/[id]/route.ts
 // ============================================================
 // GET /api/assessments/templates/:id - Get template details
