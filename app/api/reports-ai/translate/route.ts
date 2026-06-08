@@ -1,38 +1,37 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
+import { withAuth } from '@/lib/api/withAuth';
 import { ReportTranslatorService } from '@/features/reports-ai/services/translator.service';
 import { validateRequest } from '@/lib/validation';
 import type { ParentFriendlyTranslationRequest } from '@/features/reports-ai/types/report-ai.types';
 
 const translatorService = new ReportTranslatorService();
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   try {
-    // Validate request body
     const body = await request.json();
-    
+
     const validation = validateRequest<ParentFriendlyTranslationRequest>(body, {
       technical_term: 'string',
       context: 'object',
-      target_language: 'string'
+      target_language: 'string',
     });
 
     if (!validation.valid) {
       return NextResponse.json(
         { error: validation.error },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const { technical_term, context, target_language } = validation.data;
 
-    // Translate technical term
     const response = await translatorService.translateToParentFriendly(technical_term, context);
 
     if (!response.success) {
       return NextResponse.json(
         { error: response.warnings?.[0] || 'Failed to translate term' },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -43,30 +42,30 @@ export async function POST(request: NextRequest) {
         translated_text: response.data,
         target_language,
         confidence: response.confidence,
-        reasoning: response.reasoning
-      }
+        reasoning: response.reasoning,
+      },
     });
   } catch (error) {
     console.error('Translation Error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
-      { status: 500 }
+      { status: 500 },
     );
   }
-}
+});
 
 export async function GET() {
   return NextResponse.json({
     message: 'AI Translator API',
     version: '1.0.0',
     endpoints: {
-      POST: '/api/reports-ai/translate'
+      POST: '/api/reports-ai/translate',
     },
     features: [
       'Technical term translation',
       'Parent-friendly language conversion',
       'Context-aware translation',
-      'Multiple language support'
+      'Multiple language support',
     ],
     common_terms: [
       'Numeracy',
@@ -78,7 +77,7 @@ export async function GET() {
       'Skills acquisition',
       'Cognitive development',
       'Motor skills',
-      'Social-emotional learning'
-    ]
+      'Social-emotional learning',
+    ],
   });
 }

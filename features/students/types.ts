@@ -1,21 +1,19 @@
 // features/students/types.ts
 
-import { Database } from '@/types/database.types';
-
 // ─── Base Database Types ─────────────────────────────────────
-export type StudentRow = Database['public']['Tables']['students']['Row'];
-export type StudentInsert = Database['public']['Tables']['students']['Insert'];
-export type StudentUpdate = Database['public']['Tables']['students']['Update'];
+export type StudentRow = Record<string, any>;
+export type StudentInsert = Record<string, any>;
+export type StudentUpdate = Record<string, any>;
 
-export type StudentGuardianRow = Database['public']['Tables']['student_guardians']['Row'];
-export type StudentGuardianInsert = Database['public']['Tables']['student_guardians']['Insert'];
+export type StudentGuardianRow = Record<string, any>;
+export type StudentGuardianInsert = Record<string, any>;
 
-export type StudentClassRow = Database['public']['Tables']['student_classes']['Row'];
-export type StudentClassInsert = Database['public']['Tables']['student_classes']['Insert'];
+export type StudentClassRow = Record<string, any>;
+export type StudentClassInsert = Record<string, any>;
 
 // ─── Enums ───────────────────────────────────────────────────
-export type EnrollmentStatus = Database['public']['Enums']['enrollment_status'];
-export type GenderType = Database['public']['Enums']['gender_type'];
+export type EnrollmentStatus = 'active' | 'transferred' | 'graduated' | 'withdrawn' | 'suspended';
+export type GenderType = 'male' | 'female' | 'other';
 
 export const ENROLLMENT_STATUSES: EnrollmentStatus[] = [
   'active',

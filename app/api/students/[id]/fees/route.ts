@@ -1,16 +1,10 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  successResponse,
+  errorResponse,
+} from '@/lib/api/response';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-
-// ─── Response Helpers ─────────────────────────────────────────────────────────
-
-function successResponse(data: unknown, message: string, status: number = 200) {
-  return NextResponse.json({ success: true, message, data }, { status });
-}
-
-function errorResponse(message: string, status: number = 400) {
-  return NextResponse.json({ success: false, message, data: null }, { status });
-}
 
 // ─── Auth Helper ──────────────────────────────────────────────────────────────
 
@@ -412,7 +406,6 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
         terms: Array.from(uniqueTerms.values()),
         academic_years: Array.from(uniqueYears.values()),
       },
-    },
-    `Retrieved ${feesList.length} fee record(s) for student`
+    }
   );
 }

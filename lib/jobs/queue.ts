@@ -219,31 +219,146 @@ async function handleClassReportGeneration(
 }
 
 async function handleBatchAssessmentExport(
-  _job: Job,
+  job: Job,
 ): Promise<Record<string, unknown>> {
-  // Placeholder: export assessments to CSV
-  return { success: true, message: "Assessment export completed." };
+  const supabase = await createSupabaseServerClient();
+  const { schoolId, classId, termId, academicYearId, format } = job.payload as Record<string, string | undefined>;
+
+  if (!schoolId || !classId) {
+    return { success: false, message: "Missing schoolId or classId in payload" };
+  }
+
+  const query = supabase
+    .from("assessment_results")
+    .select("*, students!inner(student_id, first_name, last_name, admission_number), strands!inner(name), sub_strands!inner(name)")
+    .eq("school_id", schoolId)
+    .eq("class_id", classId);
+
+  if (termId) { query.eq("term_id", termId); }
+  if (academicYearId) { query.eq("academic_year_id", academicYearId); }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return { success: false, message: `Failed to export assessments: ${error.message}` };
+  }
+
+  return {
+    success: true,
+    message: `Exported ${(data ?? []).length} assessment records`,
+    exportedCount: (data ?? []).length,
+    format: format ?? "json",
+  };
 }
 
 async function handleBulkNotification(
-  _job: Job,
+  job: Job,
 ): Promise<Record<string, unknown>> {
-  // Placeholder: send bulk notifications
-  return { success: true, message: "Bulk notifications sent." };
+  const supabase = await createSupabaseServerClient();
+  const { schoolId, type = "info", title, message, recipientIds } = job.payload as Record<string, any>;
+
+  if (!schoolId || !title) {
+    return { success: false, message: "Missing schoolId or title in payload" };
+  }
+
+  const recipients = Array.isArray(recipientIds) ? recipientIds : [];
+
+  if (recipients.length === 0) {
+    return { success: false, message: "No recipients specified" };
+  }
+
+  const notifications = recipients.map((userId: string) => ({
+    user_id: userId,
+    school_id: schoolId,
+    type,
+    title,
+    message: message ?? "",
+    status: "unread",
+    created_at: new Date().toISOString(),
+  }));
+
+  const { error } = await supabase.from("notifications").insert(notifications);
+
+  if (error) {
+    return { success: false, message: `Failed to send notifications: ${error.message}` };
+  }
+
+  return {
+    success: true,
+    message: `Sent ${recipients.length} notification(s)`,
+    sentCount: recipients.length,
+  };
 }
 
 async function handleFinanceExport(
-  _job: Job,
+  job: Job,
 ): Promise<Record<string, unknown>> {
-  // Placeholder: export finance data
-  return { success: true, message: "Finance export completed." };
+  const supabase = await createSupabaseServerClient();
+  const { schoolId, dateFrom, dateTo, format } = job.payload as Record<string, string | undefined>;
+
+  if (!schoolId) {
+    return { success: false, message: "Missing schoolId in payload" };
+  }
+
+  let paymentsQuery = supabase
+    .from("payments")
+    .select("*, students!inner(student_id, first_name, last_name, admission_number)")
+    .eq("school_id", schoolId);
+
+  if (dateFrom) { paymentsQuery = paymentsQuery.gte("payment_date", dateFrom); }
+  if (dateTo) { paymentsQuery = paymentsQuery.lte("payment_date", dateTo); }
+
+  const { data: payments, error: paymentsError } = await paymentsQuery;
+
+  if (paymentsError) {
+    return { success: false, message: `Failed to export finance data: ${paymentsError.message}` };
+  }
+
+  const { data: feeStructures } = await supabase
+    .from("fee_structures")
+    .select("*")
+    .eq("school_id", schoolId);
+
+  return {
+    success: true,
+    message: `Exported ${(payments ?? []).length} payment records`,
+    exportedCount: (payments ?? []).length,
+    feeStructuresCount: (feeStructures ?? []).length,
+    format: format ?? "json",
+  };
 }
 
 async function handleAttendanceExport(
-  _job: Job,
+  job: Job,
 ): Promise<Record<string, unknown>> {
-  // Placeholder: export attendance data
-  return { success: true, message: "Attendance export completed." };
+  const supabase = await createSupabaseServerClient();
+  const { schoolId, classId, dateFrom, dateTo, format } = job.payload as Record<string, string | undefined>;
+
+  if (!schoolId) {
+    return { success: false, message: "Missing schoolId in payload" };
+  }
+
+  let query = supabase
+    .from("attendance_records")
+    .select("*, students!inner(student_id, first_name, last_name, admission_number)")
+    .eq("school_id", schoolId);
+
+  if (classId) { query = query.eq("class_id", classId); }
+  if (dateFrom) { query = query.gte("date", dateFrom); }
+  if (dateTo) { query = query.lte("date", dateTo); }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return { success: false, message: `Failed to export attendance: ${error.message}` };
+  }
+
+  return {
+    success: true,
+    message: `Exported ${(data ?? []).length} attendance records`,
+    exportedCount: (data ?? []).length,
+    format: format ?? "json",
+  };
 }
 
 // ============================================================

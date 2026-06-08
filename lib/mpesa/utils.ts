@@ -107,3 +107,51 @@ export function splitReference(reference?: string | null) {
   const normalized = value.replace(/\s+/g, "");
   return { raw: value, normalized };
 }
+
+// Safaricom C2B known IP addresses
+const SAFARICOM_C2B_IPS_PRODUCTION = new Set([
+  '196.201.214.200',
+  '196.201.214.206',
+  '196.201.213.114',
+  '196.201.214.207',
+  '196.201.214.208',
+  '196.201.213.44',
+  '196.201.212.127',
+  '196.201.212.138',
+  '196.201.212.129',
+  '196.201.212.128',
+  '196.201.214.199',
+  '196.201.213.112',
+  '196.201.213.113',
+  '196.201.213.60',
+  '196.201.213.61',
+]);
+
+const SAFARICOM_C2B_IPS_SANDBOX = new Set([
+  '196.201.214.200',
+  '196.201.214.206',
+]);
+
+export function isValidMpesaOrigin(request: Request): boolean {
+  const env = (process.env.MPESA_ENV || 'sandbox').toLowerCase();
+  const allowedIps = env === 'production' ? SAFARICOM_C2B_IPS_PRODUCTION : SAFARICOM_C2B_IPS_SANDBOX;
+
+  const xForwardedFor = request.headers.get('x-forwarded-for');
+  const xRealIp = request.headers.get('x-real-ip');
+
+  const ipsToCheck: string[] = [];
+  if (xForwardedFor) {
+    ipsToCheck.push(...xForwardedFor.split(',').map((ip) => ip.trim()));
+  }
+  if (xRealIp) {
+    ipsToCheck.push(xRealIp.trim());
+  }
+
+  for (const ip of ipsToCheck) {
+    if (allowedIps.has(ip)) {
+      return true;
+    }
+  }
+
+  return false;
+}

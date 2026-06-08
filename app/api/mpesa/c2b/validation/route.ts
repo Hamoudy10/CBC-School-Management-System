@@ -2,13 +2,17 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
-import { normalizeC2BPayload } from "@/lib/mpesa/utils";
+import { isValidMpesaOrigin, normalizeC2BPayload } from "@/lib/mpesa/utils";
 
 function mpesaResponse(resultCode: number, resultDesc: string) {
   return NextResponse.json({ ResultCode: resultCode, ResultDesc: resultDesc });
 }
 
 export async function POST(request: Request) {
+  if (process.env.MPESA_ENV === "production" && !isValidMpesaOrigin(request)) {
+    return mpesaResponse(1, "Forbidden");
+  }
+
   let payload: any = null;
 
   try {

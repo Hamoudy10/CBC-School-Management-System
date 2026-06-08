@@ -2,20 +2,15 @@ export const dynamic = 'force-dynamic';
 
 // app/api/students/import/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  successResponse,
+  errorResponse,
+} from '@/lib/api/response';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import * as XLSX from 'xlsx';
 import { parse } from 'csv-parse/sync';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
-
-// ─── Response Helpers ─────────────────────────────────────────────────────────
-function successResponse(data: unknown, message: string, status: number = 200) {
-  return NextResponse.json({ success: true, message, data }, { status });
-}
-
-function errorResponse(message: string, status: number = 400) {
-  return NextResponse.json({ success: false, message, data: null }, { status });
-}
 
 // ─── Validation Schemas ───────────────────────────────────────────────────────
 const studentImportSchema = z.object({
@@ -645,10 +640,7 @@ export async function POST(req: NextRequest) {
           duplicateCount: validationResult.duplicateCount,
           records: validationResult.records,
           errors: validationResult.errors,
-        },
-        validationResult.errorCount === 0 
-          ? `All ${validationResult.validRecords} records are valid and ready for import`
-          : `Found ${validationResult.errorCount} errors in ${validationResult.totalRecords} records`
+        }
       );
     }
 
@@ -678,7 +670,6 @@ export async function POST(req: NextRequest) {
         duplicateEntries: importResult.duplicateEntries,
         errors: importResult.errors,
       },
-      `Successfully imported ${importResult.successfulImports} of ${importResult.totalRecords} students`,
       201
     );
 
