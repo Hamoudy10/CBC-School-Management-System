@@ -40,7 +40,8 @@ Analyze the user's request and produce a plan with this structure:
 - Creating/updating records requires medium risk.
 - Financial operations, messaging, and bulk operations are high risk.
 - Deletes, role changes, term/year changes, publishing, fee waivers are critical risk.
-- Always prefer summaries over exposing raw row-level data unless the user asks for specifics.`;
+- Always prefer summaries over exposing raw row-level data unless the user asks for specifics.
+- Do NOT use markdown formatting (no asterisks, no bold, no italics). Use plain text only.`;
 
 export async function processAgentMessage(
   request: AgentChatRequest,
@@ -214,7 +215,7 @@ ${request.message}`;
       }
 
       const responseResult = await provider.generate({
-        system: `You are a helpful school assistant. Explain the following result to the user in a clear, friendly way. Keep it concise. Do not invent additional information.`,
+        system: `You are a helpful school assistant. Explain the following result to the user in a clear, friendly way. Keep it concise. Do not invent additional information. Do NOT use markdown formatting (no asterisks, no bold, no italics).`,
         prompt: `The user asked: "${request.message}"\n\nTool "${plan.toolName}" returned:\n${JSON.stringify(result.output, null, 2)}\n\nExplain this result to the user.`,
         responseFormat: "text",
         requestLabel: "ai-agent.answer",

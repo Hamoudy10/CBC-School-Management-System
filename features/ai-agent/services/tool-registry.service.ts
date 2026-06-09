@@ -228,7 +228,7 @@ const get_school_health_summary = makeTool(
     const supabase = await createSupabaseServerClient();
     const [students, teachers, classes, attendance] = await Promise.all([
       supabase.from("students").select("student_id, status").eq("school_id", schoolId),
-      supabase.from("teachers").select("teacher_id, status").eq("school_id", schoolId),
+      supabase.from("staff").select("staff_id, status").eq("school_id", schoolId),
       supabase.from("classes").select("class_id").eq("school_id", schoolId),
       supabase.from("attendance_records").select("status").eq("school_id", schoolId).limit(1000),
     ]);
