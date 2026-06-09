@@ -45,7 +45,7 @@ export default function ExtracurricularPage() {
       ]);
       if (cRes.ok) { const j = await cRes.json(); setClubs(j.data ?? []); }
       if (tRes.ok) { const j = await tRes.json(); setTeams(j.data ?? []); }
-      if (sRes.ok) { const j = await sRes.json(); setStudents(j.data ?? []); }
+      if (sRes.ok) { const j = await sRes.json(); setStudents(j.data?.data ?? j.data ?? []); }
     } catch {} finally { setLoading(false); }
   }, []);
 

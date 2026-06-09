@@ -43,7 +43,7 @@ export default function TransportPage() {
       if (vRes.ok) { const j = await vRes.json(); setVehicles(j.data ?? []); }
       if (rRes.ok) { const j = await rRes.json(); setRoutes(j.data ?? []); }
       if (aRes.ok) { const j = await aRes.json(); setAssignments(j.data ?? []); }
-      if (sRes.ok) { const j = await sRes.json(); setStudents(j.data ?? []); }
+      if (sRes.ok) { const j = await sRes.json(); setStudents(j.data?.data ?? j.data ?? []); }
     } catch {} finally { setLoading(false); }
   }, []);
 

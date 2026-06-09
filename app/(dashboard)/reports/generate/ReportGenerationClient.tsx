@@ -125,7 +125,7 @@ export default function ReportGenerationClient({
           first_name: string;
           last_name: string;
           admission_number: string;
-        }> = (previewJson.data ?? []).map((student: any) => ({
+        }        > = (previewJson.data?.data ?? previewJson.data ?? []).map((student: any) => ({
           student_id: student.student_id ?? student.studentId,
           first_name: student.first_name ?? student.firstName,
           last_name: student.last_name ?? student.lastName,

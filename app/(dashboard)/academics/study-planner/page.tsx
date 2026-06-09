@@ -72,7 +72,7 @@ export default function StudyPlannerPage() {
       const res = await fetch(`/api/students?classId=${cId}`, { credentials: 'include' });
       const json = await res.json();
       if (res.ok) {
-        setStudents((json.data ?? []).map((s: any) => ({
+        setStudents((json.data?.data ?? json.data ?? []).map((s: any) => ({
           studentId: s.studentId ?? s.student_id,
           name: `${s.firstName ?? s.first_name ?? ''} ${s.lastName ?? s.last_name ?? ''}`.trim(),
           admissionNumber: s.admissionNumber ?? s.admission_number ?? '',
