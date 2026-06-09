@@ -71,7 +71,7 @@ export default function PortfolioPage() {
     if (!filterStudent && refClasses.length > 0) {
       const firstClass = refClasses[0].classId;
       fetch(`/api/students?classId=${firstClass}`, { credentials: 'include' })
-        .then((r) => r.json()).then((j) => setStudents(j.data ?? [])).catch(() => {});
+        .then((r) => r.json()).then((j) => setStudents(j.data?.data ?? j.data ?? [])).catch(() => {});
     }
   }, [refClasses]);
 
