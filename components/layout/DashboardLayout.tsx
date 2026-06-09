@@ -14,6 +14,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { NavigationFeedback } from "./NavigationFeedback";
+import { AIAgentPanel } from "@/features/ai-agent/components/AIAgentPanel";
+import { Bot } from "lucide-react";
 import type { BreadcrumbItem } from "@/components/ui/Breadcrumbs";
 
 interface DashboardLayoutProps {
@@ -31,6 +33,7 @@ function DashboardLayout({
   const { user, loading } = useAuth();
   const pathname = usePathname();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -88,6 +91,7 @@ function DashboardLayout({
           title={title}
           breadcrumbs={breadcrumbs}
           onMenuClick={() => setMobileSidebarOpen(true)}
+          onAIOpen={() => setAiPanelOpen(true)}
         />
 
         {/* Page Content */}
@@ -118,6 +122,20 @@ function DashboardLayout({
             )}
           </div>
         </main>
+
+        {/* AI Assistant Panel */}
+        <AIAgentPanel isOpen={aiPanelOpen} onClose={() => setAiPanelOpen(false)} />
+
+        {/* Floating AI Button */}
+        {!aiPanelOpen && (
+          <button
+            onClick={() => setAiPanelOpen(true)}
+            className="fixed bottom-6 right-6 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-primary-600 to-primary-700 text-white shadow-lg transition-all hover:scale-105 hover:shadow-xl"
+            aria-label="Open AI Assistant"
+          >
+            <Bot className="h-5 w-5" />
+          </button>
+        )}
 
         {/* Footer */}
         <footer className="border-t border-secondary-200 bg-white px-6 py-4">

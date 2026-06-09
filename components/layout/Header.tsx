@@ -21,6 +21,7 @@ import {
   User,
   Settings,
   LogOut,
+  Bot,
 } from "lucide-react";
 
 // ============================================================
@@ -30,6 +31,7 @@ interface HeaderProps {
   title?: string;
   breadcrumbs?: BreadcrumbItem[];
   onMenuClick?: () => void;
+  onAIOpen?: () => void;
   className?: string;
 }
 
@@ -37,6 +39,7 @@ function Header({
   title,
   breadcrumbs = [],
   onMenuClick,
+  onAIOpen,
   className,
 }: HeaderProps) {
   const { user, logout } = useAuth();
@@ -147,6 +150,15 @@ function Header({
             />
           </div>
         </div>
+
+        {/* AI Assistant */}
+        <button
+          onClick={onAIOpen}
+          className="relative rounded-lg p-2 text-secondary-400 hover:bg-secondary-100 hover:text-secondary-600"
+          aria-label="AI Assistant"
+        >
+          <Bot className="h-5 w-5" />
+        </button>
 
         {/* Theme Toggle */}
         <ThemeToggle />

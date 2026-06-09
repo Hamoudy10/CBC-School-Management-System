@@ -69,6 +69,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Library', href: '/library', icon: Library, module: 'library', category: 'support' },
   { label: 'Users', href: '/users', icon: UserCog, module: 'users', category: 'support' },
   { label: 'Settings', href: '/settings', icon: Settings, module: 'settings', category: 'support' },
+  { label: 'AI Assistant', href: '/ai-agent', icon: Brain, module: 'dashboard', category: 'core' },
 ];
 
 const CATEGORY_ORDER = ['core', 'academic', 'admin', 'support'] as const;
