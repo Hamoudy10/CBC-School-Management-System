@@ -11,8 +11,8 @@ import { logAIEvent } from "@/lib/ai/ai.logger";
 import { AIProviderError, type AIProvider, type AIProviderRequest, type AIProviderResponse } from "./types";
 
 const DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1";
-const DEFAULT_MODEL_FAST = process.env.DEEPSEEK_MODEL_FAST ?? "deepseek/deepseek-v4-flash";
-const DEFAULT_MODEL_REASONING = process.env.DEEPSEEK_MODEL_REASONING ?? "deepseek/deepseek-v4-pro";
+const DEFAULT_MODEL_FAST = process.env.DEEPSEEK_MODEL_FAST ?? "deepseek-v4-flash";
+const DEFAULT_MODEL_REASONING = process.env.DEEPSEEK_MODEL_REASONING ?? "deepseek-v4-pro";
 const MAX_RETRIES = 2;
 
 function getApiKey(): string {
