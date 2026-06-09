@@ -4,7 +4,10 @@ import { PERMISSION_MATRIX } from "@/types/roles";
 import type { AuthUser } from "@/types/auth";
 import type { PageContextData } from "@/features/ai-agent/types";
 
-export async function buildPageContext(user: AuthUser): Promise<PageContextData> {
+export async function buildPageContext(
+  user: AuthUser,
+  pageContext?: { route?: string; module?: string; selectedRecordId?: string },
+): Promise<PageContextData> {
   const supabase = await createSupabaseServerClient();
 
   let schoolName = "";
@@ -47,6 +50,8 @@ export async function buildPageContext(user: AuthUser): Promise<PageContextData>
     userRole: user.role,
     allowedModules,
     allowedActions,
+    currentPage: pageContext?.route,
+    currentModule: pageContext?.module,
   };
 }
 

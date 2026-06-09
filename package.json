@@ -47,6 +47,7 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
     "@types/csv-parse": "^1.1.12",
     "@types/jest": "^30.0.0",
     "@types/node": "^20.10.0",

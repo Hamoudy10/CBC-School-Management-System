@@ -11,10 +11,8 @@ export function requiresConfirmation(
   user: AuthUser,
 ): boolean {
   if (tool.riskLevel === "low") return false;
-  if (tool.riskLevel === "medium") {
-    return false;
-  }
-  if (tool.requiresConfirmation(input, user)) return true;
+  const toolCallback = tool.requiresConfirmation(input, user);
+  if (toolCallback) return true;
   return tool.riskLevel === "high" || tool.riskLevel === "critical";
 }
 

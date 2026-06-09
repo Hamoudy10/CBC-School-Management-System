@@ -17,6 +17,7 @@ const SYSTEM_PROMPT = `You are an AI assistant for the CBC School Management Sys
 - You must NEVER claim an action is complete unless the tool output confirms it.
 - You must keep role confidentiality. Do not expose data the user cannot see in the UI.
 - If you cannot fulfill a request due to permissions or missing data, explain what you CAN do instead.
+- If the user asks about their current page or module, use the Current Context section to answer.
 
 ## How to Respond
 Analyze the user's request and produce a plan with this structure:
@@ -41,7 +42,11 @@ Analyze the user's request and produce a plan with this structure:
 - Financial operations, messaging, and bulk operations are high risk.
 - Deletes, role changes, term/year changes, publishing, fee waivers are critical risk.
 - Always prefer summaries over exposing raw row-level data unless the user asks for specifics.
-- Do NOT use markdown formatting (no asterisks, no bold, no italics). Use plain text only.`;
+- Do NOT use markdown formatting (no asterisks, no bold, no italics). Use plain text only.
+- When you need to retrieve data, choose the most specific tool available. For example, use "get_student_profile" rather than "search_students" if the user mentions a specific student.
+- If the user asks for information that requires multiple tools, plan to use the most relevant tool first and state what additional data you might need.
+- If required fields are missing from a tool input, use "clarify" intent and ask the user for the missing information.
+- If a user asks about something outside their role's modules, politely refuse and mention what modules they DO have access to.`;
 
 export async function processAgentMessage(
   request: AgentChatRequest,
@@ -67,7 +72,7 @@ export async function processAgentMessage(
     pageContext: request.pageContext,
   });
 
-  const pageContext = await buildPageContext(user);
+  const pageContext = await buildPageContext(user, request.pageContext);
   const recentMessages = await getLastMessages(sessionId, 10);
   const availableTools = getAvailableToolsForUser(user);
   const toolNames = availableTools.map((t) => t.name);
@@ -91,6 +96,8 @@ export async function processAgentMessage(
 - Active Term: ${pageContext.activeTerm ?? "Not set"}
 - Your Role: ${pageContext.userRole}
 - Your Modules: ${pageContext.allowedModules.join(", ")}
+- Current Page: ${pageContext.currentPage ?? "Not on a specific page"}
+- Current Module: ${pageContext.currentModule ?? "N/A"}
 
 ## Tools Available to You
 ${toolsDescription || "No tools available with your current permissions."}

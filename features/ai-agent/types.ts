@@ -136,6 +136,8 @@ export interface PageContextData {
   userRole: string;
   allowedModules: string[];
   allowedActions: Record<string, string[]>;
+  currentPage?: string;
+  currentModule?: string;
 }
 
 export interface SessionSummary {

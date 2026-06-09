@@ -1,5 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { hasPermission } from "@/lib/auth/permissions";
+import { hasPermission, canManageRole } from "@/lib/auth/permissions";
 import { PERMISSION_MATRIX } from "@/types/roles";
 import type { AuthUser } from "@/types/auth";
 import type { AgentTool } from "@/features/ai-agent/types";
@@ -255,7 +255,7 @@ const get_timetable = makeTool(
   summaryOutput,
   async (input, { schoolId }) => {
     const supabase = await createSupabaseServerClient();
-    let query = supabase.from("timetable_entries").select("*, subjects(name), classes(name), teachers(first_name, last_name)").eq("school_id", schoolId);
+    let query = supabase.from("timetable_slots").select("*, learning_area:learning_areas(name), class:classes(name), teacher:staff(staff_id, user:users(first_name, last_name))").eq("school_id", schoolId);
     if (input.classId) query = query.eq("class_id", input.classId);
     if (input.teacherId) query = query.eq("teacher_id", input.teacherId);
     if (input.dayOfWeek !== undefined) query = query.eq("day_of_week", input.dayOfWeek);
@@ -829,11 +829,12 @@ const send_message = makeTool(
   "high",
   toolInputSchemas.send_message,
   voidOutput,
-  async (input, { schoolId }) => {
+  async (input, { schoolId, user }) => {
     const supabase = await createSupabaseServerClient();
     const { data: msg, error } = await supabase.from("messages").insert({
       school_id: schoolId,
-      sender_id: input.recipientId,
+      sender_id: user.id,
+      sender_role: user.role,
       subject: input.subject,
       body: input.body,
       priority: input.priority ?? "normal",
@@ -933,8 +934,15 @@ const change_user_role = makeTool(
   "critical",
   toolInputSchemas.change_user_role,
   voidOutput,
-  async (input, { schoolId }) => {
+  async (input, { schoolId, user }) => {
+    if (!canManageRole(user.role as any, input.newRole as any)) {
+      throw new Error(`You cannot assign the role "${input.newRole}" — it is at or above your own role level`);
+    }
     const supabase = await createSupabaseServerClient();
+    const { data: target } = await supabase.from("user_roles").select("name").eq("user_id", input.userId).maybeSingle();
+    if (target && !canManageRole(user.role as any, target.name as any)) {
+      throw new Error("You cannot change this user's role — they are at or above your role level");
+    }
     const { error } = await supabase.from("user_roles").update({ name: input.newRole }).eq("user_id", input.userId).eq("school_id", schoolId);
     if (error) throw new Error(`Failed to change role: ${error.message}`);
     return { success: true, message: `User role changed to ${input.newRole}: ${input.reason}` };
@@ -950,7 +958,7 @@ const waive_fee = makeTool(
   "critical",
   toolInputSchemas.waive_fee,
   voidOutput,
-  async (input, { schoolId }) => {
+  async (input, { schoolId, user }) => {
     const supabase = await createSupabaseServerClient();
     const { error } = await supabase.from("fee_waivers").insert({
       school_id: schoolId,
@@ -959,7 +967,7 @@ const waive_fee = makeTool(
       reason: input.reason,
       term_id: input.termId,
       academic_year_id: input.academicYearId,
-      approved_by: input.studentId,
+      approved_by: user.id,
     });
     if (error) throw new Error(`Failed to waive fee: ${error.message}`);
     return { success: true, message: `Fee waiver of KES ${input.amount.toLocaleString()} approved` };
@@ -994,10 +1002,14 @@ const change_active_term = makeTool(
   voidOutput,
   async (input, { schoolId }) => {
     const supabase = await createSupabaseServerClient();
-    await supabase.from("terms").update({ is_active: false }).eq("school_id", schoolId);
-    await supabase.from("academic_years").update({ is_active: false }).eq("school_id", schoolId);
-    await supabase.from("terms").update({ is_active: true }).eq("term_id", input.termId).eq("school_id", schoolId);
-    await supabase.from("academic_years").update({ is_active: true }).eq("academic_year_id", input.academicYearId).eq("school_id", schoolId);
+    const { error: deactivateTermErr } = await supabase.from("terms").update({ is_active: false }).eq("school_id", schoolId);
+    if (deactivateTermErr) throw new Error(`Failed to deactivate current term: ${deactivateTermErr.message}`);
+    const { error: deactivateYearErr } = await supabase.from("academic_years").update({ is_active: false }).eq("school_id", schoolId);
+    if (deactivateYearErr) throw new Error(`Failed to deactivate current year: ${deactivateYearErr.message}`);
+    const { error: activateTermErr } = await supabase.from("terms").update({ is_active: true }).eq("term_id", input.termId).eq("school_id", schoolId);
+    if (activateTermErr) throw new Error(`Failed to activate term: ${activateTermErr.message}`);
+    const { error: activateYearErr } = await supabase.from("academic_years").update({ is_active: true }).eq("academic_year_id", input.academicYearId).eq("school_id", schoolId);
+    if (activateYearErr) throw new Error(`Failed to activate academic year: ${activateYearErr.message}`);
     return { success: true, message: `Active term changed: ${input.reason}` };
   },
   () => true,
