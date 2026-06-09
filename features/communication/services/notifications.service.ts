@@ -1,7 +1,4 @@
-// features/communication/services/notifications.service.ts
-// Notification management service
-
-import { createClient } from "@/lib/supabase/client";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   Notification,
   NotificationFilters,
@@ -10,16 +7,11 @@ import type {
   UnreadCounts,
 } from "../types";
 
-const supabase = createClient();
-
-// ============================================================
-// CREATE NOTIFICATIONS
-// ============================================================
-
 export async function createNotification(
   input: CreateNotificationInput,
   schoolId: string,
 ): Promise<{ success: boolean; id?: string; message: string }> {
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("notifications")
     .insert({
@@ -46,6 +38,7 @@ export async function createBulkNotifications(
   input: BulkNotificationInput,
   schoolId: string,
 ): Promise<{ success: boolean; count: number; message: string }> {
+  const supabase = await createSupabaseServerClient();
   const records = input.user_ids.map((userId) => ({
     user_id: userId,
     title: input.title,
@@ -70,7 +63,6 @@ export async function createBulkNotifications(
   };
 }
 
-// Convenience function for system-generated notifications
 export async function notifyUser(
   userId: string,
   schoolId: string,
@@ -91,10 +83,6 @@ export async function notifyUser(
   );
 }
 
-// ============================================================
-// READ NOTIFICATIONS
-// ============================================================
-
 export async function getUserNotifications(
   userId: string,
   schoolId: string,
@@ -107,6 +95,7 @@ export async function getUserNotifications(
   total: number;
   message?: string;
 }> {
+  const supabase = await createSupabaseServerClient();
   const offset = (page - 1) * pageSize;
 
   let query = supabase
@@ -143,15 +132,12 @@ export async function getUserNotifications(
   };
 }
 
-// ============================================================
-// MARK AS READ
-// ============================================================
-
 export async function markNotificationAsRead(
   notificationId: string,
   userId: string,
   schoolId: string,
 ): Promise<{ success: boolean; message: string }> {
+  const supabase = await createSupabaseServerClient();
   const { error } = await supabase
     .from("notifications")
     .update({
@@ -173,6 +159,7 @@ export async function markAllNotificationsAsRead(
   userId: string,
   schoolId: string,
 ): Promise<{ success: boolean; message: string }> {
+  const supabase = await createSupabaseServerClient();
   const { error } = await supabase
     .from("notifications")
     .update({
@@ -190,15 +177,12 @@ export async function markAllNotificationsAsRead(
   return { success: true, message: "All notifications marked as read" };
 }
 
-// ============================================================
-// DELETE NOTIFICATION
-// ============================================================
-
 export async function deleteNotification(
   notificationId: string,
   userId: string,
   schoolId: string,
 ): Promise<{ success: boolean; message: string }> {
+  const supabase = await createSupabaseServerClient();
   const { error } = await supabase
     .from("notifications")
     .delete()
@@ -213,15 +197,12 @@ export async function deleteNotification(
   return { success: true, message: "Notification deleted" };
 }
 
-// ============================================================
-// UNREAD COUNTS
-// ============================================================
-
 export async function getUnreadCounts(
   userId: string,
   schoolId: string,
 ): Promise<{ success: boolean; data?: UnreadCounts; message?: string }> {
-  // Count unread notifications
+  const supabase = await createSupabaseServerClient();
+
   const { count: notifCount, error: notifError } = await supabase
     .from("notifications")
     .select("*", { count: "exact", head: true })
@@ -233,7 +214,6 @@ export async function getUnreadCounts(
     return { success: false, message: notifError.message };
   }
 
-  // Count unread messages
   const { count: msgCount, error: msgError } = await supabase
     .from("message_recipients")
     .select("*", { count: "exact", head: true })
