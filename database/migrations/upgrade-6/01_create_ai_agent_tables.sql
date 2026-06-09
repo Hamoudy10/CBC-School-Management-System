@@ -94,25 +94,85 @@ ALTER TABLE ai_agent_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ai_agent_actions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ai_agent_tool_catalog ENABLE ROW LEVEL SECURITY;
 
--- Sessions: own school access
-CREATE POLICY ai_agent_sessions_school_access
+-- Sessions: users see only their own sessions
+CREATE POLICY ai_agent_sessions_user_select
   ON ai_agent_sessions
-  FOR ALL
-  USING (school_id = auth.uid()::text::uuid);
+  FOR SELECT
+  USING (user_id = auth.uid());
 
--- Messages: own school access
-CREATE POLICY ai_agent_messages_school_access
+CREATE POLICY ai_agent_sessions_user_insert
+  ON ai_agent_sessions
+  FOR INSERT
+  WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY ai_agent_sessions_user_update
+  ON ai_agent_sessions
+  FOR UPDATE
+  USING (user_id = auth.uid());
+
+CREATE POLICY ai_agent_sessions_user_delete
+  ON ai_agent_sessions
+  FOR DELETE
+  USING (user_id = auth.uid());
+
+-- Messages: via session ownership
+CREATE POLICY ai_agent_messages_user_select
   ON ai_agent_messages
-  FOR ALL
-  USING (school_id = auth.uid()::text::uuid);
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM ai_agent_sessions
+      WHERE ai_agent_sessions.session_id = ai_agent_messages.session_id
+      AND ai_agent_sessions.user_id = auth.uid()
+    )
+  );
 
--- Actions: own school access
-CREATE POLICY ai_agent_actions_school_access
+CREATE POLICY ai_agent_messages_user_insert
+  ON ai_agent_messages
+  FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM ai_agent_sessions
+      WHERE ai_agent_sessions.session_id = ai_agent_messages.session_id
+      AND ai_agent_sessions.user_id = auth.uid()
+    )
+  );
+
+-- Actions: via session ownership
+CREATE POLICY ai_agent_actions_user_select
   ON ai_agent_actions
-  FOR ALL
-  USING (school_id = auth.uid()::text::uuid);
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM ai_agent_sessions
+      WHERE ai_agent_sessions.session_id = ai_agent_actions.session_id
+      AND ai_agent_sessions.user_id = auth.uid()
+    )
+  );
 
--- Tool catalog: read-only for authenticated users
+CREATE POLICY ai_agent_actions_user_insert
+  ON ai_agent_actions
+  FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM ai_agent_sessions
+      WHERE ai_agent_sessions.session_id = ai_agent_actions.session_id
+      AND ai_agent_sessions.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY ai_agent_actions_user_update
+  ON ai_agent_actions
+  FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM ai_agent_sessions
+      WHERE ai_agent_sessions.session_id = ai_agent_actions.session_id
+      AND ai_agent_sessions.user_id = auth.uid()
+    )
+  );
+
+-- Tool catalog: read-only for all authenticated users
 CREATE POLICY ai_agent_tool_catalog_read
   ON ai_agent_tool_catalog
   FOR SELECT
