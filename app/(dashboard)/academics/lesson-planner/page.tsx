@@ -240,12 +240,12 @@ export default function LessonPlannerPage() {
   );
 }
 
-function Section({ title, items }: { title: string; items: string[] }) {
+function Section({ title, items }: { title: string; items?: string[] }) {
   return (
     <div>
       <h3 className="text-sm font-semibold text-gray-900 mb-2">{title}</h3>
       <ul className="space-y-1.5">
-        {items.map((item, i) => (
+        {(items ?? []).map((item, i) => (
           <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
             <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary-500" />
             {item}

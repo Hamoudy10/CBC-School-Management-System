@@ -71,7 +71,15 @@ export default function ParentPage() {
         const res = await fetch('/api/parent/dashboard', { credentials: 'include' });
         const json = await res.json();
         if (res.ok && json.data) {
-          setData(json.data);
+          setData({
+            ...json.data,
+            students: (json.data.students ?? []).map((s: any) => ({
+              ...s,
+              performance: s.performance ?? [],
+              attendance: s.attendance ?? { totalDays: 0, presentDays: 0, absentDays: 0, attendanceRate: 0 },
+              recentPayments: s.recentPayments ?? [],
+            })),
+          });
           if (json.data.students?.length > 0) {
             setSelectedStudent(json.data.students[0].studentId);
           }

@@ -141,7 +141,7 @@ export default function SmartSearchPage() {
             </div>
             <p className="text-sm text-gray-700">{result.summary}</p>
 
-            {result.columns.length > 0 && result.data.length > 0 ? (
+            {result.columns?.length > 0 && result.data?.length > 0 ? (
               <div className="overflow-x-auto rounded-lg border">
                 <table className="min-w-full divide-y divide-gray-200 text-sm">
                   <thead className="bg-gray-50">

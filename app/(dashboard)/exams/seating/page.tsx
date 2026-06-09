@@ -100,11 +100,11 @@ export default function ExamSeatingPage() {
       <PageHeader title="Exam Seating Planner" description="Manage rooms and generate seating arrangements" icon={<LayoutGrid className="h-6 w-6" />} />
 
       <Tabs defaultValue="rooms">
-        <TabsList>
-          <TabsTrigger value="rooms"><MapPin className="h-4 w-4 mr-1" /> Exam Rooms ({rooms.length})</TabsTrigger>
-          <TabsTrigger value="generate"><Shuffle className="h-4 w-4 mr-1" /> Generate Plan</TabsTrigger>
-          {chart && <TabsTrigger value="chart"><LayoutGrid className="h-4 w-4 mr-1" /> Seating Chart</TabsTrigger>}
-        </TabsList>
+          <TabsList>
+            <TabsTrigger value="rooms"><MapPin className="h-4 w-4 mr-1" /> Exam Rooms ({rooms.length})</TabsTrigger>
+            <TabsTrigger value="generate"><Shuffle className="h-4 w-4 mr-1" /> Generate Plan</TabsTrigger>
+            <TabsTrigger value="chart" className={chart ? '' : 'hidden'}><LayoutGrid className="h-4 w-4 mr-1" /> Seating Chart</TabsTrigger>
+          </TabsList>
 
         <TabsContent value="rooms" className="space-y-4">
           <Card>
@@ -189,8 +189,8 @@ export default function ExamSeatingPage() {
           </Card>
         </TabsContent>
 
-        {chart && (
-          <TabsContent value="chart" className="space-y-4">
+        <TabsContent value="chart" className={chart ? 'space-y-4' : 'hidden'}>
+          {chart && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
@@ -236,8 +236,8 @@ export default function ExamSeatingPage() {
                 </Button>
               </CardContent>
             </Card>
-          </TabsContent>
-        )}
+          )}
+        </TabsContent>
       </Tabs>
     </div>
   );
