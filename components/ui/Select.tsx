@@ -93,7 +93,7 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
               </option>
             )}
             {children ||
-              options.map((option) => (
+              (options ?? []).map((option) => (
                 <option
                   key={option.value}
                   value={option.value}

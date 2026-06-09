@@ -256,7 +256,7 @@ export default function ExamGeneratorPage() {
                   <p>{result.exam.instructions}</p>
                 </div>
 
-                {result.exam.questions.map((q) => (
+                {(result.exam?.questions ?? []).map((q) => (
                   <div key={q.number} className="rounded-lg border p-4">
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">
@@ -302,7 +302,7 @@ export default function ExamGeneratorPage() {
                 <CardTitle className="text-base">Marking Scheme</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {result.exam.markingScheme.map((ms) => (
+                {(result.exam?.markingScheme ?? []).map((ms) => (
                   <div key={ms.questionNumber} className="rounded-lg border p-4">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-gray-900">Question {ms.questionNumber}</span>
@@ -311,7 +311,7 @@ export default function ExamGeneratorPage() {
                     <div className="space-y-2">
                       <p className="text-xs font-medium text-gray-600">Expected Points:</p>
                       <ul className="list-disc pl-5 space-y-1">
-                        {ms.expectedPoints.map((point, i) => (
+                        {(ms.expectedPoints ?? []).map((point, i) => (
                           <li key={i} className="text-sm text-gray-700">{point}</li>
                         ))}
                       </ul>
@@ -333,7 +333,7 @@ export default function ExamGeneratorPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {Object.entries(result.exam.bloomTaxonomyBreakdown).map(([level, marks]) => (
+                  {Object.entries(result.exam?.bloomTaxonomyBreakdown ?? {}).map(([level, marks]) => (
                     <div key={level} className="flex items-center gap-3">
                       <span className={`w-20 rounded-full px-2 py-0.5 text-xs font-medium text-center ${bloomColors[level] || 'bg-gray-100 text-gray-800'}`}>
                         {level}

@@ -217,7 +217,7 @@ export default function StudyPlannerPage() {
             </TabsList>
 
             <TabsContent value="timetable" className="space-y-3">
-              {result.plan.sessions.map((session, idx) => (
+              {(result.plan?.sessions ?? []).map((session, idx) => (
                 <Card key={idx} className={`transition-opacity ${completedSessions.has(idx) ? 'opacity-60' : ''}`}>
                   <CardContent className="flex items-center gap-4 p-4">
                     <button
@@ -243,7 +243,7 @@ export default function StudyPlannerPage() {
                         <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {session.durationMinutes} min</span>
                         <span>{session.activity}</span>
                       </div>
-                      {session.resources.length > 0 && (
+                      {session.resources?.length > 0 && (
                         <p className="mt-0.5 text-xs text-gray-400">Resources: {session.resources.join(', ')}</p>
                       )}
                     </div>
@@ -260,7 +260,7 @@ export default function StudyPlannerPage() {
                 <CardHeader><CardTitle className="text-base">Study Recommendations</CardTitle></CardHeader>
                 <CardContent>
                   <ul className="space-y-2">
-                    {result.plan.recommendations.map((rec, i) => (
+                    {(result.plan?.recommendations ?? []).map((rec, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
                         <CheckCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-green-500" />
                         {rec}
