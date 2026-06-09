@@ -78,3 +78,9 @@ export { PageHeader } from "./PageHeader";
 
 // Alert
 export { Alert, AlertTitle, AlertDescription } from "./Alert";
+
+// Animation
+export { AnimatedContainer, StaggerList, StaggerItem } from "./AnimatedContainer";
+
+// Theme
+export { ThemeToggle } from "./ThemeToggle";

@@ -7,7 +7,8 @@
 "use client";
 
 import { useEffect, useState, type ReactNode, Suspense } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { Sidebar } from "./Sidebar";
@@ -28,6 +29,7 @@ function DashboardLayout({
 }: DashboardLayoutProps) {
   const router = useRouter();
   const { user, loading } = useAuth();
+  const pathname = usePathname();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
@@ -104,9 +106,15 @@ function DashboardLayout({
                 <div className="mt-6 h-64 rounded-xl bg-gray-100" />
               </div>
             ) : (
-              <div className="min-h-[calc(100vh-12rem)] rounded-[28px] border border-white/65 bg-white/92 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.06)] backdrop-blur sm:p-6">
+              <motion.div
+                key={pathname}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+                className="min-h-[calc(100vh-12rem)] rounded-[28px] border border-white/65 bg-white/92 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.06)] backdrop-blur sm:p-6"
+              >
                 {children}
-              </div>
+              </motion.div>
             )}
           </div>
         </main>

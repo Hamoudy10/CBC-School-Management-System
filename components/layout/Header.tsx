@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { Avatar } from "@/components/ui/Avatar";
 import { Breadcrumbs, type BreadcrumbItem } from "@/components/ui/Breadcrumbs";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import {
   Search,
   Bell,
@@ -146,6 +147,9 @@ function Header({
             />
           </div>
         </div>
+
+        {/* Theme Toggle */}
+        <ThemeToggle />
 
         {/* Notifications */}
         <div className="relative">

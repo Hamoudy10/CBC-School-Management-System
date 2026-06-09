@@ -175,8 +175,69 @@
   --content-max-width: 1440px;
 }
 
-/* ─── Dark Mode Variables (Future) ─── */
+/* ─── Dark Mode Variables ─── */
 [data-theme="dark"] {
+  --color-primary-50: #1E293B;
+  --color-primary-100: #1E3A5F;
+  --color-primary-200: #1E4D7A;
+  --color-primary-300: #2563A0;
+  --color-primary-400: #3B82C4;
+  --color-primary-500: #60A5FA;
+  --color-primary-600: #93C5FD;
+  --color-primary-700: #BFDBFE;
+  --color-primary-800: #DBEAFE;
+  --color-primary-900: #EFF6FF;
+  --color-primary-950: #F0F7FF;
+
+  --color-secondary-50: #0F172A;
+  --color-secondary-100: #1E293B;
+  --color-secondary-200: #334155;
+  --color-secondary-300: #475569;
+  --color-secondary-400: #64748B;
+  --color-secondary-500: #94A3B8;
+  --color-secondary-600: #CBD5E1;
+  --color-secondary-700: #E2E8F0;
+  --color-secondary-800: #F1F5F9;
+  --color-secondary-900: #F8FAFC;
+
+  --color-success-50: #022C22;
+  --color-success-100: #065F46;
+  --color-success-200: #047857;
+  --color-success-300: #059669;
+  --color-success-400: #10B981;
+  --color-success-500: #34D399;
+  --color-success-600: #6EE7B7;
+  --color-success-700: #A7F3D0;
+  --color-success-800: #D1FAE5;
+  --color-success-900: #ECFDF5;
+
+  --color-warning-50: #451A03;
+  --color-warning-100: #78350F;
+  --color-warning-200: #92400E;
+  --color-warning-300: #B45309;
+  --color-warning-400: #D97706;
+  --color-warning-500: #F59E0B;
+  --color-warning-600: #FBBF24;
+  --color-warning-700: #FCD34D;
+  --color-warning-800: #FDE68A;
+  --color-warning-900: #FEF3C7;
+
+  --color-error-50: #450A0A;
+  --color-error-100: #7F1D1D;
+  --color-error-200: #991B1B;
+  --color-error-300: #B91C1C;
+  --color-error-400: #DC2626;
+  --color-error-500: #EF4444;
+  --color-error-600: #F87171;
+  --color-error-700: #FCA5A5;
+  --color-error-800: #FECACA;
+  --color-error-900: #FEE2E2;
+
+  --color-info-50: #1E293B;
+  --color-info-100: #1E3A5F;
+  --color-info-500: #60A5FA;
+  --color-info-600: #93C5FD;
+
   --color-background: #0F172A;
   --color-surface: #1E293B;
   --color-surface-elevated: #334155;

@@ -5,6 +5,7 @@
 
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { ThemeProvider } from "next-themes";
 import { ToastProvider } from "@/components/ui/Toast";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { SWRProvider } from "@/components/providers/SWRProvider";
@@ -53,13 +54,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body className="min-h-screen bg-secondary-50 font-sans antialiased">
-        <SWRProvider>
-          <AuthProvider>
-            <ToastProvider>{children}</ToastProvider>
-          </AuthProvider>
-        </SWRProvider>
+        <ThemeProvider attribute="data-theme" defaultTheme="light" enableSystem disableTransitionOnChange>
+          <SWRProvider>
+            <AuthProvider>
+              <ToastProvider>{children}</ToastProvider>
+            </AuthProvider>
+          </SWRProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
