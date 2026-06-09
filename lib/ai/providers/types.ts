@@ -1,6 +1,6 @@
 import type { z } from "zod";
 
-export type AIProviderName = "openrouter" | "groq";
+export type AIProviderName = "openrouter" | "groq" | "deepseek";
 
 export interface AIProviderRequest<TJson = unknown> {
   system: string;

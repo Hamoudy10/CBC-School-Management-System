@@ -1,10 +1,12 @@
 import { openRouterProvider } from "./openrouter.client";
 import { groqProvider } from "./groq.client";
+import { deepSeekProvider } from "./deepseek.client";
 import type { AIProvider, AIProviderName } from "./types";
 
 const providerMap: Record<AIProviderName, AIProvider> = {
   openrouter: openRouterProvider,
   groq: groqProvider,
+  deepseek: deepSeekProvider,
 };
 
 const defaultProvider: AIProviderName =
@@ -19,6 +21,6 @@ export function getProvider(name?: AIProviderName): AIProvider {
   return provider;
 }
 
-export { openRouterProvider, groqProvider };
+export { openRouterProvider, groqProvider, deepSeekProvider };
 export type { AIProvider, AIProviderName };
 export { AIProviderError } from "./types";

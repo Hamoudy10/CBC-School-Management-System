@@ -120,7 +120,7 @@ export interface AIProviderResponse<T = unknown> {
   };
 }
 
-export type AIProviderName = "openrouter" | "groq";
+export type AIProviderName = "openrouter" | "groq" | "deepseek";
 
 export interface AIProvider {
   name: AIProviderName;
