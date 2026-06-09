@@ -189,11 +189,15 @@ export default function ProfilePage() {
     if (!user?.id) {return;}
     setIsSaving(true);
     try {
+      const body: Record<string, any> = {};
+      for (const [key, value] of Object.entries(editForm)) {
+        if (value !== "") body[key] = value;
+      }
       const response = await fetch(`/api/users/${user.id}/profile`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(editForm),
+        body: JSON.stringify(body),
       });
       const json = await response.json().catch(() => null);
       if (!response.ok) {throw new Error(json?.message || "Failed to update profile");}

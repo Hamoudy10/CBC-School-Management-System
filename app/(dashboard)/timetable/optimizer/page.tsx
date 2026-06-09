@@ -30,7 +30,7 @@ interface TimetableResult {
 export default function TimetableOptimizerPage() {
   const { user } = useAuth();
   const { success, error } = useToast();
-  const { classes: referenceClasses } = useReferenceData({ enabled: Boolean(user) });
+  const { classes: referenceClasses, activeTerm, activeYear } = useReferenceData({ enabled: Boolean(user) });
 
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -51,11 +51,18 @@ export default function TimetableOptimizerPage() {
     setResult(null);
 
     try {
+      if (!activeTerm || !activeYear) {
+        error('No active term or academic year found');
+        return;
+      }
+
       const res = await fetch('/api/timetable-optimizer/suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           classIds: selectedClassIds,
+          termId: activeTerm.id,
+          academicYearId: activeYear.id,
           preferences: {
             teacherMaxPeriodsPerDay: 6,
             maxConsecutivePeriods: 3,
@@ -75,7 +82,7 @@ export default function TimetableOptimizerPage() {
     } finally {
       setIsGenerating(false);
     }
-  }, [selectedClassIds, error, success]);
+  }, [selectedClassIds, activeTerm, activeYear, error, success]);
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 

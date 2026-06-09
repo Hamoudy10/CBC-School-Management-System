@@ -1,13 +1,16 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { CheckSquare, ClipboardList, RefreshCw } from 'lucide-react';
+import { CheckSquare, ClipboardList, RefreshCw, BookOpen } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
+import { Select } from '@/components/ui/Select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
+import { useReferenceData } from '@/hooks/useReferenceData';
 
 interface AlignmentResult {
   overallScore: number;
@@ -17,14 +20,25 @@ interface AlignmentResult {
 }
 
 export default function CurriculumAlignmentPage() {
+  const { user } = useAuth();
   const { success, error } = useToast();
-  const [lessonPlan, setLessonPlan] = useState('');
+  const { learningAreas } = useReferenceData({ enabled: Boolean(user), includeLearningAreas: true });
+
+  const [title, setTitle] = useState('');
+  const [subject, setSubject] = useState('');
+  const [grade, setGrade] = useState('');
+  const [duration, setDuration] = useState('');
+  const [objectives, setObjectives] = useState('');
+  const [activities, setActivities] = useState('');
+  const [assessmentMethods, setAssessmentMethods] = useState('');
+  const [materials, setMaterials] = useState('');
+  const [learningAreaId, setLearningAreaId] = useState('');
   const [isChecking, setIsChecking] = useState(false);
   const [result, setResult] = useState<AlignmentResult | null>(null);
 
   const handleCheck = useCallback(async () => {
-    if (!lessonPlan.trim()) {
-      error('Please enter a lesson plan');
+    if (!title.trim() || !subject.trim() || !grade.trim() || !duration.trim() || !objectives.trim() || !activities.trim() || !assessmentMethods.trim()) {
+      error('Please fill in all required fields');
       return;
     }
 
@@ -35,7 +49,19 @@ export default function CurriculumAlignmentPage() {
       const res = await fetch('/api/curriculum-alignment/check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lessonPlan: lessonPlan.trim() }),
+        body: JSON.stringify({
+          lessonPlan: {
+            title: title.trim(),
+            subject: subject.trim(),
+            grade: grade.trim(),
+            duration: duration.trim(),
+            objectives: objectives.split('\n').filter(Boolean),
+            activities: activities.split('\n').filter(Boolean),
+            assessmentMethods: assessmentMethods.split('\n').filter(Boolean),
+            materials: materials.trim() ? materials.split('\n').filter(Boolean) : undefined,
+          },
+          learningAreaId: learningAreaId || undefined,
+        }),
       });
 
       const data = await res.json();
@@ -48,7 +74,7 @@ export default function CurriculumAlignmentPage() {
     } finally {
       setIsChecking(false);
     }
-  }, [lessonPlan, error, success]);
+  }, [title, subject, grade, duration, objectives, activities, assessmentMethods, materials, learningAreaId, error, success]);
 
   const scoreColor = result
     ? result.overallScore >= 70 ? 'text-green-600' : result.overallScore >= 40 ? 'text-amber-600' : 'text-red-600'
@@ -64,20 +90,85 @@ export default function CurriculumAlignmentPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Lesson Plan</CardTitle>
+          <CardTitle className="text-base">Lesson Plan Details</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <input
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="Lesson title *"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+            <input
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="Subject / Learning Area *"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+            />
+            <input
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="Grade (e.g. Grade 4) *"
+              value={grade}
+              onChange={(e) => setGrade(e.target.value)}
+            />
+            <input
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="Duration (e.g. 40 min) *"
+              value={duration}
+              onChange={(e) => setDuration(e.target.value)}
+            />
+          </div>
+          <Select
+            value={learningAreaId}
+            onChange={(e) => setLearningAreaId(e.target.value)}
+            placeholder="CBC Learning Area (optional)"
+          >
+            <option value="">All learning areas</option>
+            {learningAreas.map((la) => (
+              <option key={la.learningAreaId} value={la.learningAreaId}>{la.name}</option>
+            ))}
+          </Select>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Objectives (one per line) *</label>
+              <textarea
+                className="w-full min-h-[120px] rounded-lg border border-gray-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder="Understand fractions..."
+                value={objectives}
+                onChange={(e) => setObjectives(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Activities (one per line) *</label>
+              <textarea
+                className="w-full min-h-[120px] rounded-lg border border-gray-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder="Group discussion..."
+                value={activities}
+                onChange={(e) => setActivities(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Assessment Methods (one per line) *</label>
+              <textarea
+                className="w-full min-h-[120px] rounded-lg border border-gray-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                placeholder="Oral questions..."
+                value={assessmentMethods}
+                onChange={(e) => setAssessmentMethods(e.target.value)}
+              />
+            </div>
+          </div>
           <textarea
-            className="w-full min-h-[200px] rounded-lg border border-gray-300 p-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-            placeholder="Paste your lesson plan here..."
-            value={lessonPlan}
-            onChange={(e) => setLessonPlan(e.target.value)}
+            className="w-full min-h-[80px] rounded-lg border border-gray-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            placeholder="Materials (one per line, optional)"
+            value={materials}
+            onChange={(e) => setMaterials(e.target.value)}
           />
           <Button
             leftIcon={<ClipboardList className="h-4 w-4" />}
             onClick={handleCheck}
             loading={isChecking}
-            disabled={!lessonPlan.trim()}
+            disabled={!title.trim() || !subject.trim() || !grade.trim() || !duration.trim() || !objectives.trim() || !activities.trim() || !assessmentMethods.trim()}
           >
             Check Alignment
           </Button>

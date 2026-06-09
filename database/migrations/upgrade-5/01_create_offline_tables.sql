@@ -5,7 +5,7 @@
 -- Create offline_sync_queue table to track pending local operations
 CREATE TABLE IF NOT EXISTS offline_sync_queue (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
     table_name VARCHAR(100) NOT NULL, -- Name of the table being synced
     record_id UUID NOT NULL, -- ID of the record in the target table
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS offline_sync_queue (
 -- Create offline_metadata table to track sync state per user/device
 CREATE TABLE IF NOT EXISTS offline_metadata (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     device_id VARCHAR(255) NOT NULL, -- Unique device identifier
     school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
     last_sync TIMESTAMP WITH TIME ZONE, -- Last successful sync timestamp
@@ -71,24 +71,24 @@ COMMENT ON COLUMN offline_sync_queue.priority IS 'Priority level (1-10) for proc
 COMMENT ON COLUMN offline_sync_queue.processed IS 'Whether this operation has been successfully processed';
 
 COMMENT ON TABLE offline_metadata IS 'Tracks synchronization state for each user/device combination';
-COMMENT ON COLUMN offline_metadata.device_id IS 'Unique identifier for the user\'s device';
+COMMENT ON COLUMN offline_metadata.device_id IS 'Unique identifier for the user''s device';
 COMMENT ON COLUMN offline_metadata.last_sync IS 'Timestamp of the last successful synchronization';
 COMMENT ON COLUMN offline_metadata.sync_in_progress IS 'Whether a sync operation is currently in progress';
 COMMENT ON COLUMN offline_metadata.last_error IS 'Error message from the last failed sync attempt';
 
 -- Updated trigger function to automatically update the updated_at column (if not already present)
-DO $$
+DO $block$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'update_updated_at_column') THEN
         CREATE OR REPLACE FUNCTION update_updated_at_column()
-        RETURNS TRIGGER AS $$
+        RETURNS TRIGGER AS $func$
         BEGIN
             NEW.updated_at = NOW();
             RETURN NEW;
         END;
-        $$ language 'plpgsql';
+        $func$ language 'plpgsql';
     END IF;
-END $$;
+END $block$;
 
 -- Create triggers to automatically update updated_at column for offline_metadata
 DROP TRIGGER IF EXISTS update_offline_metadata_updated_at ON offline_metadata;

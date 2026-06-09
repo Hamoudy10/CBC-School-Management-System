@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS ai_logs (
 -- Create student_risk_scores table for tracking student risk assessments
 CREATE TABLE IF NOT EXISTS student_risk_scores (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    student_id UUID NOT NULL REFERENCES students(student_id) ON DELETE CASCADE,
     school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
     risk_level VARCHAR(20) NOT NULL CHECK (risk_level IN ('low', 'medium', 'high')),
     risk_factors JSONB, -- Store factors contributing to risk score
@@ -26,17 +26,16 @@ CREATE TABLE IF NOT EXISTS student_risk_scores (
     computed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     valid_until TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
-    -- Ensure one active risk score per student at a time
-    CONSTRAINT unique_active_student_risk UNIQUE (student_id, school_id) 
-    WHERE (valid_until IS NULL OR valid_until > NOW())
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Note: "one active risk score per student" is enforced at the application layer
+-- because a partial unique index with NOW() would require IMMUTABLE functions
 
 -- Create analytics_snapshots table for storing computed analytics
 CREATE TABLE IF NOT EXISTS analytics_snapshots (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    class_id UUID REFERENCES classes(id) ON DELETE SET NULL,
+    class_id UUID REFERENCES classes(class_id) ON DELETE SET NULL,
     school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
     metrics_json JSONB NOT NULL, -- Store various computed metrics
     snapshot_type VARCHAR(50) NOT NULL CHECK (snapshot_type IN (
@@ -60,7 +59,7 @@ CREATE TABLE IF NOT EXISTS ai_cache (
     hash VARCHAR(64) UNIQUE NOT NULL, -- SHA-256 hash of the prompt + context
     response JSONB NOT NULL,
     school_id UUID REFERENCES schools(school_id) ON DELETE SET NULL,
-    class_id UUID REFERENCES classes(id) ON DELETE SET NULL,
+    class_id UUID REFERENCES classes(class_id) ON DELETE SET NULL,
     subject VARCHAR(100),
     prompt_text TEXT, -- Store original prompt for debugging/transparency
     system_prompt TEXT,

@@ -26,7 +26,15 @@ export const atSettingsSchema = z.object({
   env: z.enum(['sandbox', 'production']).default('sandbox'),
 });
 
+export const sendClassNotificationSchema = z.object({
+  channel: z.enum(['sms', 'whatsapp']),
+  classId: z.string().uuid(),
+  message: z.string().min(1).max(1600),
+  template: z.enum(['fee_reminder', 'attendance_alert', 'report_available', 'discipline_notice', 'event_announcement', 'custom']).optional(),
+});
+
 export type SendSmsInput = z.infer<typeof sendSmsSchema>;
 export type SendWhatsAppInput = z.infer<typeof sendWhatsAppSchema>;
 export type ParentNotificationInput = z.infer<typeof parentNotificationSchema>;
+export type SendClassNotificationInput = z.infer<typeof sendClassNotificationSchema>;
 export type AtSettingsInput = z.infer<typeof atSettingsSchema>;

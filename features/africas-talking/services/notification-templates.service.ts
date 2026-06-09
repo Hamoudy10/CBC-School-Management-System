@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { sendSms, sendWhatsApp } from './africas-talking.service';
-import type { ParentNotificationResult, ParentNotificationRequest, NotificationChannel } from '../types';
+import type { ParentNotificationResult, ParentNotificationRequest, NotificationChannel, ClassNotificationResult } from '../types';
+import type { SendClassNotificationInput } from '../validators/africas-talking.schema';
 
 function renderTemplate(
   template: string,
@@ -130,5 +131,48 @@ export async function sendParentNotification(
     channel: request.channel,
     sent: overallSuccess,
     error: overallSuccess ? undefined : 'Failed to send via one or more channels',
+  };
+}
+
+export async function sendClassNotification(
+  request: SendClassNotificationInput,
+): Promise<ClassNotificationResult> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data: students } = await supabase
+    .from('students')
+    .select('student_id, first_name, last_name')
+    .eq('current_class_id', request.classId)
+    .eq('status', 'active');
+
+  if (!students || students.length === 0) {
+    return { success: false, sent: 0, failed: 0, total: 0, channel: request.channel };
+  }
+
+  let sentCount = 0;
+  let failedCount = 0;
+
+  for (const student of students) {
+    const parentPhone = await getParentPhone(supabase, student.student_id);
+    if (!parentPhone) {
+      failedCount++;
+      continue;
+    }
+
+    if (request.channel === 'sms') {
+      const result = await sendSms({ to: [parentPhone], message: request.message });
+      if (result.success) { sentCount++; } else { failedCount++; }
+    } else {
+      const result = await sendWhatsApp({ to: [parentPhone], message: request.message });
+      if (result.success) { sentCount++; } else { failedCount++; }
+    }
+  }
+
+  return {
+    success: failedCount === 0,
+    sent: sentCount,
+    failed: failedCount,
+    total: students.length,
+    channel: request.channel,
   };
 }

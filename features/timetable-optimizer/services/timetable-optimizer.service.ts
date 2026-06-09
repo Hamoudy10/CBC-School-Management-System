@@ -39,7 +39,7 @@ export async function generateTimetableSuggestions(
 
   const { data: teacherSubjects } = await supabase
     .from('teacher_subjects')
-    .select('*, teachers!inner(user_id, users!inner(first_name, last_name)), subjects!inner(name)')
+    .select('*, staff!inner(user_id, users!inner(first_name, last_name)), learning_areas!inner(name)')
     .in('class_id', input.classIds)
     .eq('school_id', schoolId);
 
@@ -69,8 +69,8 @@ export async function generateTimetableSuggestions(
       name: `${c.name} ${c.stream || ''}`.trim(),
     })),
     teachers: (teacherSubjects || []).map((ts: any) => ({
-      name: `${ts.teachers?.users?.first_name || ''} ${ts.teachers?.users?.last_name || ''}`.trim(),
-      subject: ts.subjects?.name || '',
+      name: `${ts.staff?.users?.first_name || ''} ${ts.staff?.users?.last_name || ''}`.trim(),
+      subject: ts.learning_areas?.name || '',
       classIds: [ts.class_id],
     })),
     existingSlots: (existingTimetable.data || []).map((s: any) => ({

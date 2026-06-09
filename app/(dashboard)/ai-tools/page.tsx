@@ -12,6 +12,9 @@ import {
   DollarSign,
   Calendar,
   BookOpen,
+  BookOpenCheck,
+  BarChart,
+  Search,
   ArrowRight,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -91,6 +94,46 @@ const tools: AIToolCard[] = [
     icon: <GraduationCap className="h-6 w-6" />,
     href: '/assessments/voice',
     color: 'bg-rose-100 text-rose-600',
+  },
+  {
+    title: 'Exam Generator',
+    description: 'Generate CBC-aligned exam papers with marking schemes',
+    icon: <BookOpen className="h-6 w-6" />,
+    href: '/assessments/exam-generator',
+    color: 'bg-violet-100 text-violet-600',
+    badge: 'New',
+  },
+  {
+    title: 'Lesson Planner',
+    description: 'Create structured CBC lesson plans with competencies',
+    icon: <BookOpenCheck className="h-6 w-6" />,
+    href: '/academics/lesson-planner',
+    color: 'bg-teal-100 text-teal-600',
+    badge: 'New',
+  },
+  {
+    title: 'Competency Gaps',
+    description: 'Identify weak areas across learning areas and students',
+    icon: <BarChart className="h-6 w-6" />,
+    href: '/analytics/competency-gaps',
+    color: 'bg-orange-100 text-orange-600',
+    badge: 'New',
+  },
+  {
+    title: 'Study Planner',
+    description: 'Generate personalized revision timetables for exams',
+    icon: <Calendar className="h-6 w-6" />,
+    href: '/academics/study-planner',
+    color: 'bg-cyan-100 text-cyan-600',
+    badge: 'New',
+  },
+  {
+    title: 'Smart Search',
+    description: 'Ask natural language questions about your school data',
+    icon: <Search className="h-6 w-6" />,
+    href: '/ai-tools/smart-search',
+    color: 'bg-pink-100 text-pink-600',
+    badge: 'New',
   },
 ];
 

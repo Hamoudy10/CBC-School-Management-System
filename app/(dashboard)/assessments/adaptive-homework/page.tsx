@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
-import { BookOpen, RefreshCw, Download, Sparkles } from 'lucide-react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { BookOpen, RefreshCw, Download, Sparkles, Users } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -12,6 +12,13 @@ import { Spinner } from '@/components/ui/Spinner';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/Alert';
 import { useToast } from '@/components/ui/Toast';
 import { useReferenceData } from '@/hooks/useReferenceData';
+
+interface StudentOption {
+  studentId: string;
+  firstName: string;
+  lastName: string;
+  admissionNumber: string;
+}
 
 interface WorksheetQuestion {
   question: string;
@@ -35,7 +42,10 @@ export default function AdaptiveHomeworkPage() {
   const { classes: referenceClasses } = useReferenceData({ enabled: Boolean(user) });
 
   const [selectedClassId, setSelectedClassId] = useState('');
+  const [selectedStudentId, setSelectedStudentId] = useState('');
   const [selectedStrand, setSelectedStrand] = useState('');
+  const [students, setStudents] = useState<StudentOption[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<WorksheetResult | null>(null);
 
@@ -47,9 +57,32 @@ export default function AdaptiveHomeworkPage() {
 
   const strands = ['Numbers', 'Measurements', 'Algebra', 'Data Handling', 'Geometry', 'Fractions', 'Decimals', 'Time'];
 
-  const handleGenerate = useCallback(async () => {
+  useEffect(() => {
     if (!selectedClassId) {
-      error('Please select a class');
+      setStudents([]);
+      setSelectedStudentId('');
+      return;
+    }
+    setLoadingStudents(true);
+    setSelectedStudentId('');
+    fetch(`/api/students?classId=${selectedClassId}&pageSize=100`)
+      .then((res) => res.json())
+      .then((data) => {
+        const list: StudentOption[] = (data.data?.data || data.data?.students || data.students || []).map((s: any) => ({
+          studentId: s.studentId || s.student_id,
+          firstName: s.firstName || s.first_name,
+          lastName: s.lastName || s.last_name,
+          admissionNumber: s.admissionNumber || s.admission_number,
+        }));
+        setStudents(list);
+      })
+      .catch(() => setStudents([]))
+      .finally(() => setLoadingStudents(false));
+  }, [selectedClassId]);
+
+  const handleGenerate = useCallback(async () => {
+    if (!selectedStudentId) {
+      error('Please select a student');
       return;
     }
 
@@ -61,8 +94,8 @@ export default function AdaptiveHomeworkPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          classId: selectedClassId,
-          strand: selectedStrand || undefined,
+          studentId: selectedStudentId,
+          strandId: selectedStrand || undefined,
         }),
       });
 
@@ -76,7 +109,7 @@ export default function AdaptiveHomeworkPage() {
     } finally {
       setIsGenerating(false);
     }
-  }, [selectedClassId, selectedStrand, error, success]);
+  }, [selectedStudentId, selectedStrand, error, success]);
 
   return (
     <div className="space-y-6">
@@ -91,7 +124,7 @@ export default function AdaptiveHomeworkPage() {
           <CardTitle className="text-base">Configure Worksheet</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-4">
             <Select
               value={selectedClassId}
               onChange={(e) => setSelectedClassId(e.target.value)}
@@ -100,6 +133,22 @@ export default function AdaptiveHomeworkPage() {
               <option value="">Select class</option>
               {classes.map((cls: any) => (
                 <option key={cls.classId} value={cls.classId}>{cls.name}</option>
+              ))}
+            </Select>
+
+            <Select
+              value={selectedStudentId}
+              onChange={(e) => setSelectedStudentId(e.target.value)}
+              placeholder="Select student"
+              disabled={!selectedClassId || loadingStudents}
+            >
+              <option value="">
+                {loadingStudents ? 'Loading...' : !selectedClassId ? 'Select a class first' : 'Select student'}
+              </option>
+              {students.map((s) => (
+                <option key={s.studentId} value={s.studentId}>
+                  {s.firstName} {s.lastName} ({s.admissionNumber})
+                </option>
               ))}
             </Select>
 
@@ -116,7 +165,7 @@ export default function AdaptiveHomeworkPage() {
               leftIcon={<Sparkles className="h-4 w-4" />}
               onClick={handleGenerate}
               loading={isGenerating}
-              disabled={!selectedClassId}
+              disabled={!selectedStudentId}
             >
               Generate Worksheet
             </Button>

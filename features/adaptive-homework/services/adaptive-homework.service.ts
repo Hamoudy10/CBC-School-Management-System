@@ -22,23 +22,23 @@ async function getStudentWeakAreas(
   studentId: string,
   schoolId: string,
 ): Promise<StudentWeakArea[]> {
-  const { data: assessments } = await supabase
+  const { data: aggregates } = await supabase
     .from('assessment_aggregates')
-    .select('*, learning_areas!inner(name), strands!inner(name, strand_id), sub_strands!inner(name, sub_strand_id)')
+    .select('*, learning_areas!inner(name)')
     .eq('student_id', studentId)
     .eq('school_id', schoolId)
     .order('average_score', { ascending: true })
     .limit(5);
 
-  if (!assessments || assessments.length === 0) {
+  if (!aggregates || aggregates.length === 0) {
     return [];
   }
 
-  return assessments.map((a: any) => ({
-    strandId: a.strands?.strand_id || '',
-    strandName: a.strands?.name || '',
-    subStrandId: a.sub_strands?.sub_strand_id || '',
-    subStrandName: a.sub_strands?.name || '',
+  return aggregates.map((a: any) => ({
+    strandId: '',
+    strandName: a.learning_areas?.name || '',
+    subStrandId: '',
+    subStrandName: '',
     averageScore: a.average_score || 0,
     performanceLevel: a.overall_level || 'unknown',
     competencyCount: a.total_competencies || 0,

@@ -46,15 +46,37 @@ Extract the assessment data from this dictation.`,
     const parsed = parsedAssessmentSchema.parse(ai.data);
 
     if (input.studentId && input.competencyId) {
-      await supabase.from('assessments').insert({
-        school_id: user.schoolId,
-        student_id: input.studentId,
-        competency_id: input.competencyId,
-        score: parsed.score,
-        remarks: parsed.remarks || null,
-        assessment_date: new Date().toISOString().split('T')[0],
-        assessed_by: user.id,
-      });
+      const [{ data: student }, { data: activeYear }, { data: activeTerm }, { data: competencyChain }] = await Promise.all([
+        supabase.from('students').select('current_class_id').eq('student_id', input.studentId).single(),
+        supabase.from('academic_years').select('academic_year_id').eq('school_id', user.schoolId).eq('is_active', true).maybeSingle(),
+        supabase.from('terms').select('term_id').eq('school_id', user.schoolId).eq('is_active', true).maybeSingle(),
+        supabase.from('competencies').select('competency_id, sub_strands!inner(strand_id, strands!inner(learning_area_id))').eq('competency_id', input.competencyId).single(),
+      ]);
+
+      const levelMap: Record<number, string> = { 1: 'below', 2: 'approaching', 3: 'meeting', 4: 'exceeding' };
+      const { data: level } = await supabase
+        .from('performance_levels')
+        .select('level_id')
+        .eq('school_id', user.schoolId)
+        .eq('label', levelMap[parsed.score])
+        .maybeSingle();
+
+      if (student?.current_class_id && activeYear?.academic_year_id && activeTerm?.term_id && level?.level_id) {
+        await supabase.from('assessments').insert({
+          school_id: user.schoolId,
+          student_id: input.studentId,
+          competency_id: input.competencyId,
+          learning_area_id: (competencyChain as any)?.sub_strands?.[0]?.strands?.[0]?.learning_area_id || null,
+          class_id: student.current_class_id,
+          academic_year_id: activeYear.academic_year_id,
+          term_id: activeTerm.term_id,
+          level_id: level.level_id,
+          score: parsed.score,
+          remarks: parsed.remarks || null,
+          assessment_date: new Date().toISOString().split('T')[0],
+          assessed_by: user.id,
+        });
+      }
     }
 
     return {

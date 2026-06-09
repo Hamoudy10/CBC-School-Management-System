@@ -52,3 +52,11 @@ export interface ParentNotificationResult {
   sent: boolean;
   error?: string;
 }
+
+export interface ClassNotificationResult {
+  success: boolean;
+  sent: number;
+  failed: number;
+  total: number;
+  channel: 'sms' | 'whatsapp';
+}

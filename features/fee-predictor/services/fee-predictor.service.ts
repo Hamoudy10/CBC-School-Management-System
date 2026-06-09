@@ -31,6 +31,7 @@ async function getPaymentPatterns(
     .from('payments')
     .select('amount_paid, payment_method, paid_at')
     .eq('school_id', schoolId)
+    .eq('student_id', studentId)
     .order('paid_at', { ascending: false });
 
   if (!payments || payments.length === 0) {

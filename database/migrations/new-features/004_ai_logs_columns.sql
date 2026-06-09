@@ -1,3 +1,16 @@
+-- Create ai_logs table if not exists (for environments that skipped upgrade-4)
+CREATE TABLE IF NOT EXISTS ai_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    prompt TEXT NOT NULL,
+    response JSONB NOT NULL,
+    cost DECIMAL(10, 6) DEFAULT 0,
+    school_id UUID NOT NULL REFERENCES schools(school_id) ON DELETE CASCADE,
+    model_used VARCHAR(100) DEFAULT 'groq',
+    tokens_used INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Add missing columns to ai_logs for structured error monitoring
 ALTER TABLE IF EXISTS ai_logs
   ADD COLUMN IF NOT EXISTS request_label VARCHAR(100),
