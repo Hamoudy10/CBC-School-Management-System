@@ -65,7 +65,7 @@ function AIAgentPanel({ isOpen, onClose }: AIAgentPanelProps) {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          sessionId,
+          ...(sessionId ? { sessionId } : {}),
           message: text,
           mode: "assist",
         }),

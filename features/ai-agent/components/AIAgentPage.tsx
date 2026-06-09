@@ -53,7 +53,7 @@ function AIAgentPage() {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          sessionId,
+          ...(sessionId ? { sessionId } : {}),
           message: text,
           mode: "act",
         }),
