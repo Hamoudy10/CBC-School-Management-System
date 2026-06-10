@@ -54,6 +54,18 @@ export function buildRetryPrompt(
   attempt: number,
   maxAttempts: number,
 ): string {
+  const entityGuidance = errorMessage.includes("Unknown entity")
+    ? `\n\nThe error says the entity name is unknown. Check the Entity Columns section in the system context — only entities listed there are valid. Pick the closest match from that list. If none match, use intent "answer" and tell the user you cannot look that up.`
+    : errorMessage.includes("not filterable")
+      ? `\n\nThe error says a field is not filterable. Check the filterable columns listed for that entity in Entity Columns below. Only those exact fields can be used in filters.`
+      : errorMessage.includes("not readable")
+        ? `\n\nThe error says a column is not readable. Check the readable columns listed for that entity in Entity Columns below. Only those exact columns can be selected.`
+        : errorMessage.includes("specified more than once")
+          ? `\n\nThe query failed because of a database conflict. Remove the foreign key column from your select — the join provides the related data automatically. For example if you selected "current_class_id", remove it and rely on the classes join.`
+          : errorMessage.includes("failed")
+            ? `\n\nThe database query failed. Simplify your query: reduce the number of columns selected, remove unnecessary filters, and avoid using joins if possible.`
+            : "";
+
   return `Your previous attempt failed. Please analyze the error and produce a corrected plan.
 
 Original user request: "${originalRequest}"
@@ -64,7 +76,7 @@ ${previousPlan}
 The error was:
 ${errorMessage}
 
-This is retry attempt ${attempt} of ${maxAttempts}. Fix the issue in your new plan based on the error above. For example, if the error mentions a column name, use the correct column name from the Entity Columns section.`;
+This is retry attempt ${attempt} of ${maxAttempts}. Fix the issue in your new plan based on the error above.${entityGuidance}`;
 }
 
 export function buildRetryExhaustedMessage(

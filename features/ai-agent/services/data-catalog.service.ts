@@ -55,6 +55,25 @@ const DATA_CATALOG: Record<string, DataCatalogEntity> = {
     },
   },
 
+  // ── Users (profiles) ──
+  users: {
+    table: "users",
+    module: "users",
+    action: "view",
+    scopeColumn: "school_id",
+    primaryKey: "user_id",
+    readableColumns: [
+      "user_id", "first_name", "last_name", "email",
+      "role", "status", "phone", "created_at",
+    ],
+    filterableColumns: [
+      "user_id", "role", "status", "school_id", "created_at",
+    ],
+    searchableColumns: ["first_name", "last_name", "email"],
+    defaultSelect: ["user_id", "first_name", "last_name", "email", "role", "status"],
+    joins: {},
+  },
+
   // ── Staff ──
   staff: {
     table: "staff",

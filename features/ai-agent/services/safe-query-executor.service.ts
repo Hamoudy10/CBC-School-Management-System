@@ -1,7 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { hasPermission } from "@/lib/auth/permissions";
 import { sanitizeForAgent } from "./context-builder.service";
-import { getEntity } from "./data-catalog.service";
+import { getEntity, getDataCatalog } from "./data-catalog.service";
 import type { AuthUser } from "@/types/auth";
 import type { DataCatalogEntity, DataCatalogJoin } from "./data-catalog.service";
 import type { z } from "zod";
@@ -37,7 +37,9 @@ export class QueryPermissionError extends Error {
 function validateAgainstCatalog(input: QuerySchoolDataInput): DataCatalogEntity {
   const entity = getEntity(input.entity);
   if (!entity) {
-    throw new QueryValidationError(`Unknown entity "${input.entity}". Available entities: students, staff, classes, attendance, assessments, assessment_aggregates, report_cards, student_fees, payments, fee_structures, messages, announcements, timetable_slots, disciplinary_records, special_needs, teacher_subjects, academic_years, terms`);
+    const catalog = getDataCatalog();
+    const available = Object.keys(catalog).sort().join(", ");
+    throw new QueryValidationError(`Unknown entity "${input.entity}". Available entities: ${available}`);
   }
 
   if (input.select) {
@@ -278,7 +280,20 @@ async function executeListQuery(
   const appliedFilters: { field: string; operator: string; value?: unknown }[] = [];
 
   const selectCols = input.select ?? entity.defaultSelect;
-  const allSelect = [...selectCols];
+
+  // Build the select expression without FK columns that have joins,
+  // to prevent PostgREST from generating conflicting relationship aliases.
+  // e.g. if the model asks for "current_class_id" but the entity has a
+  // join via that FK, we remove it from direct select and rely on the
+  // join embed to provide the related data.
+  const fkColumns = new Set<string>();
+  if (entity.joins) {
+    for (const [, j] of Object.entries(entity.joins)) {
+      fkColumns.add((j as DataCatalogJoin).foreignKey);
+    }
+  }
+  const directSelect = selectCols.filter((col) => !fkColumns.has(col));
+  const allSelect = [...directSelect];
 
   if (entity.joins) {
     for (const [, join] of Object.entries(entity.joins)) {

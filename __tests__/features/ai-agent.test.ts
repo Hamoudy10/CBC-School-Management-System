@@ -422,7 +422,7 @@ describe("query_school_data schema and catalog", () => {
   describe("Data catalog entity configuration", () => {
     it("catalog has all expected entities", () => {
       const catalog = require("@/features/ai-agent/services/data-catalog.service").getDataCatalog();
-      const expected = ["students", "staff", "classes", "attendance", "assessments", "assessment_aggregates", "report_cards", "student_fees", "payments", "fee_structures", "messages", "announcements", "timetable_slots", "disciplinary_records", "special_needs", "teacher_subjects", "academic_years", "terms"];
+      const expected = ["students", "users", "staff", "classes", "attendance", "assessments", "assessment_aggregates", "report_cards", "student_fees", "payments", "fee_structures", "messages", "announcements", "timetable_slots", "disciplinary_records", "special_needs", "teacher_subjects", "academic_years", "terms"];
       for (const name of expected) {
         expect(catalog[name]).toBeDefined();
       }

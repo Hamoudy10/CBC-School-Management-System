@@ -23,6 +23,8 @@ const SYSTEM_PROMPT = `You are an AI assistant for the CBC School Management Sys
 - Do NOT use markdown formatting (no asterisks, bold, italics). Plain text only.
 - If required fields are missing from a tool input, use clarify intent and ask the user.
 - If outside permissions, refuse politely and mention what modules they DO have access to.
+- If the user's question does not match any entity in the catalog (e.g. "roles", "permissions", "features", "system capabilities"), use "answer" intent and say "I don't have information about that" rather than trying to invent an entity name.
+- For questions about user accounts or profiles (e.g. "how many user profiles", "list users"), use the "users" entity.
 
 ## Plan Structure
 Analyze requests and produce a JSON plan: intent ("answer"|"retrieve"|"act"|"clarify"|"refuse"), userGoal, toolName (or null), toolInput (or null), requiresConfirmation, riskLevel ("low"|"medium"|"high"|"critical"), reasoningSummary, userFacingMessage.
@@ -34,12 +36,17 @@ Analyze requests and produce a JSON plan: intent ("answer"|"retrieve"|"act"|"cla
 Available entities with their column schemas are listed in Entity Columns below. Use the correct filterable field names — e.g. staff position is "position", not "role". For name fields on staff, select from users join (first_name, last_name).
 Operations: count (totals), list (records), summary (groupBy), exists. Always include relevant filters like status, is_published, date ranges. Read-only.
 
+### Important: select and joins
+When selecting columns for an entity that has a join (shown in Entity Columns as "join=relation(cols)"), do NOT include the foreign key column in your select. The join will provide the related data automatically. For example, for staff, do NOT include "user_id" in select — use the users join instead.
+
 ### Examples
 User: "How many teachers?" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"staff","operation":"count","filters":[{"field":"status","operator":"eq","value":"active"}]}}
 User: "Show absent students today" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"attendance","operation":"list","filters":[{"field":"date","operator":"eq","value":"CURRENT_DATE"},{"field":"status","operator":"eq","value":"absent"}],"select":["student_id","class_id","date","status"],"limit":100}}
 User: "Unpaid fees?" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"student_fees","operation":"list","filters":[{"field":"balance","operator":"gt","value":0}],"select":["student_id","amount_due","amount_paid","balance","status"],"limit":100}}
 User: "How many active students?" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"students","operation":"count","filters":[{"field":"status","operator":"eq","value":"active"}]}}
-User: "Low attendance students" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"attendance","operation":"summary","filters":[{"field":"status","operator":"eq","value":"absent"}],"groupBy":["student_id"],"limit":100}}`;
+User: "Low attendance students" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"attendance","operation":"summary","filters":[{"field":"status","operator":"eq","value":"absent"}],"groupBy":["student_id"],"limit":100}}
+User: "How many user profiles?" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"users","operation":"count"}}
+User: "List all users" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"users","operation":"list","select":["user_id","first_name","last_name","email","role","status"],"limit":50}}`;
 
 const DEFAULT_AGENT_TIME_ZONE = process.env.AI_AGENT_TIMEZONE ?? "Europe/London";
 
@@ -63,9 +70,15 @@ export async function processAgentMessage(
     sessionId = await createSession(user.id, schoolId, request.mode ?? "assist");
   }
 
-  await saveMessage(sessionId, "user", request.message, schoolId, {
+  const normalizedMessage = preProcessUserMessage(request.message);
+
+  await saveMessage(sessionId, "user", normalizedMessage, schoolId, {
     pageContext: request.pageContext,
   });
+
+  // Use normalized message for all downstream processing
+  const originalMessage = request.message;
+  request.message = normalizedMessage;
 
   const pageContext = await buildPageContext(user, request.pageContext);
   const recentMessages = await getLastMessages(sessionId, 10);
@@ -419,6 +432,32 @@ export function getStaffSummaryToolInput(message: string): Record<string, unknow
   }
 
   return input;
+}
+
+/**
+ * Normalize common typos and misspellings in user input so the model
+ * has a better chance of understanding the intent.
+ */
+function preProcessUserMessage(message: string): string {
+  let text = message.trim();
+
+  // "okay how many" → "how many" (most common typo pattern)
+  text = text.replace(/\bokay\s+(how|many|what|who|where|when|why|is|are|can|do|does)\b/i, "$1");
+
+  // "alot" → "a lot"
+  text = text.replace(/\balot\b/gi, "a lot");
+
+  // "dont/cant/wont/isnt" → "don't/can't/won't/isn't"
+  text = text.replace(/\b(dont|cant|wont|isnt|wasnt|werent|havent|hasnt|didnt|couldnt|wouldnt|shouldnt)\b/gi,
+    (m) => m.slice(0, -2) + "'t");
+
+  // "u" → "you" (common textism)
+  text = text.replace(/\b(?<![a-z])u(?![a-z])\b/gi, "you");
+
+  // "pls/plz" → "please"
+  text = text.replace(/\b(pls|plz)\b/gi, "please");
+
+  return text;
 }
 
 function buildEntityColumnsHelp(): string {
