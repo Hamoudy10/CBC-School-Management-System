@@ -40,6 +40,7 @@ export async function getSession(sessionId: string): Promise<{
   status: SessionStatus;
   title: string;
   createdAt: string;
+  metadata?: Record<string, unknown>;
 } | null> {
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase
@@ -58,6 +59,7 @@ export async function getSession(sessionId: string): Promise<{
     status: data.status,
     title: data.title,
     createdAt: data.created_at,
+    metadata: data.metadata,
   };
 }
 
@@ -100,6 +102,24 @@ export async function updateSessionStatus(
   const updates: Record<string, unknown> = { status, updated_at: new Date().toISOString() };
   if (title) updates.title = title;
   await supabase.from("ai_agent_sessions").update(updates).eq("session_id", sessionId);
+}
+
+export async function updateSessionMetadata(
+  sessionId: string,
+  metadata: Record<string, unknown>,
+): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  const { data: existing } = await supabase
+    .from("ai_agent_sessions")
+    .select("metadata")
+    .eq("session_id", sessionId)
+    .maybeSingle();
+
+  const merged = { ...(existing?.metadata as Record<string, unknown> ?? {}), ...metadata };
+  await supabase
+    .from("ai_agent_sessions")
+    .update({ metadata: merged, updated_at: new Date().toISOString() })
+    .eq("session_id", sessionId);
 }
 
 export async function saveMessage(

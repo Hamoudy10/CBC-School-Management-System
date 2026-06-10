@@ -6,8 +6,10 @@ import { getAvailableToolsForUser, getToolNamesForUser } from "./tool-registry.s
 import { executeTool, ToolExecutionError } from "./tool-executor.service";
 import { buildPageContext, sanitizeForAgent } from "./context-builder.service";
 import { getDataCatalog } from "./data-catalog.service";
-import { createSession, saveMessage, getLastMessages, getSession, updateSessionStatus } from "./memory.service";
+import { createSession, saveMessage, getLastMessages, getSession, updateSessionStatus, updateSessionMetadata } from "./memory.service";
 import { logAgentAIEvent } from "./agent-audit.service";
+import { classifyToolError, buildRetryPrompt, buildRetryExhaustedMessage, MAX_RETRY_ATTEMPTS } from "./retry.service";
+import { shouldCompact, compactConversation } from "./compaction.service";
 
 const SYSTEM_PROMPT = `You are an AI assistant for the CBC School Management System. You act as the logged-in user with their exact permissions.
 
@@ -92,7 +94,17 @@ export async function processAgentMessage(
     )
     .join("\n");
 
-  const systemContext = `${SYSTEM_PROMPT}
+  const provider = getProvider();
+
+  // ── Retry loop: plan → execute → on error, replan (max MAX_RETRY_ATTEMPTS) ──
+  const previousPlans: Array<{ plan: string; error: string }> = [];
+
+  for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt += 1) {
+    const retryContextStr = previousPlans.length > 0
+      ? `\n\n## Previous Attempt (${attempt - 1})\n${buildRetryPrompt(request.message, previousPlans[previousPlans.length - 1].plan, previousPlans[previousPlans.length - 1].error, attempt, MAX_RETRY_ATTEMPTS)}`
+      : "";
+
+    const systemContext = `${SYSTEM_PROMPT}
 
 ## Current Context
 - School: ${pageContext.schoolName}
@@ -115,83 +127,60 @@ ${toolsDescription || "No tools available with your current permissions."}
 ${conversationHistory || "No previous messages in this session."}
 
 ## User's New Request
-${request.message}`;
+${request.message}${retryContextStr}`;
 
-  const provider = getProvider();
+    // Step 1: Plan
+    let planResult: import("@/features/ai-agent/types").AIProviderResponse<AgentPlan | string>;
+    try {
+      planResult = await provider.generate<AgentPlan>({
+        system: systemContext,
+        prompt: previousPlans.length > 0
+          ? `Your previous plan failed. Review the error below and produce a corrected plan. Original request: "${request.message}". Error: ${previousPlans[previousPlans.length - 1].error}`
+          : `Analyze this request and produce a JSON plan with intent, toolName (if applicable), toolInput, requiresConfirmation, riskLevel, reasoningSummary, and userFacingMessage.`,
+        responseFormat: "json",
+        responseSchema: agentPlanSchema,
+        requestLabel: "ai-agent.plan",
+        temperature: 0.3,
+        maxOutputTokens: 1000,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unexpected error during planning";
+      await logAgentAIEvent({
+        requestLabel: "ai-agent.plan",
+        model: "unknown",
+        schoolId,
+        prompt: request.message,
+        success: false,
+        durationMs: Date.now() - startedAt,
+        error: msg,
+      });
+      if (previousPlans.length > 0) {
+        previousPlans.push({ plan: "(planning failed)", error: msg });
+        continue;
+      }
+      const isSchemaError = msg.includes("did not match schema") || msg.includes("invalid JSON");
+      const userMessage = isSchemaError
+        ? "I had trouble understanding your request. Please try rephrasing it more clearly."
+        : "I encountered an issue while processing your request. Please try rephrasing.";
+      await tryCompact(sessionId, schoolId);
+      return buildErrorResponse(sessionId, userMessage);
+    }
 
-  // Step 1: Plan
-  let planResult: import("@/features/ai-agent/types").AIProviderResponse<AgentPlan | string>;
-  try {
-    planResult = await provider.generate<AgentPlan>({
-      system: systemContext,
-      prompt: `Analyze this request and produce a JSON plan with intent, toolName (if applicable), toolInput, requiresConfirmation, riskLevel, reasoningSummary, and userFacingMessage.`,
-      responseFormat: "json",
-      responseSchema: agentPlanSchema,
-      requestLabel: "ai-agent.plan",
-      temperature: 0.3,
-      maxOutputTokens: 1000,
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unexpected error during planning";
-    await logAgentAIEvent({
-      requestLabel: "ai-agent.plan",
-      model: "unknown",
-      schoolId,
-      prompt: request.message,
-      success: false,
-      durationMs: Date.now() - startedAt,
-      error: msg,
-    });
-    const isSchemaError = msg.includes("did not match schema") || msg.includes("invalid JSON");
-    const userMessage = isSchemaError
-      ? "I had trouble understanding your request. Please try rephrasing it more clearly."
-      : "I encountered an issue while processing your request. Please try rephrasing.";
-    return buildErrorResponse(sessionId, userMessage);
-  }
+    if (!planResult.success) {
+      if (previousPlans.length > 0) {
+        previousPlans.push({ plan: "(plan result not successful)", error: "Model did not return a valid plan" });
+        continue;
+      }
+      await tryCompact(sessionId, schoolId);
+      return buildErrorResponse(sessionId, "Failed to analyze your request. Please try again.");
+    }
 
-  if (!planResult.success) {
-    return buildErrorResponse(sessionId, "Failed to analyze your request. Please try again.");
-  }
+    const plan = planResult.data as AgentPlan;
 
-  const plan = planResult.data as AgentPlan;
-
-  // Handle refusal
-  if (plan.intent === "refuse") {
-    await saveMessage(sessionId, "assistant", plan.userFacingMessage, schoolId);
-    return {
-      sessionId,
-      message: { role: "assistant", content: plan.userFacingMessage },
-      confidence: planResult.confidence,
-      warnings: planResult.warnings ?? [],
-    };
-  }
-
-  // Handle clarification
-  if (plan.intent === "clarify") {
-    await saveMessage(sessionId, "assistant", plan.userFacingMessage, schoolId);
-    return {
-      sessionId,
-      message: { role: "assistant", content: plan.userFacingMessage },
-      confidence: planResult.confidence,
-      warnings: planResult.warnings ?? [],
-    };
-  }
-
-  // Handle answering (no tool needed)
-  if (plan.intent === "answer") {
-    await saveMessage(sessionId, "assistant", plan.userFacingMessage, schoolId);
-    return {
-      sessionId,
-      message: { role: "assistant", content: plan.userFacingMessage },
-      confidence: planResult.confidence,
-      warnings: planResult.warnings ?? [],
-    };
-  }
-
-  // Handle retrieval or action
-  if (plan.intent === "retrieve" || plan.intent === "act") {
-    if (!plan.toolName) {
+    // Non-tool intents — return immediately (no retry needed)
+    if (plan.intent === "refuse" || plan.intent === "clarify" || plan.intent === "answer") {
       await saveMessage(sessionId, "assistant", plan.userFacingMessage, schoolId);
+      await tryCompact(sessionId, schoolId);
       return {
         sessionId,
         message: { role: "assistant", content: plan.userFacingMessage },
@@ -200,115 +189,137 @@ ${request.message}`;
       };
     }
 
-    const tool = availableTools.find((t) => t.name === plan.toolName);
-    if (!tool) {
-      const msg = `I cannot use "${plan.toolName}" — it is not available with your current permissions. ${plan.userFacingMessage}`;
-      await saveMessage(sessionId, "assistant", msg, schoolId);
-      return {
-        sessionId,
-        message: { role: "assistant", content: msg },
-        confidence: planResult.confidence,
-        warnings: [...(planResult.warnings ?? []), `Tool "${plan.toolName}" not available`],
-      };
-    }
-
-    const context: AgentExecutionContext = {
-      user,
-      schoolId,
-      sessionId,
-      requestId: `chat-${sessionId}-${Date.now()}`,
-    };
-
-    try {
-      const result = await executeTool(
-        plan.toolName,
-        (plan.toolInput ?? {}) as Record<string, unknown>,
-        context,
-      );
-
-      // Step 2: Generate user-friendly response with tool output
-      if (result.requiresConfirmation) {
-        const msg = `${plan.userFacingMessage}\n\nI need your confirmation before proceeding. Please review the action details below.`;
-        await saveMessage(sessionId, "assistant", msg, schoolId, {
-          actionPreview: result.preview,
-          actionId: result.actionId,
-          requiresConfirmation: true,
-        });
+    // Tool-based intent (retrieve or act)
+    if (plan.intent === "retrieve" || plan.intent === "act") {
+      if (!plan.toolName) {
+        await saveMessage(sessionId, "assistant", plan.userFacingMessage, schoolId);
+        await tryCompact(sessionId, schoolId);
         return {
           sessionId,
-          message: { role: "assistant", content: msg },
-          action: {
-            actionId: result.actionId,
-            status: "awaiting_confirmation",
-            preview: result.preview as Record<string, unknown>,
-            riskLevel: plan.riskLevel,
-            requiresConfirmation: true,
-          },
+          message: { role: "assistant", content: plan.userFacingMessage },
           confidence: planResult.confidence,
           warnings: planResult.warnings ?? [],
         };
       }
 
-      const responseResult = await provider.generate({
-        system: `You are a helpful school assistant. Explain the following result to the user in a clear, friendly way. Keep it concise. Do not invent additional information. Do NOT use markdown formatting (no asterisks, no bold, no italics).`,
-        prompt: `The user asked: "${request.message}"\n\nTool "${plan.toolName}" returned:\n${JSON.stringify(result.output, null, 2)}\n\nExplain this result to the user.`,
-        responseFormat: "text",
-        requestLabel: "ai-agent.answer",
-        temperature: 0.5,
-        maxOutputTokens: 800,
-      });
+      const tool = availableTools.find((t) => t.name === plan.toolName);
+      if (!tool) {
+        const msg = `I cannot use "${plan.toolName}" — it is not available with your current permissions. ${plan.userFacingMessage}`;
+        previousPlans.push({ plan: JSON.stringify(plan), error: msg });
+        continue;
+      }
 
-      const answerText = responseResult.success
-        ? (responseResult.data as string)
-        : plan.userFacingMessage;
-
-      await saveMessage(sessionId, "assistant", answerText, schoolId, {
-        toolName: plan.toolName,
-        toolOutput: result.output,
-      });
-
-      // Log AI event
-      const durationMs = Date.now() - startedAt;
-      await logAgentAIEvent({
-        requestLabel: `ai-agent.tool.${plan.toolName}`,
-        model: planResult.meta?.model ?? "unknown",
+      const context: AgentExecutionContext = {
+        user,
         schoolId,
-        prompt: request.message,
-        response: answerText,
-        success: true,
-        durationMs,
-      });
-
-      return {
         sessionId,
-        message: { role: "assistant", content: answerText },
-        confidence: responseResult.success ? responseResult.confidence : planResult.confidence,
-        warnings: [...(planResult.warnings ?? []), ...(responseResult.warnings ?? [])],
+        requestId: `chat-${sessionId}-${Date.now()}`,
       };
-    } catch (error) {
-      const rawMessage = error instanceof ToolExecutionError ? error.message : (error instanceof AIProviderError ? error.message : "An unexpected error occurred");
 
-      const sanitizedMessage = rawMessage.includes("did not match schema") || rawMessage.includes("invalid JSON") || rawMessage.includes("API key")
-        ? "I could not complete that action. Please try a different approach."
-        : rawMessage;
+      try {
+        const result = await executeTool(
+          plan.toolName,
+          (plan.toolInput ?? {}) as Record<string, unknown>,
+          context,
+        );
 
-      await saveMessage(sessionId, "assistant", `Error: ${sanitizedMessage}`, schoolId);
+        // Confirmation needed — return immediately
+        if (result.requiresConfirmation) {
+          const msg = `${plan.userFacingMessage}\n\nI need your confirmation before proceeding. Please review the action details below.`;
+          await saveMessage(sessionId, "assistant", msg, schoolId, {
+            actionPreview: result.preview,
+            actionId: result.actionId,
+            requiresConfirmation: true,
+          });
+          await tryCompact(sessionId, schoolId);
+          return {
+            sessionId,
+            message: { role: "assistant", content: msg },
+            action: {
+              actionId: result.actionId,
+              status: "awaiting_confirmation",
+              preview: result.preview as Record<string, unknown>,
+              riskLevel: plan.riskLevel,
+              requiresConfirmation: true,
+            },
+            confidence: planResult.confidence,
+            warnings: planResult.warnings ?? [],
+          };
+        }
 
-      await logAgentAIEvent({
-        requestLabel: `ai-agent.tool.${plan.toolName}`,
-        model: planResult.meta?.model ?? "unknown",
-        schoolId,
-        prompt: request.message,
-        success: false,
-        durationMs: Date.now() - startedAt,
-        error: rawMessage,
-      });
+        // Step 2: Generate user-friendly response with tool output
+        const responseResult = await provider.generate({
+          system: `You are a helpful school assistant. Explain the following result to the user in a clear, friendly way. Keep it concise. Do not invent additional information. Do NOT use markdown formatting (no asterisks, no bold, no italics).`,
+          prompt: `The user asked: "${request.message}"\n\nTool "${plan.toolName}" returned:\n${JSON.stringify(result.output, null, 2)}\n\nExplain this result to the user.`,
+          responseFormat: "text",
+          requestLabel: "ai-agent.answer",
+          temperature: 0.5,
+          maxOutputTokens: 800,
+        });
 
-      return buildErrorResponse(sessionId, sanitizedMessage);
+        const answerText = responseResult.success
+          ? (responseResult.data as string)
+          : plan.userFacingMessage;
+
+        await saveMessage(sessionId, "assistant", answerText, schoolId, {
+          toolName: plan.toolName,
+          toolOutput: result.output,
+        });
+
+        // Log AI event
+        const durationMs = Date.now() - startedAt;
+        await logAgentAIEvent({
+          requestLabel: `ai-agent.tool.${plan.toolName}`,
+          model: planResult.meta?.model ?? "unknown",
+          schoolId,
+          prompt: request.message,
+          response: answerText,
+          success: true,
+          durationMs,
+        });
+
+        // Check compaction after successful response
+        await tryCompact(sessionId, schoolId);
+
+        return {
+          sessionId,
+          message: { role: "assistant", content: answerText },
+          confidence: responseResult.success ? responseResult.confidence : planResult.confidence,
+          warnings: [...(planResult.warnings ?? []), ...(responseResult.warnings ?? [])],
+        };
+      } catch (error) {
+        const classification = classifyToolError(error);
+        previousPlans.push({ plan: JSON.stringify(plan), error: classification.message });
+
+        if (classification.retryable && attempt < MAX_RETRY_ATTEMPTS) {
+          continue;
+        }
+
+        // Exhausted retries or non-retryable error
+        const userMessage = previousPlans.length >= MAX_RETRY_ATTEMPTS
+          ? buildRetryExhaustedMessage(request.message, previousPlans)
+          : classification.message;
+
+        await saveMessage(sessionId, "assistant", `Error: ${userMessage}`, schoolId);
+
+        await logAgentAIEvent({
+          requestLabel: `ai-agent.tool.${plan.toolName}`,
+          model: planResult.meta?.model ?? "unknown",
+          schoolId,
+          prompt: request.message,
+          success: false,
+          durationMs: Date.now() - startedAt,
+          error: classification.message,
+        });
+
+        await tryCompact(sessionId, schoolId);
+        return buildErrorResponse(sessionId, userMessage);
+      }
     }
   }
 
-  return buildErrorResponse(sessionId, "Unable to process your request. Please try again.");
+  await tryCompact(sessionId, schoolId);
+  return buildErrorResponse(sessionId, buildRetryExhaustedMessage(request.message, previousPlans));
 }
 
 function buildErrorResponse(sessionId: string, message: string): AgentChatResponse {
@@ -318,6 +329,24 @@ function buildErrorResponse(sessionId: string, message: string): AgentChatRespon
     confidence: 0,
     warnings: [message],
   };
+}
+
+async function tryCompact(sessionId: string, schoolId: string): Promise<void> {
+  try {
+    const recent = await getLastMessages(sessionId, 20);
+    if (shouldCompact(recent)) {
+      const session = await getSession(sessionId);
+      const existingSummary = session?.metadata?.compacted_summary as string | undefined;
+      const result = await compactConversation(recent, existingSummary);
+      await updateSessionMetadata(sessionId, {
+        compacted_summary: result.summary,
+        compacted_message_count: result.userMessageCount,
+        last_compacted_at: new Date().toISOString(),
+      });
+    }
+  } catch {
+    // Compaction failure is non-critical — continue silently
+  }
 }
 
 export function buildCurrentDateAnswer(date = new Date(), timeZone = DEFAULT_AGENT_TIME_ZONE): string {
