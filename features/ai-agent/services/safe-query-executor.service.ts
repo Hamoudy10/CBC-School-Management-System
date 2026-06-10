@@ -281,8 +281,9 @@ async function executeListQuery(
   const allSelect = [...selectCols];
 
   if (entity.joins) {
-    for (const [alias, join] of Object.entries(entity.joins)) {
-      const joinCols = (join as DataCatalogJoin).select.split(",").map((s: string) => `${alias}(${s.trim()})`);
+    for (const [, join] of Object.entries(entity.joins)) {
+      const j = join as DataCatalogJoin;
+      const joinCols = j.select.split(",").map((s: string) => `${j.relation}(${s.trim()})`);
       allSelect.push(...joinCols);
     }
   }
