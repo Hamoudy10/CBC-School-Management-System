@@ -59,28 +59,17 @@ Analyze the user's request and produce a plan with this structure:
 - Never request columns that are not described in the tool description.
 - query_school_data is read-only. Never use it to create, update, or delete records.
 
-### Examples
+### Examples (compact)
 
-User: "How many teachers are here?"
-Plan: {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"staff","operation":"count","filters":[{"field":"status","operator":"eq","value":"active"},{"field":"position","operator":"in","value":["class_teacher","subject_teacher","principal","deputy_principal"]}]}}
+User: "How many teachers?" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"staff","operation":"count","filters":[{"field":"status","operator":"eq","value":"active"}]}}
 
-User: "Show absent students today"
-Plan: {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"attendance","operation":"list","filters":[{"field":"date","operator":"eq","value":"CURRENT_DATE"},{"field":"status","operator":"eq","value":"absent"}],"select":["student_id","class_id","date","status"],"limit":100}}
+User: "Show absent students today" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"attendance","operation":"list","filters":[{"field":"date","operator":"eq","value":"CURRENT_DATE"},{"field":"status","operator":"eq","value":"absent"}],"select":["student_id","class_id","date","status"],"limit":100}}
 
-User: "Who has unpaid fees?"
-Plan: {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"student_fees","operation":"list","filters":[{"field":"balance","operator":"gt","value":0}],"select":["student_id","amount_due","amount_paid","balance","status"],"limit":100}}
+User: "Unpaid fees?" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"student_fees","operation":"list","filters":[{"field":"balance","operator":"gt","value":0}],"select":["student_id","amount_due","amount_paid","balance","status"],"limit":100}}
 
-User: "How many students are in Grade 6?"
-Plan: {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"students","operation":"count","filters":[{"field":"status","operator":"eq","value":"active"}],"limit":100}}
+User: "How many active students?" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"students","operation":"count","filters":[{"field":"status","operator":"eq","value":"active"}]}}
 
-User: "Show me fee defaulters this term"
-Plan: {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"student_fees","operation":"list","filters":[{"field":"balance","operator":"gt","value":0},{"field":"status","operator":"in","value":["pending","overdue"]}],"select":["student_id","amount_due","amount_paid","balance","status"],"limit":100}}
-
-User: "What is the balance for admission number ADM001?"
-Plan: {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"student_fees","operation":"list","filters":[{"field":"status","operator":"eq","value":"active"}],"select":["student_id","amount_due","amount_paid","balance","status"],"limit":5}}
-
-User: "Show students with low attendance"
-Plan: {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"attendance","operation":"summary","filters":[{"field":"status","operator":"eq","value":"absent"}],"groupBy":["student_id"],"limit":100}}`;
+User: "Low attendance students" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"attendance","operation":"summary","filters":[{"field":"status","operator":"eq","value":"absent"}],"groupBy":["student_id"],"limit":100}}`;
 
 const DEFAULT_AGENT_TIME_ZONE = process.env.AI_AGENT_TIMEZONE ?? "Europe/London";
 
@@ -158,15 +147,30 @@ ${request.message}`;
   const provider = getProvider();
 
   // Step 1: Plan
-  const planResult = await provider.generate<AgentPlan>({
-    system: systemContext,
-    prompt: `Analyze this request and produce a JSON plan with intent, toolName (if applicable), toolInput, requiresConfirmation, riskLevel, reasoningSummary, and userFacingMessage.`,
-    responseFormat: "json",
-    responseSchema: agentPlanSchema,
-    requestLabel: "ai-agent.plan",
-    temperature: 0.3,
-    maxOutputTokens: 1000,
-  });
+  let planResult: import("@/features/ai-agent/types").AIProviderResponse<AgentPlan | string>;
+  try {
+    planResult = await provider.generate<AgentPlan>({
+      system: systemContext,
+      prompt: `Analyze this request and produce a JSON plan with intent, toolName (if applicable), toolInput, requiresConfirmation, riskLevel, reasoningSummary, and userFacingMessage.`,
+      responseFormat: "json",
+      responseSchema: agentPlanSchema,
+      requestLabel: "ai-agent.plan",
+      temperature: 0.3,
+      maxOutputTokens: 1000,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unexpected error during planning";
+    await logAgentAIEvent({
+      requestLabel: "ai-agent.plan",
+      model: "unknown",
+      schoolId,
+      prompt: request.message,
+      success: false,
+      durationMs: Date.now() - startedAt,
+      error: msg,
+    });
+    return buildErrorResponse(sessionId, "I encountered an issue while processing your request. Please try rephrasing.");
+  }
 
   if (!planResult.success) {
     return buildErrorResponse(sessionId, "Failed to analyze your request. Please try again.");
