@@ -4,6 +4,7 @@ import { requiresConfirmation, getConfirmationTimeoutMs, isActionExpired } from 
 import { hasPermission, canManageRole, getAccessibleModules } from "@/lib/auth/permissions";
 import { PERMISSION_MATRIX } from "@/types/roles";
 import { getAvailableToolsForUser, findTool, getToolNamesForUser, ALL_TOOLS } from "@/features/ai-agent/services/tool-registry.service";
+import { buildCurrentDateAnswer, getStaffSummaryToolInput, isCurrentDateQuestion } from "@/features/ai-agent/services/agent.service";
 import type { AuthUser } from "@/types/auth";
 
 const uuid = "550e8400-e29b-41d4-a716-446655440000";
@@ -58,6 +59,35 @@ describe("Zod schema validation", () => {
     });
     it("draft_announcement accepts valid", () => {
       expect(toolInputSchemas.draft_announcement.parse({ title: "Meeting", audience: "teachers", context: "Staff meeting" }).title).toBe("Meeting");
+    });
+    it("get_staff_summary accepts valid", () => {
+      const parsed = toolInputSchemas.get_staff_summary.parse({ status: "active", teachingOnly: true });
+      expect(parsed.teachingOnly).toBe(true);
+    });
+  });
+});
+
+describe("Deterministic agent routing helpers", () => {
+  it("recognizes current date/day questions", () => {
+    expect(isCurrentDateQuestion("what is the day today")).toBe(true);
+    expect(isCurrentDateQuestion("what day is it")).toBe(true);
+    expect(isCurrentDateQuestion("how many teachers are here")).toBe(false);
+  });
+
+  it("builds a current date answer without using the model", () => {
+    expect(buildCurrentDateAnswer(new Date("2026-06-09T12:00:00Z"), "Europe/London")).toBe("Today is Tuesday, 9 June 2026.");
+  });
+
+  it("routes teacher counts to teaching-only active staff summary", () => {
+    expect(getStaffSummaryToolInput("how many teachers are here")).toEqual({
+      teachingOnly: true,
+      status: "active",
+    });
+  });
+
+  it("routes all staff counts without active-only filtering", () => {
+    expect(getStaffSummaryToolInput("total staff")).toEqual({
+      teachingOnly: false,
     });
   });
 });
@@ -219,8 +249,11 @@ describe("Tool registry completeness", () => {
   const readTools = ["search_students", "get_student_profile", "get_student_attendance_summary", "get_student_assessment_summary", "get_student_fee_summary", "get_class_roster", "get_class_attendance_summary", "get_class_performance_summary", "get_school_health_summary", "get_timetable", "get_report_card_status", "get_messages_summary", "get_audit_summary"];
   const draftTools = ["draft_parent_message", "draft_announcement", "draft_report_comment", "generate_lesson_plan", "generate_assessment", "generate_study_plan", "explain_cbc_result", "predict_dropout_risk", "predict_fee_default_risk"];
   const writeTools = ["create_student", "update_student", "record_attendance", "bulk_record_attendance", "create_assessment", "bulk_create_assessments", "create_discipline_record", "create_timetable_slot", "create_fee_structure", "assign_student_fee", "record_payment", "send_message", "create_announcement", "generate_report_cards"];
-  const highRiskTools = ["delete_student", "change_user_role", "waive_fee", "publish_report_cards", "change_active_term"];
-  const allExpected = [...readTools, ...draftTools, ...writeTools, ...highRiskTools];
+
+  const highRiskTools2 = ["delete_student", "change_user_role", "waive_fee", "publish_report_cards", "change_active_term"];
+  const dynamicTools = ["query_school_data", "get_staff_summary"];
+  const allExpected = [...readTools, ...draftTools, ...writeTools, ...highRiskTools2, ...dynamicTools];
+  const allNames = ALL_TOOLS.map((t) => t.name);
 
   it("contains every expected tool", () => {
     const names = ALL_TOOLS.map((t) => t.name);
@@ -249,5 +282,166 @@ describe("Tool registry completeness", () => {
         expect(requiresConfirmation(tool, {}, makeUser())).toBe(true);
       }
     }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// 11. query_school_data — Data Catalog & Query Schema
+// ═══════════════════════════════════════════════════════════
+describe("query_school_data schema and catalog", () => {
+  describe("Zod schema validation", () => {
+    it("accepts valid count query", () => {
+      const p = toolInputSchemas.query_school_data.parse({
+        entity: "staff",
+        operation: "count",
+        filters: [{ field: "status", operator: "eq", value: "active" }],
+      });
+      expect(p.entity).toBe("staff");
+      expect(p.operation).toBe("count");
+    });
+
+    it("accepts valid list query with select and limit", () => {
+      const p = toolInputSchemas.query_school_data.parse({
+        entity: "students",
+        operation: "list",
+        select: ["student_id", "first_name", "last_name", "status"],
+        filters: [{ field: "status", operator: "eq", value: "active" }],
+        limit: 50,
+      });
+      expect(p.operation).toBe("list");
+      expect(p.select).toContain("first_name");
+    });
+
+    it("accepts grouped summary", () => {
+      const p = toolInputSchemas.query_school_data.parse({
+        entity: "attendance",
+        operation: "summary",
+        groupBy: ["status"],
+        limit: 100,
+      });
+      expect(p.groupBy).toContain("status");
+    });
+
+    it("rejects invalid entity value", () => {
+      const result = toolInputSchemas.query_school_data.safeParse({
+        entity: "",
+        operation: "count",
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects unsupported operation", () => {
+      const result = toolInputSchemas.query_school_data.safeParse({
+        entity: "students",
+        operation: "delete",
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects limit over 500", () => {
+      const result = toolInputSchemas.query_school_data.safeParse({
+        entity: "students",
+        operation: "list",
+        limit: 501,
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects invalid operator", () => {
+      const result = toolInputSchemas.query_school_data.safeParse({
+        entity: "students",
+        operation: "list",
+        filters: [{ field: "status", operator: "regex", value: "active" }],
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects empty select array", () => {
+      const result = toolInputSchemas.query_school_data.safeParse({
+        entity: "students",
+        operation: "list",
+        select: [],
+      });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe("query_school_data tool in registry", () => {
+    it("is registered as a low-risk read tool", () => {
+      const tool = findTool("query_school_data");
+      expect(tool).toBeDefined();
+      expect(tool!.riskLevel).toBe("low");
+      expect(tool!.action).toBe("view");
+    });
+
+    it("is accessible to school_admin", () => {
+      const tools = getAvailableToolsForUser(makeUser({ role: "school_admin" }));
+      expect(tools.map((t) => t.name)).toContain("query_school_data");
+    });
+
+    it("is accessible to teacher role", () => {
+      const tools = getAvailableToolsForUser(makeUser({ role: "teacher" }));
+      expect(tools.map((t) => t.name)).toContain("query_school_data");
+    });
+
+    it("is not accessible to student role (no analytics module)", () => {
+      const tools = getAvailableToolsForUser(makeUser({ role: "student" }));
+      expect(tools.map((t) => t.name)).not.toContain("query_school_data");
+    });
+
+    it("does not require confirmation", () => {
+      const tool = findTool("query_school_data")!;
+      expect(requiresConfirmation(tool, {}, makeUser())).toBe(false);
+    });
+  });
+
+  describe("Data catalog entity configuration", () => {
+    it("catalog has all expected entities", () => {
+      const catalog = require("@/features/ai-agent/services/data-catalog.service").getDataCatalog();
+      const expected = ["students", "staff", "classes", "attendance", "assessments", "assessment_aggregates", "report_cards", "student_fees", "payments", "fee_structures", "messages", "announcements", "timetable_slots", "disciplinary_records", "special_needs", "teacher_subjects", "academic_years", "terms"];
+      for (const name of expected) {
+        expect(catalog[name]).toBeDefined();
+      }
+      expect(Object.keys(catalog).length).toBeGreaterThanOrEqual(expected.length);
+    });
+
+    it("each entity has required fields", () => {
+      const catalog = require("@/features/ai-agent/services/data-catalog.service").getDataCatalog();
+      for (const [name, entity] of Object.entries(catalog)) {
+        expect(entity).toHaveProperty("table");
+        expect(entity).toHaveProperty("module");
+        expect(entity).toHaveProperty("scopeColumn");
+        expect(entity).toHaveProperty("primaryKey");
+        expect(entity).toHaveProperty("readableColumns");
+        expect(entity).toHaveProperty("filterableColumns");
+        expect(entity).toHaveProperty("action", "view");
+      }
+    });
+
+    it("staff entity maps to teachers module", () => {
+      const catalog = require("@/features/ai-agent/services/data-catalog.service").getDataCatalog();
+      expect(catalog.staff.module).toBe("teachers");
+    });
+
+    it("student_fees maps to finance module", () => {
+      const catalog = require("@/features/ai-agent/services/data-catalog.service").getDataCatalog();
+      expect(catalog.student_fees.module).toBe("finance");
+    });
+  });
+
+  describe("Catalog validation logic", () => {
+    const { getEntity } = require("@/features/ai-agent/services/data-catalog.service");
+
+    it("getEntity returns undefined for unknown entity", () => {
+      expect(getEntity("nonexistent")).toBeUndefined();
+    });
+
+    it("getEntity returns config for known entity", () => {
+      const entity = getEntity("students");
+      expect(entity).toBeDefined();
+      expect(entity!.readableColumns).toContain("first_name");
+      expect(entity!.filterableColumns).toContain("status");
+      expect(entity!.searchableColumns).toContain("first_name");
+    });
   });
 });

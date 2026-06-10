@@ -18,6 +18,8 @@ const SYSTEM_PROMPT = `You are an AI assistant for the CBC School Management Sys
 - You must keep role confidentiality. Do not expose data the user cannot see in the UI.
 - If you cannot fulfill a request due to permissions or missing data, explain what you CAN do instead.
 - If the user asks about their current page or module, use the Current Context section to answer.
+- You may answer harmless general questions such as today's date/day/time directly from Current Context.
+- For school data counts, totals, lists, balances, or summaries, you must use a tool. Do not estimate or infer counts from conversation text.
 
 ## How to Respond
 Analyze the user's request and produce a plan with this structure:
@@ -32,6 +34,7 @@ Analyze the user's request and produce a plan with this structure:
 
 ## Rules
 - For informational questions, use "answer" intent.
+- For harmless general context questions like today's date/day/time, use "answer" intent.
 - For data retrieval, use "retrieve" intent with the appropriate tool.
 - For actions (create, update, delete), use "act" intent.
 - If unsure about the request, use "clarify" intent.
@@ -46,7 +49,40 @@ Analyze the user's request and produce a plan with this structure:
 - When you need to retrieve data, choose the most specific tool available. For example, use "get_student_profile" rather than "search_students" if the user mentions a specific student.
 - If the user asks for information that requires multiple tools, plan to use the most relevant tool first and state what additional data you might need.
 - If required fields are missing from a tool input, use "clarify" intent and ask the user for the missing information.
-- If a user asks about something outside their role's modules, politely refuse and mention what modules they DO have access to.`;
+- If a user asks about something outside their role's modules, politely refuse and mention what modules they DO have access to.
+
+## Using query_school_data
+- For any question asking about counts, how many, list, show, find, total, balance, status, absent, present, paid, unpaid, published, active, inactive, assigned, or registered — use query_school_data with the correct entity unless a more specific tool is clearly better.
+- query_school_data supports entities: students, staff, classes, attendance, assessments, assessment_aggregates, report_cards, student_fees, payments, fee_structures, messages, announcements, timetable_slots, disciplinary_records, special_needs, teacher_subjects, academic_years, terms.
+- Use "operation": "count" for totals. Use "operation": "list" for detailed records. Use "operation": "summary" with "groupBy" for grouped counts.
+- Always include relevant filters (e.g., status: "active", is_published: true, date ranges).
+- Never request columns that are not described in the tool description.
+- query_school_data is read-only. Never use it to create, update, or delete records.
+
+### Examples
+
+User: "How many teachers are here?"
+Plan: {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"staff","operation":"count","filters":[{"field":"status","operator":"eq","value":"active"},{"field":"position","operator":"in","value":["class_teacher","subject_teacher","principal","deputy_principal"]}]}}
+
+User: "Show absent students today"
+Plan: {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"attendance","operation":"list","filters":[{"field":"date","operator":"eq","value":"CURRENT_DATE"},{"field":"status","operator":"eq","value":"absent"}],"select":["student_id","class_id","date","status"],"limit":100}}
+
+User: "Who has unpaid fees?"
+Plan: {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"student_fees","operation":"list","filters":[{"field":"balance","operator":"gt","value":0}],"select":["student_id","amount_due","amount_paid","balance","status"],"limit":100}}
+
+User: "How many students are in Grade 6?"
+Plan: {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"students","operation":"count","filters":[{"field":"status","operator":"eq","value":"active"}],"limit":100}}
+
+User: "Show me fee defaulters this term"
+Plan: {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"student_fees","operation":"list","filters":[{"field":"balance","operator":"gt","value":0},{"field":"status","operator":"in","value":["pending","overdue"]}],"select":["student_id","amount_due","amount_paid","balance","status"],"limit":100}}
+
+User: "What is the balance for admission number ADM001?"
+Plan: {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"student_fees","operation":"list","filters":[{"field":"status","operator":"eq","value":"active"}],"select":["student_id","amount_due","amount_paid","balance","status"],"limit":5}}
+
+User: "Show students with low attendance"
+Plan: {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"attendance","operation":"summary","filters":[{"field":"status","operator":"eq","value":"absent"}],"groupBy":["student_id"],"limit":100}}`;
+
+const DEFAULT_AGENT_TIME_ZONE = process.env.AI_AGENT_TIMEZONE ?? "Europe/London";
 
 export async function processAgentMessage(
   request: AgentChatRequest,
@@ -76,6 +112,17 @@ export async function processAgentMessage(
   const recentMessages = await getLastMessages(sessionId, 10);
   const availableTools = getAvailableToolsForUser(user);
   const toolNames = availableTools.map((t) => t.name);
+
+  const deterministicResponse = await handleDeterministicRequest({
+    request,
+    user,
+    schoolId,
+    sessionId,
+    availableTools,
+  });
+  if (deterministicResponse) {
+    return deterministicResponse;
+  }
 
   const conversationHistory = recentMessages
     .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
@@ -285,5 +332,138 @@ function buildErrorResponse(sessionId: string, message: string): AgentChatRespon
     message: { role: "assistant", content: message },
     confidence: 0,
     warnings: [message],
+  };
+}
+
+export function buildCurrentDateAnswer(date = new Date(), timeZone = DEFAULT_AGENT_TIME_ZONE): string {
+  const weekday = new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone }).format(date);
+  const fullDate = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone,
+  }).format(date);
+
+  return `Today is ${weekday}, ${fullDate}.`;
+}
+
+export function isCurrentDateQuestion(message: string): boolean {
+  const normalized = message.toLowerCase().trim();
+  return (
+    /\b(what|which)\s+(is\s+)?(the\s+)?(day|date)\s+(is\s+)?(today|now)\b/.test(normalized) ||
+    /\b(today'?s|current)\s+(day|date)\b/.test(normalized) ||
+    /\bwhat\s+day\s+is\s+it\b/.test(normalized)
+  );
+}
+
+export function getStaffSummaryToolInput(message: string): Record<string, unknown> | null {
+  const normalized = message.toLowerCase();
+  const isCountQuestion = /\b(how many|number of|count|total)\b/.test(normalized);
+  const asksStaff = /\b(staff|teacher|teachers|teaching staff)\b/.test(normalized);
+
+  if (!isCountQuestion || !asksStaff) {
+    return null;
+  }
+
+  const asksTeachers = /\b(teacher|teachers|teaching staff)\b/.test(normalized);
+  const asksAll = /\b(all|total)\b/.test(normalized);
+  const asksInactive = /\b(inactive|suspended|archived)\b/.test(normalized);
+
+  const input: Record<string, unknown> = {
+    teachingOnly: asksTeachers,
+  };
+
+  if (asksInactive) {
+    if (normalized.includes("suspended")) input.status = "suspended";
+    else if (normalized.includes("archived")) input.status = "archived";
+    else input.status = "inactive";
+  } else if (!asksAll) {
+    input.status = "active";
+  }
+
+  return input;
+}
+
+async function handleDeterministicRequest(args: {
+  request: AgentChatRequest;
+  user: AuthUser;
+  schoolId: string;
+  sessionId: string;
+  availableTools: AgentTool[];
+}): Promise<AgentChatResponse | null> {
+  const { request, user, schoolId, sessionId, availableTools } = args;
+
+  if (isCurrentDateQuestion(request.message)) {
+    const content = buildCurrentDateAnswer();
+    await saveMessage(sessionId, "assistant", content, schoolId, {
+      deterministic: true,
+      type: "current_date",
+    });
+    return {
+      sessionId,
+      message: { role: "assistant", content },
+      confidence: 1,
+      warnings: [],
+    };
+  }
+
+  const staffInput = getStaffSummaryToolInput(request.message);
+  if (!staffInput) {
+    return null;
+  }
+
+  const tool = availableTools.find((candidate) => candidate.name === "get_staff_summary");
+  if (!tool) {
+    const content = "I cannot view staff or teacher counts with your current role. I can help with the modules available to you instead.";
+    await saveMessage(sessionId, "assistant", content, schoolId, {
+      deterministic: true,
+      type: "staff_summary_denied",
+    });
+    return {
+      sessionId,
+      message: { role: "assistant", content },
+      confidence: 1,
+      warnings: ["get_staff_summary not available for this role"],
+    };
+  }
+
+  const result = await executeTool("get_staff_summary", staffInput, {
+    user,
+    schoolId,
+    sessionId,
+    requestId: `deterministic-${sessionId}-${Date.now()}`,
+  });
+
+  const details = (result.output.details ?? {}) as Record<string, unknown>;
+  const teachingOnly = staffInput.teachingOnly === true;
+  const total = typeof details.total === "number" ? details.total : null;
+  const activeTeachingStaff =
+    typeof details.activeTeachingStaff === "number" ? details.activeTeachingStaff : null;
+  const byPosition = details.byPosition as Record<string, number> | undefined;
+
+  const content = teachingOnly
+    ? `There ${total === 1 ? "is" : "are"} ${total ?? "no"} ${staffInput.status === "active" ? "active " : ""}teacher${total === 1 ? "" : "s"} in this school.`
+    : `There ${total === 1 ? "is" : "are"} ${total ?? "no"} ${staffInput.status === "active" ? "active " : ""}staff member${total === 1 ? "" : "s"} in this school.${activeTeachingStaff !== null ? ` Active teaching staff: ${activeTeachingStaff}.` : ""}`;
+
+  const breakdown = byPosition && Object.keys(byPosition).length > 0
+    ? ` Breakdown by position: ${Object.entries(byPosition)
+        .map(([position, count]) => `${position.replace(/_/g, " ")} ${count}`)
+        .join(", ")}.`
+    : "";
+
+  const finalContent = `${content}${breakdown}`;
+
+  await saveMessage(sessionId, "assistant", finalContent, schoolId, {
+    deterministic: true,
+    type: "staff_summary",
+    toolName: "get_staff_summary",
+    toolOutput: result.output,
+  });
+
+  return {
+    sessionId,
+    message: { role: "assistant", content: finalContent },
+    confidence: 1,
+    warnings: [],
   };
 }

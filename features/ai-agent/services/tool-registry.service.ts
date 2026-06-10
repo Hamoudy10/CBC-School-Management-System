@@ -6,12 +6,18 @@ import type { AgentTool } from "@/features/ai-agent/types";
 import { toolInputSchemas } from "@/features/ai-agent/validators/aiAgent.schema";
 import { canAccessStudent, sanitizeForAgent } from "./context-builder.service";
 import { getProvider } from "@/lib/ai/providers";
+import { executeSafeQuery } from "./safe-query-executor.service";
+import type { QuerySchoolDataOutput } from "./safe-query-executor.service";
 import { z } from "zod";
+
+const TEACHING_POSITIONS = new Set([
+  "principal", "deputy_principal", "class_teacher", "subject_teacher",
+]);
 
 function makeTool<TInput extends z.ZodType<any>, TOutput extends z.ZodType<any>>(
   name: string,
   description: string,
-  module: "students" | "attendance" | "assessments" | "finance" | "academics" | "reports" | "communication" | "timetable" | "analytics" | "audit_logs" | "users" | "settings" | "library" | "exams",
+  module: "students" | "teachers" | "attendance" | "assessments" | "finance" | "academics" | "reports" | "communication" | "timetable" | "analytics" | "audit_logs" | "users" | "settings" | "library" | "exams",
   action: "view" | "create" | "update" | "delete" | "approve" | "publish",
   riskLevel: "low" | "medium" | "high" | "critical",
   inputSchema: TInput,
@@ -42,6 +48,19 @@ const summaryOutput = z.object({
 
 const voidOutput = z.object({ success: z.boolean(), message: z.string() });
 
+const queryOutput = z.object({
+  summary: z.string(),
+  rows: z.array(z.record(z.unknown())),
+  count: z.number(),
+  totalCount: z.number().optional(),
+  grouped: z.record(z.number()).optional(),
+  appliedFilters: z.array(z.object({ field: z.string(), operator: z.string(), value: z.any().optional() })),
+  warnings: z.array(z.string()),
+  executionMs: z.number(),
+});
+
+// ═══════════════════════════════════════════
+// PHASE B: READ-ONLY TOOLS
 // ═══════════════════════════════════════════
 // PHASE B: READ-ONLY TOOLS
 // ═══════════════════════════════════════════
@@ -228,19 +247,82 @@ const get_school_health_summary = makeTool(
     const supabase = await createSupabaseServerClient();
     const [students, teachers, classes, attendance] = await Promise.all([
       supabase.from("students").select("student_id, status").eq("school_id", schoolId),
-      supabase.from("staff").select("staff_id, status").eq("school_id", schoolId),
+      supabase.from("staff").select("staff_id, status, position").eq("school_id", schoolId),
       supabase.from("classes").select("class_id").eq("school_id", schoolId),
       supabase.from("attendance_records").select("status").eq("school_id", schoolId).limit(1000),
     ]);
     const activeStudents = (students.data ?? []).filter((s: any) => s.status === "active").length;
-    const activeTeachers = (teachers.data ?? []).filter((t: any) => t.status === "active").length;
+    const activeStaff = (teachers.data ?? []).filter((t: any) => t.status === "active").length;
+    const activeTeachingStaff = (teachers.data ?? []).filter(
+      (t: any) => t.status === "active" && TEACHING_POSITIONS.has(t.position),
+    ).length;
     const totalClasses = (classes.data ?? []).length;
     const attendanceRate = (attendance.data ?? []).length
       ? Math.round((attendance.data ?? []).filter((a: any) => a.status === "present").length / (attendance.data ?? []).length * 100)
       : 0;
     return {
-      summary: `${activeStudents} active students, ${activeTeachers} teachers, ${totalClasses} classes, ${attendanceRate}% attendance rate`,
-      details: { activeStudents, activeTeachers, totalClasses, attendanceRate, totalStudents: (students.data ?? []).length },
+      summary: `${activeStudents} active students, ${activeTeachingStaff} active teaching staff, ${activeStaff} active staff, ${totalClasses} classes, ${attendanceRate}% attendance rate`,
+      details: { activeStudents, activeTeachingStaff, activeStaff, totalClasses, attendanceRate, totalStudents: (students.data ?? []).length },
+    };
+  },
+);
+
+const get_staff_summary = makeTool(
+  "get_staff_summary",
+  "Get exact staff and teacher counts for the current school",
+  "teachers",
+  "view",
+  "low",
+  toolInputSchemas.get_staff_summary,
+  summaryOutput,
+  async (input, { schoolId }) => {
+    const supabase = await createSupabaseServerClient();
+    let query = supabase
+      .from("staff")
+      .select("staff_id, status, position")
+      .eq("school_id", schoolId);
+
+    if (input.status) {
+      query = query.eq("status", input.status);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      throw new Error(`Failed to load staff summary: ${error.message}`);
+    }
+
+    const staff = data ?? [];
+    const filtered = input.teachingOnly
+      ? staff.filter((member: any) => TEACHING_POSITIONS.has(member.position))
+      : staff;
+
+    const byStatus = filtered.reduce((acc: Record<string, number>, member: any) => {
+      const status = member.status ?? "unknown";
+      acc[status] = (acc[status] ?? 0) + 1;
+      return acc;
+    }, {});
+
+    const byPosition = filtered.reduce((acc: Record<string, number>, member: any) => {
+      const position = member.position ?? "unknown";
+      acc[position] = (acc[position] ?? 0) + 1;
+      return acc;
+    }, {});
+
+    const activeTeachingStaff = staff.filter(
+      (member: any) => member.status === "active" && TEACHING_POSITIONS.has(member.position),
+    ).length;
+
+    return {
+      summary: input.teachingOnly
+        ? `${filtered.length} teaching staff member(s) found${input.status ? ` with status ${input.status}` : ""}.`
+        : `${filtered.length} staff member(s) found${input.status ? ` with status ${input.status}` : ""}.`,
+      details: {
+        total: filtered.length,
+        activeTeachingStaff,
+        teachingPositions: Array.from(TEACHING_POSITIONS),
+        byStatus,
+        byPosition,
+      },
     };
   },
 );
@@ -1016,11 +1098,30 @@ const change_active_term = makeTool(
 );
 
 // ═══════════════════════════════════════════
+// QUERY SCHOOL DATA — Dynamic read-only query tool
+// ═══════════════════════════════════════════
+
+const query_school_data = makeTool(
+  "query_school_data",
+  "Query school data dynamically. Use for counting, listing, or summarizing any entity. Supports filtering, grouping, search, and ordering. Safe read-only queries against the data catalog.",
+  "analytics",
+  "view",
+  "low",
+  toolInputSchemas.query_school_data,
+  queryOutput,
+  async (input, { user }) => {
+    const result = await executeSafeQuery(input, user);
+    return result as unknown as QuerySchoolDataOutput;
+  },
+);
+
+// ═══════════════════════════════════════════
 // REGISTRY
 // ═══════════════════════════════════════════
 
 const ALL_TOOLS: AgentTool<any, any>[] = [
   // Phase B: Read-only
+  query_school_data,
   search_students,
   get_student_profile,
   get_student_attendance_summary,
@@ -1030,6 +1131,7 @@ const ALL_TOOLS: AgentTool<any, any>[] = [
   get_class_attendance_summary,
   get_class_performance_summary,
   get_school_health_summary,
+  get_staff_summary,
   get_timetable,
   get_report_card_status,
   get_messages_summary,
