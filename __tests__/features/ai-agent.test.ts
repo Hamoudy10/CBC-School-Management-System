@@ -4,7 +4,7 @@ import { requiresConfirmation, getConfirmationTimeoutMs, isActionExpired } from 
 import { hasPermission, canManageRole, getAccessibleModules } from "@/lib/auth/permissions";
 import { PERMISSION_MATRIX } from "@/types/roles";
 import { getAvailableToolsForUser, findTool, getToolNamesForUser, ALL_TOOLS } from "@/features/ai-agent/services/tool-registry.service";
-import { buildCurrentDateAnswer, getStaffSummaryToolInput, isCurrentDateQuestion } from "@/features/ai-agent/services/agent.service";
+import { buildCurrentDateAnswer, buildCurrentTimeAnswer, getStaffSummaryToolInput, isCurrentDateQuestion, isCurrentTimeQuestion } from "@/features/ai-agent/services/agent.service";
 import type { AuthUser } from "@/types/auth";
 
 const uuid = "550e8400-e29b-41d4-a716-446655440000";
@@ -68,14 +68,38 @@ describe("Zod schema validation", () => {
 });
 
 describe("Deterministic agent routing helpers", () => {
-  it("recognizes current date/day questions", () => {
-    expect(isCurrentDateQuestion("what is the day today")).toBe(true);
-    expect(isCurrentDateQuestion("what day is it")).toBe(true);
-    expect(isCurrentDateQuestion("how many teachers are here")).toBe(false);
+  describe("isCurrentDateQuestion", () => {
+    it("recognizes 'what is the day today'", () => { expect(isCurrentDateQuestion("what is the day today")).toBe(true); });
+    it("recognizes 'whats the day today' (no apostrophe)", () => { expect(isCurrentDateQuestion("whats the day today")).toBe(true); });
+    it("recognizes 'what's the day today'", () => { expect(isCurrentDateQuestion("what's the day today")).toBe(true); });
+    it("recognizes 'what is today's date'", () => { expect(isCurrentDateQuestion("what is today's date")).toBe(true); });
+    it("recognizes 'what day is it'", () => { expect(isCurrentDateQuestion("what day is it")).toBe(true); });
+    it("recognizes 'todays date' (no apostrophe)", () => { expect(isCurrentDateQuestion("todays date")).toBe(true); });
+    it("recognizes 'today date'", () => { expect(isCurrentDateQuestion("today date")).toBe(true); });
+    it("recognizes 'current date'", () => { expect(isCurrentDateQuestion("current date")).toBe(true); });
+    it("recognizes 'current day'", () => { expect(isCurrentDateQuestion("current day")).toBe(true); });
+    it("recognizes 'date today'", () => { expect(isCurrentDateQuestion("date today")).toBe(true); });
+    it("recognizes 'day today'", () => { expect(isCurrentDateQuestion("day today")).toBe(true); });
+    it("rejects 'how many teachers are here'", () => { expect(isCurrentDateQuestion("how many teachers are here")).toBe(false); });
+    it("rejects 'what time is it'", () => { expect(isCurrentDateQuestion("what time is it")).toBe(false); });
+  });
+
+  describe("isCurrentTimeQuestion", () => {
+    it("recognizes 'what time is it'", () => { expect(isCurrentTimeQuestion("what time is it")).toBe(true); });
+    it("recognizes 'what's the time'", () => { expect(isCurrentTimeQuestion("what's the time")).toBe(true); });
+    it("recognizes 'whats the time' (no apostrophe)", () => { expect(isCurrentTimeQuestion("whats the time")).toBe(true); });
+    it("recognizes 'current time'", () => { expect(isCurrentTimeQuestion("current time")).toBe(true); });
+    it("recognizes 'time now'", () => { expect(isCurrentTimeQuestion("time now")).toBe(true); });
+    it("rejects 'what is the day today'", () => { expect(isCurrentTimeQuestion("what is the day today")).toBe(false); });
+    it("rejects 'how many students'", () => { expect(isCurrentTimeQuestion("how many students")).toBe(false); });
   });
 
   it("builds a current date answer without using the model", () => {
     expect(buildCurrentDateAnswer(new Date("2026-06-09T12:00:00Z"), "Europe/London")).toBe("Today is Tuesday, 9 June 2026.");
+  });
+
+  it("builds a current time answer without using the model", () => {
+    expect(buildCurrentTimeAnswer(new Date("2026-06-09T14:30:00Z"), "Europe/London")).toBe("The current time is 15:30 BST.");
   });
 
   it("routes teacher counts to teaching-only active staff summary", () => {

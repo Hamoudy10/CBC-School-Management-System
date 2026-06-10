@@ -1,74 +1,41 @@
 import type { AuthUser } from "@/types/auth";
 import type { AgentChatRequest, AgentChatResponse, AgentPlan, AgentExecutionContext, AgentTool } from "@/features/ai-agent/types";
 import { agentPlanSchema } from "@/features/ai-agent/validators/aiAgent.schema";
-import { getProvider } from "@/lib/ai/providers";
+import { getProvider, AIProviderError } from "@/lib/ai/providers";
 import { getAvailableToolsForUser, getToolNamesForUser } from "./tool-registry.service";
 import { executeTool, ToolExecutionError } from "./tool-executor.service";
 import { buildPageContext, sanitizeForAgent } from "./context-builder.service";
 import { createSession, saveMessage, getLastMessages, getSession, updateSessionStatus } from "./memory.service";
 import { logAgentAIEvent } from "./agent-audit.service";
 
-const SYSTEM_PROMPT = `You are an AI assistant for the CBC School Management System.
+const SYSTEM_PROMPT = `You are an AI assistant for the CBC School Management System. You act as the logged-in user with their exact permissions.
 
-## Your Role
-- You act as the logged-in user and operate with their exact permissions.
-- You can answer questions, retrieve school data, and perform permitted actions.
-- You must NEVER invent data. Only use information returned by your tools.
-- You must NEVER claim an action is complete unless the tool output confirms it.
-- You must keep role confidentiality. Do not expose data the user cannot see in the UI.
-- If you cannot fulfill a request due to permissions or missing data, explain what you CAN do instead.
-- If the user asks about their current page or module, use the Current Context section to answer.
-- You may answer harmless general questions such as today's date/day/time directly from Current Context.
-- For school data counts, totals, lists, balances, or summaries, you must use a tool. Do not estimate or infer counts from conversation text.
+## Core Rules
+- NEVER invent data, dates, counts, totals, balances, or names. Only use information returned by tools or provided in Current Context.
+- The current date and time are provided in Current Context below. Do not guess them.
+- For data questions (counts, how many, list, show, total, balance, status), use query_school_data with the correct entity unless a more specific tool is clearly better.
+- Never estimate or infer counts from conversation text. Always use a tool.
+- Keep role confidentiality. Do not expose data the user cannot see in the UI.
+- Prefer summaries over raw row-level data unless the user asks for specifics.
+- Do NOT use markdown formatting (no asterisks, bold, italics). Plain text only.
+- If required fields are missing from a tool input, use clarify intent and ask the user.
+- If outside permissions, refuse politely and mention what modules they DO have access to.
 
-## How to Respond
-Analyze the user's request and produce a plan with this structure:
-- **intent**: One of "answer", "retrieve", "act", "clarify", "refuse"
-- **userGoal**: Brief summary of what the user wants
-- **toolName**: The tool to use (or null for answer/clarify/refuse)
-- **toolInput**: Parameters for the tool (or null)
-- **requiresConfirmation**: Whether the action needs user confirmation
-- **riskLevel**: "low", "medium", "high", or "critical"
-- **reasoningSummary**: Brief explanation of your plan
-- **userFacingMessage**: Your response to the user, clear and professional
+## Plan Structure
+Analyze requests and produce a JSON plan: intent ("answer"|"retrieve"|"act"|"clarify"|"refuse"), userGoal, toolName (or null), toolInput (or null), requiresConfirmation, riskLevel ("low"|"medium"|"high"|"critical"), reasoningSummary, userFacingMessage.
 
-## Rules
-- For informational questions, use "answer" intent.
-- For harmless general context questions like today's date/day/time, use "answer" intent.
-- For data retrieval, use "retrieve" intent with the appropriate tool.
-- For actions (create, update, delete), use "act" intent.
-- If unsure about the request, use "clarify" intent.
-- If the request is outside your permissions or capabilities, use "refuse" intent.
-- Read-only operations (view/search) are low risk.
-- Drafting content with AI is low risk.
-- Creating/updating records requires medium risk.
-- Financial operations, messaging, and bulk operations are high risk.
-- Deletes, role changes, term/year changes, publishing, fee waivers are critical risk.
-- Always prefer summaries over exposing raw row-level data unless the user asks for specifics.
-- Do NOT use markdown formatting (no asterisks, no bold, no italics). Use plain text only.
-- When you need to retrieve data, choose the most specific tool available. For example, use "get_student_profile" rather than "search_students" if the user mentions a specific student.
-- If the user asks for information that requires multiple tools, plan to use the most relevant tool first and state what additional data you might need.
-- If required fields are missing from a tool input, use "clarify" intent and ask the user for the missing information.
-- If a user asks about something outside their role's modules, politely refuse and mention what modules they DO have access to.
+## Risk Levels
+- Low: view/search/draft. Medium: create/update single records. High: finance/bulk ops/messaging. Critical: deletes/role changes/fee waivers/publishing/term changes.
 
-## Using query_school_data
-- For any question asking about counts, how many, list, show, find, total, balance, status, absent, present, paid, unpaid, published, active, inactive, assigned, or registered — use query_school_data with the correct entity unless a more specific tool is clearly better.
-- query_school_data supports entities: students, staff, classes, attendance, assessments, assessment_aggregates, report_cards, student_fees, payments, fee_structures, messages, announcements, timetable_slots, disciplinary_records, special_needs, teacher_subjects, academic_years, terms.
-- Use "operation": "count" for totals. Use "operation": "list" for detailed records. Use "operation": "summary" with "groupBy" for grouped counts.
-- Always include relevant filters (e.g., status: "active", is_published: true, date ranges).
-- Never request columns that are not described in the tool description.
-- query_school_data is read-only. Never use it to create, update, or delete records.
+## query_school_data
+Entities: students, staff, classes, attendance, assessments, assessment_aggregates, report_cards, student_fees, payments, fee_structures, messages, announcements, timetable_slots, disciplinary_records, special_needs, teacher_subjects, academic_years, terms.
+Operations: count (totals), list (records), summary (groupBy), exists. Always include relevant filters like status, is_published, date ranges. Read-only.
 
-### Examples (compact)
-
+### Examples
 User: "How many teachers?" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"staff","operation":"count","filters":[{"field":"status","operator":"eq","value":"active"}]}}
-
 User: "Show absent students today" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"attendance","operation":"list","filters":[{"field":"date","operator":"eq","value":"CURRENT_DATE"},{"field":"status","operator":"eq","value":"absent"}],"select":["student_id","class_id","date","status"],"limit":100}}
-
 User: "Unpaid fees?" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"student_fees","operation":"list","filters":[{"field":"balance","operator":"gt","value":0}],"select":["student_id","amount_due","amount_paid","balance","status"],"limit":100}}
-
 User: "How many active students?" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"students","operation":"count","filters":[{"field":"status","operator":"eq","value":"active"}]}}
-
 User: "Low attendance students" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"attendance","operation":"summary","filters":[{"field":"status","operator":"eq","value":"absent"}],"groupBy":["student_id"],"limit":100}}`;
 
 const DEFAULT_AGENT_TIME_ZONE = process.env.AI_AGENT_TIMEZONE ?? "Europe/London";
@@ -130,6 +97,8 @@ export async function processAgentMessage(
 - School: ${pageContext.schoolName}
 - Active Year: ${pageContext.activeAcademicYear ?? "Not set"}
 - Active Term: ${pageContext.activeTerm ?? "Not set"}
+- Current Date: ${new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: DEFAULT_AGENT_TIME_ZONE }).format(new Date())}
+- Current Time: ${new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "numeric", timeZone: DEFAULT_AGENT_TIME_ZONE, timeZoneName: "short" }).format(new Date())}
 - Your Role: ${pageContext.userRole}
 - Your Modules: ${pageContext.allowedModules.join(", ")}
 - Current Page: ${pageContext.currentPage ?? "Not on a specific page"}
@@ -169,7 +138,11 @@ ${request.message}`;
       durationMs: Date.now() - startedAt,
       error: msg,
     });
-    return buildErrorResponse(sessionId, "I encountered an issue while processing your request. Please try rephrasing.");
+    const isSchemaError = msg.includes("did not match schema") || msg.includes("invalid JSON");
+    const userMessage = isSchemaError
+      ? "I had trouble understanding your request. Please try rephrasing it more clearly."
+      : "I encountered an issue while processing your request. Please try rephrasing.";
+    return buildErrorResponse(sessionId, userMessage);
   }
 
   if (!planResult.success) {
@@ -309,9 +282,13 @@ ${request.message}`;
         warnings: [...(planResult.warnings ?? []), ...(responseResult.warnings ?? [])],
       };
     } catch (error) {
-      const errorMessage = error instanceof ToolExecutionError ? error.message : "An unexpected error occurred";
+      const rawMessage = error instanceof ToolExecutionError ? error.message : (error instanceof AIProviderError ? error.message : "An unexpected error occurred");
 
-      await saveMessage(sessionId, "assistant", `Error: ${errorMessage}`, schoolId);
+      const sanitizedMessage = rawMessage.includes("did not match schema") || rawMessage.includes("invalid JSON") || rawMessage.includes("API key")
+        ? "I could not complete that action. Please try a different approach."
+        : rawMessage;
+
+      await saveMessage(sessionId, "assistant", `Error: ${sanitizedMessage}`, schoolId);
 
       await logAgentAIEvent({
         requestLabel: `ai-agent.tool.${plan.toolName}`,
@@ -320,10 +297,10 @@ ${request.message}`;
         prompt: request.message,
         success: false,
         durationMs: Date.now() - startedAt,
-        error: errorMessage,
+        error: rawMessage,
       });
 
-      return buildErrorResponse(sessionId, errorMessage);
+      return buildErrorResponse(sessionId, sanitizedMessage);
     }
   }
 
@@ -351,12 +328,35 @@ export function buildCurrentDateAnswer(date = new Date(), timeZone = DEFAULT_AGE
   return `Today is ${weekday}, ${fullDate}.`;
 }
 
+export function buildCurrentTimeAnswer(date = new Date(), timeZone = DEFAULT_AGENT_TIME_ZONE): string {
+  const time = new Intl.DateTimeFormat("en-GB", {
+    hour: "numeric",
+    minute: "numeric",
+    timeZone,
+    timeZoneName: "short",
+  }).format(date);
+
+  return `The current time is ${time}.`;
+}
+
 export function isCurrentDateQuestion(message: string): boolean {
-  const normalized = message.toLowerCase().trim();
+  const n = message.toLowerCase().trim();
   return (
-    /\b(what|which)\s+(is\s+)?(the\s+)?(day|date)\s+(is\s+)?(today|now)\b/.test(normalized) ||
-    /\b(today'?s|current)\s+(day|date)\b/.test(normalized) ||
-    /\bwhat\s+day\s+is\s+it\b/.test(normalized)
+    /\b(?:whats|what's|what|which)\s+(?:is\s+)?(?:the\s+)?(?:day|date)\s+(?:is\s+)?(?:today|now)\b/.test(n) ||
+    /\bwhat\s+day\s+is\s+it\b/.test(n) ||
+    /\btoday'?s?\s+date\b/.test(n) ||
+    /\bcurrent\s+(?:date|day)\b/.test(n) ||
+    /\b(?:date|day)\s+today\b/.test(n)
+  );
+}
+
+export function isCurrentTimeQuestion(message: string): boolean {
+  const n = message.toLowerCase().trim();
+  return (
+    /\bwhat\s+(?:time|clock)\s+is\s+it\b/.test(n) ||
+    /\bcurrent\s+time\b/.test(n) ||
+    /\b(?:whats|what's|what)\s+(?:is\s+)?(?:the\s+)?time(?:\s+(?:is\s+)?(?:it|now))?\b/.test(n) ||
+    /\btime\s+(?:right\s+)?now\b/.test(n)
   );
 }
 
@@ -402,6 +402,20 @@ async function handleDeterministicRequest(args: {
     await saveMessage(sessionId, "assistant", content, schoolId, {
       deterministic: true,
       type: "current_date",
+    });
+    return {
+      sessionId,
+      message: { role: "assistant", content },
+      confidence: 1,
+      warnings: [],
+    };
+  }
+
+  if (isCurrentTimeQuestion(request.message)) {
+    const content = buildCurrentTimeAnswer();
+    await saveMessage(sessionId, "assistant", content, schoolId, {
+      deterministic: true,
+      type: "current_time",
     });
     return {
       sessionId,
