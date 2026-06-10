@@ -5,6 +5,7 @@ import { getProvider, AIProviderError } from "@/lib/ai/providers";
 import { getAvailableToolsForUser, getToolNamesForUser } from "./tool-registry.service";
 import { executeTool, ToolExecutionError } from "./tool-executor.service";
 import { buildPageContext, sanitizeForAgent } from "./context-builder.service";
+import { getDataCatalog } from "./data-catalog.service";
 import { createSession, saveMessage, getLastMessages, getSession, updateSessionStatus } from "./memory.service";
 import { logAgentAIEvent } from "./agent-audit.service";
 
@@ -28,7 +29,7 @@ Analyze requests and produce a JSON plan: intent ("answer"|"retrieve"|"act"|"cla
 - Low: view/search/draft. Medium: create/update single records. High: finance/bulk ops/messaging. Critical: deletes/role changes/fee waivers/publishing/term changes.
 
 ## query_school_data
-Entities: students, staff, classes, attendance, assessments, assessment_aggregates, report_cards, student_fees, payments, fee_structures, messages, announcements, timetable_slots, disciplinary_records, special_needs, teacher_subjects, academic_years, terms.
+Available entities with their column schemas are listed in Entity Columns below. Use the correct filterable field names — e.g. staff position is "position", not "role". For name fields on staff, select from users join (first_name, last_name).
 Operations: count (totals), list (records), summary (groupBy), exists. Always include relevant filters like status, is_published, date ranges. Read-only.
 
 ### Examples
@@ -103,6 +104,9 @@ export async function processAgentMessage(
 - Your Modules: ${pageContext.allowedModules.join(", ")}
 - Current Page: ${pageContext.currentPage ?? "Not on a specific page"}
 - Current Module: ${pageContext.currentModule ?? "N/A"}
+
+## Entity Columns
+${buildEntityColumnsHelp()}
 
 ## Tools Available to You
 ${toolsDescription || "No tools available with your current permissions."}
@@ -386,6 +390,18 @@ export function getStaffSummaryToolInput(message: string): Record<string, unknow
   }
 
   return input;
+}
+
+function buildEntityColumnsHelp(): string {
+  const catalog = getDataCatalog();
+  const lines: string[] = [];
+  for (const [name, entity] of Object.entries(catalog)) {
+    const filterable = entity.filterableColumns.join(",");
+    const readable = entity.readableColumns.slice(0, 6).join(",");
+    const extra = entity.joins ? Object.values(entity.joins).map((j) => `${j.relation}(${j.select})`).join(" ") : "";
+    lines.push(`- ${name}: filter=[${filterable}] select=[${readable}]${extra ? ` join=${extra}` : ""}`);
+  }
+  return lines.join("\n");
 }
 
 async function handleDeterministicRequest(args: {
