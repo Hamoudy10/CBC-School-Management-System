@@ -15,41 +15,41 @@ import {
 // Score to Level Mapping
 // ============================================================
 describe("mapScoreToLevel", () => {
-  it("maps score 1 to Below Expectation", () => {
-    expect(mapScoreToLevel(1)).toBe("Below Expectation");
-    expect(mapScoreToLevelFromIndex(1)).toBe("Below Expectation");
+  it("maps score 1 to below_expectation", () => {
+    expect(mapScoreToLevel(1)).toBe("below_expectation");
+    expect(mapScoreToLevelFromIndex(1)).toBe("below_expectation");
   });
 
-  it("maps score 2 to Approaching Expectation", () => {
-    expect(mapScoreToLevel(2)).toBe("Approaching Expectation");
-    expect(mapScoreToLevelFromIndex(2)).toBe("Approaching Expectation");
+  it("maps score 2 to approaching", () => {
+    expect(mapScoreToLevel(2)).toBe("approaching");
+    expect(mapScoreToLevelFromIndex(2)).toBe("approaching");
   });
 
-  it("maps score 3 to Meeting Expectation", () => {
-    expect(mapScoreToLevel(3)).toBe("Meeting Expectation");
-    expect(mapScoreToLevelFromIndex(3)).toBe("Meeting Expectation");
+  it("maps score 3 to meeting", () => {
+    expect(mapScoreToLevel(3)).toBe("meeting");
+    expect(mapScoreToLevelFromIndex(3)).toBe("meeting");
   });
 
-  it("maps score 4 to Exceeding Expectation", () => {
-    expect(mapScoreToLevel(4)).toBe("Exceeding Expectation");
-    expect(mapScoreToLevelFromIndex(4)).toBe("Exceeding Expectation");
+  it("maps score 4 to exceeding", () => {
+    expect(mapScoreToLevel(4)).toBe("exceeding");
+    expect(mapScoreToLevelFromIndex(4)).toBe("exceeding");
   });
 
   it("maps decimal scores to correct levels", () => {
-    expect(mapScoreToLevel(1.5)).toBe("Below Expectation");
-    expect(mapScoreToLevel(2.3)).toBe("Approaching Expectation");
-    expect(mapScoreToLevel(3.7)).toBe("Meeting Expectation");
-    expect(mapScoreToLevel(4.0)).toBe("Exceeding Expectation");
+    expect(mapScoreToLevel(1.5)).toBe("below_expectation");
+    expect(mapScoreToLevel(2.3)).toBe("approaching");
+    expect(mapScoreToLevel(3.7)).toBe("meeting");
+    expect(mapScoreToLevel(4.0)).toBe("exceeding");
   });
 
-  it("maps scores below 1 to Below Expectation", () => {
-    expect(mapScoreToLevel(0.5)).toBe("Below Expectation");
-    expect(mapScoreToLevel(0)).toBe("Below Expectation");
+  it("maps scores below 1 to below_expectation", () => {
+    expect(mapScoreToLevel(0.5)).toBe("below_expectation");
+    expect(mapScoreToLevel(0)).toBe("below_expectation");
   });
 
-  it("maps scores above 4 to Exceeding Expectation", () => {
-    expect(mapScoreToLevel(4.5)).toBe("Exceeding Expectation");
-    expect(mapScoreToLevel(5)).toBe("Exceeding Expectation");
+  it("maps scores above 4 to exceeding", () => {
+    expect(mapScoreToLevel(4.5)).toBe("exceeding");
+    expect(mapScoreToLevel(5)).toBe("exceeding");
   });
 });
 

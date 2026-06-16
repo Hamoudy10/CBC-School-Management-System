@@ -229,8 +229,8 @@ async function handleBatchAssessmentExport(
   }
 
   const query = supabase
-    .from("assessment_results")
-    .select("*, students!inner(student_id, first_name, last_name, admission_number), strands!inner(name), sub_strands!inner(name)")
+    .from("assessments")
+    .select("*, students!inner(student_id, first_name, last_name, admission_number), competencies!inner(competency_id, name), learning_areas!inner(learning_area_id, name)")
     .eq("school_id", schoolId)
     .eq("class_id", classId);
 
@@ -339,7 +339,7 @@ async function handleAttendanceExport(
   }
 
   let query = supabase
-    .from("attendance_records")
+    .from("attendance")
     .select("*, students!inner(student_id, first_name, last_name, admission_number)")
     .eq("school_id", schoolId);
 

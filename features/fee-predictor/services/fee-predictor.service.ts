@@ -27,12 +27,32 @@ async function getPaymentPatterns(
   studentId: string,
   schoolId: string,
 ): Promise<PaymentPattern> {
+  // Fetch student_fees for this student, then payments through student_fee_id
+  const { data: studentFeeRows } = await supabase
+    .from('student_fees')
+    .select('id')
+    .eq('student_id', studentId)
+    .eq('school_id', schoolId);
+
+  const feeIds = (studentFeeRows ?? []).map((sf: any) => sf.id);
+  if (feeIds.length === 0) {
+    return {
+      totalPayments: 0,
+      averageAmount: 0,
+      paymentFrequency: 0,
+      preferredMethod: 'unknown',
+      averageDaysLate: 0,
+      onTimeRate: 0,
+      lastPaymentDate: null,
+      recentGapDays: null,
+    };
+  }
+
   const { data: payments } = await supabase
     .from('payments')
-    .select('amount_paid, payment_method, paid_at')
-    .eq('school_id', schoolId)
-    .eq('student_id', studentId)
-    .order('paid_at', { ascending: false });
+    .select('amount_paid, payment_method, payment_date')
+    .in('student_fee_id', feeIds)
+    .order('payment_date', { ascending: false });
 
   if (!payments || payments.length === 0) {
     return {
@@ -47,12 +67,11 @@ async function getPaymentPatterns(
     };
   }
 
-  const studentPayments = payments;
-  const totalPayments = studentPayments.length;
-  const averageAmount = studentPayments.reduce((s: number, p: any) => s + Number(p.amount_paid || 0), 0) / totalPayments;
+  const totalPayments = payments.length;
+  const averageAmount = payments.reduce((s: number, p: any) => s + Number(p.amount_paid || 0), 0) / totalPayments;
 
   const methodCounts: Record<string, number> = {};
-  studentPayments.forEach((p: any) => {
+  payments.forEach((p: any) => {
     const method = p.payment_method || 'unknown';
     methodCounts[method] = (methodCounts[method] || 0) + 1;
   });
@@ -65,7 +84,7 @@ async function getPaymentPatterns(
     preferredMethod,
     averageDaysLate: 0,
     onTimeRate: 0.5,
-    lastPaymentDate: studentPayments[0]?.paid_at || null,
+    lastPaymentDate: payments[0]?.payment_date || null,
     recentGapDays: null,
   };
 }

@@ -51,7 +51,7 @@ export const GET = withPermission('academics', 'view', async (request: NextReque
     .select(
       `
       *,
-      learning_area:learning_areas(id, name)
+      learning_area:learning_areas(learning_area_id, name)
     `,
       { count: 'exact' },
     )
@@ -100,7 +100,7 @@ export const POST = withPermission('academics', 'create', async (request: NextRe
       school_id: user.school_id,
       created_by: user.id,
     })
-    .select('*, learning_area:learning_areas(id, name)')
+    .select('*, learning_area:learning_areas(learning_area_id, name)')
     .single();
 
   if (error) {return errorResponse(error.message, 400);}

@@ -21,19 +21,14 @@ import { z } from 'zod';
 
 const createSchema = z.object({
   name: z.string().min(1).max(200),
-  code: z.string().max(20).optional(),
   type: z.enum(['primary', 'secondary', 'mixed', 'academy']).default('primary'),
   address: z.string().max(500).optional(),
   county: z.string().max(100).optional(),
   subCounty: z.string().max(100).optional(),
   contactEmail: z.string().email().optional(),
   contactPhone: z.string().max(20).optional(),
-  website: z.string().url().optional(),
   motto: z.string().max(200).optional(),
-  mission: z.string().max(1000).optional(),
-  vision: z.string().max(1000).optional(),
   registrationNumber: z.string().max(50).optional(),
-  establishedYear: z.coerce.number().int().min(1900).max(new Date().getFullYear() + 1).optional(),
   logoUrl: z.string().url().optional(),
 });
 
@@ -47,7 +42,7 @@ export const GET = withPermission('settings', 'view', async (request: NextReques
     .order('name');
 
   if (user.role !== 'super_admin') {
-    query.eq('id', user.school_id);
+    query.eq('school_id', user.school_id);
   }
 
   const { data, error, count } = await query;
@@ -72,35 +67,30 @@ export const POST = withPermission('settings', 'create', async (request, { user 
   if (data.code) {
     const { data: existing } = await supabase
       .from('schools')
-      .select('id')
-      .eq('code', data.code)
+      .select('school_id')
+      .eq('registration_number', data.code)
       .maybeSingle();
-    if (existing) {return errorResponse(`A school with code "${data.code}" already exists`, 409);}
+    if (existing) {return errorResponse(`A school with registration number "${data.code}" already exists`, 409);}
   }
 
   const { data: newSchool, error } = await supabase
     .from('schools')
     .insert({
       name: data.name,
-      code: data.code || null,
       type: data.type,
       address: data.address || null,
       county: data.county || null,
       sub_county: data.subCounty || null,
       contact_email: data.contactEmail || null,
       contact_phone: data.contactPhone || null,
-      website: data.website || null,
       motto: data.motto || null,
-      mission: data.mission || null,
-      vision: data.vision || null,
       registration_number: data.registrationNumber || null,
-      established_year: data.establishedYear || null,
       logo_url: data.logoUrl || null,
-      status: 'active',
+      is_active: true,
     })
     .select()
     .single();
 
   if (error) {return errorResponse(error.message, 400);}
-  return createdResponse({ id: newSchool.id, school: newSchool }, 'School created successfully');
+  return createdResponse({ school_id: newSchool.school_id, school: newSchool }, 'School created successfully');
 });

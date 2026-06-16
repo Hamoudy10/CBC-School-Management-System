@@ -4,7 +4,7 @@
 // Tests rate limit checking, window reset, and header generation
 // ============================================================
 
-import { describe, it, expect, beforeEach } from "@jest/globals";
+import { describe, it, expect, beforeEach, jest } from "@jest/globals";
 import { checkRateLimit, rateLimit, cleanupRateLimitStore } from "@/lib/api/rateLimit";
 
 // Mock NextRequest
@@ -73,17 +73,22 @@ describe("checkRateLimit", () => {
   });
 
   it("resets after window expires", () => {
+    jest.useFakeTimers();
     const request = createMockRequest("192.168.1.3");
-    const config = { maxRequests: 2, windowMs: 1 }; // 1ms window
+    const config = { maxRequests: 2, windowMs: 1000 };
 
     checkRateLimit(request, config);
     checkRateLimit(request, config);
 
-    // Wait for window to expire
+    // Advance past window expiry
+    jest.advanceTimersByTime(1001);
+    cleanupRateLimitStore();
+
     const expired = checkRateLimit(request, config);
-
     expect(expired.allowed).toBe(true);
     expect(expired.remaining).toBe(1);
+
+    jest.useRealTimers();
   });
 });
 

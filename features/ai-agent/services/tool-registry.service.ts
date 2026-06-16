@@ -117,7 +117,7 @@ const get_student_attendance_summary = makeTool(
     const access = await canAccessStudent(user, input.studentId);
     if (!access) throw new Error("Access denied");
     const supabase = await createSupabaseServerClient();
-    let query = supabase.from("attendance_records").select("*").eq("student_id", input.studentId).eq("school_id", schoolId);
+    let query = supabase.from("attendance").select("*").eq("student_id", input.studentId).eq("school_id", schoolId);
     if (input.termId) query = query.eq("term_id", input.termId);
     if (input.academicYearId) query = query.eq("academic_year_id", input.academicYearId);
     const { data } = await query;
@@ -145,7 +145,7 @@ const get_student_assessment_summary = makeTool(
     const access = await canAccessStudent(user, input.studentId);
     if (!access) throw new Error("Access denied");
     const supabase = await createSupabaseServerClient();
-    let query = supabase.from("assessment_results").select("*, subjects(name)").eq("student_id", input.studentId).eq("school_id", schoolId);
+    let query = supabase.from("assessments").select("*, subjects(name)").eq("student_id", input.studentId).eq("school_id", schoolId);
     if (input.termId) query = query.eq("term_id", input.termId);
     if (input.academicYearId) query = query.eq("academic_year_id", input.academicYearId);
     const { data } = await query;
@@ -206,7 +206,7 @@ const get_class_attendance_summary = makeTool(
   summaryOutput,
   async (input, { schoolId }) => {
     const supabase = await createSupabaseServerClient();
-    let query = supabase.from("attendance_records").select("*, students(first_name, last_name)").eq("school_id", schoolId);
+    let query = supabase.from("attendance").select("*, students(first_name, last_name)").eq("school_id", schoolId);
     if (input.academicYearId) query = query.eq("academic_year_id", input.academicYearId);
     if (input.termId) query = query.eq("term_id", input.termId);
     const { data } = await query;
@@ -225,7 +225,7 @@ const get_class_performance_summary = makeTool(
   summaryOutput,
   async (input, { schoolId }) => {
     const supabase = await createSupabaseServerClient();
-    let query = supabase.from("assessment_results").select("*, students(first_name, last_name, class_id)").eq("school_id", schoolId);
+    let query = supabase.from("assessments").select("*, students(first_name, last_name, class_id)").eq("school_id", schoolId);
     if (input.academicYearId) query = query.eq("academic_year_id", input.academicYearId);
     if (input.termId) query = query.eq("term_id", input.termId);
     const { data } = await query;
@@ -249,7 +249,7 @@ const get_school_health_summary = makeTool(
       supabase.from("students").select("student_id, status").eq("school_id", schoolId),
       supabase.from("staff").select("staff_id, status, position").eq("school_id", schoolId),
       supabase.from("classes").select("class_id").eq("school_id", schoolId),
-      supabase.from("attendance_records").select("status").eq("school_id", schoolId).limit(1000),
+      supabase.from("attendance").select("status").eq("school_id", schoolId).limit(1000),
     ]);
     const activeStudents = (students.data ?? []).filter((s: any) => s.status === "active").length;
     const activeStaff = (teachers.data ?? []).filter((t: any) => t.status === "active").length;
@@ -593,8 +593,8 @@ const predict_dropout_risk = makeTool(
   async (input, { schoolId }) => {
     const supabase = await createSupabaseServerClient();
     const [attendance, assessments] = await Promise.all([
-      supabase.from("attendance_records").select("status").eq("student_id", input.studentId).eq("school_id", schoolId),
-      supabase.from("assessment_results").select("score").eq("student_id", input.studentId).eq("school_id", schoolId),
+      supabase.from("attendance").select("status").eq("student_id", input.studentId).eq("school_id", schoolId),
+      supabase.from("assessments").select("score").eq("student_id", input.studentId).eq("school_id", schoolId),
     ]);
     const attRecords = attendance.data ?? [];
     const assRecords = assessments.data ?? [];
@@ -691,7 +691,7 @@ const record_attendance = makeTool(
   voidOutput,
   async (input, { schoolId }) => {
     const supabase = await createSupabaseServerClient();
-    const { error } = await supabase.from("attendance_records").insert({
+    const { error } = await supabase.from("attendance").insert({
       school_id: schoolId,
       class_id: input.classId,
       student_id: input.studentId,
@@ -723,7 +723,7 @@ const bulk_record_attendance = makeTool(
       status: r.status,
       remarks: r.remarks ?? null,
     }));
-    const { error } = await supabase.from("attendance_records").insert(records);
+    const { error } = await supabase.from("attendance").insert(records);
     if (error) throw new Error(`Failed to record bulk attendance: ${error.message}`);
     return { success: true, message: `Attendance recorded for ${records.length} students` };
   },
@@ -740,7 +740,7 @@ const create_assessment = makeTool(
   voidOutput,
   async (input, { schoolId }) => {
     const supabase = await createSupabaseServerClient();
-    const { error } = await supabase.from("assessment_results").insert({
+    const { error } = await supabase.from("assessments").insert({
       school_id: schoolId,
       student_id: input.studentId,
       subject: input.subject,
@@ -774,7 +774,7 @@ const bulk_create_assessments = makeTool(
       academic_year_id: input.academicYearId,
       remarks: s.remarks ?? null,
     }));
-    const { error } = await supabase.from("assessment_results").insert(records);
+    const { error } = await supabase.from("assessments").insert(records);
     if (error) throw new Error(`Failed to create assessments: ${error.message}`);
     return { success: true, message: `Assessments recorded for ${records.length} students` };
   },
@@ -791,7 +791,7 @@ const create_discipline_record = makeTool(
   voidOutput,
   async (input, { schoolId }) => {
     const supabase = await createSupabaseServerClient();
-    const { error } = await supabase.from("discipline_records").insert({
+    const { error } = await supabase.from("disciplinary_records").insert({
       school_id: schoolId,
       student_id: input.studentId,
       incident_type: input.incidentType,

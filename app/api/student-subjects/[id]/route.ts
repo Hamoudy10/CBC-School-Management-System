@@ -29,7 +29,7 @@ export const GET = withPermission('academics', 'view', async (_request, { user, 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('student_subjects')
-    .select('*, student:students(first_name, last_name), subject:subjects(name, code), teacher:staff(first_name, last_name)')
+    .select('*, student:students(first_name, last_name), subject:subjects(name, code), teacher:staff(staff_id, user:users(first_name, last_name))')
     .eq('id', id)
     .eq('school_id', user.school_id)
     .maybeSingle();

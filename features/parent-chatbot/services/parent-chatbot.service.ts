@@ -63,7 +63,7 @@ async function queryStudentData(
       .eq('student_id', studentId)
       .eq('school_id', schoolId),
     supabase
-      .from('attendance_records')
+      .from('attendance')
       .select('status, date')
       .eq('student_id', studentId)
       .eq('school_id', schoolId)

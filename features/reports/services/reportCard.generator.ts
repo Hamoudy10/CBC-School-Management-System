@@ -18,7 +18,7 @@ export async function assembleReportCardData(
     .select(
       `
       student_id,
-      admission_no,
+      admission_number,
       user:users(first_name, last_name, dob),
       user_profile:user_profiles(photo_url),
       current_class:classes(name)
@@ -233,7 +233,7 @@ export async function assembleReportCardData(
   const reportData: CBCReportCardData = {
     student: {
       student_id: (student as any).student_id,
-      admission_no: (student as any).admission_no,
+      admission_no: (student as any).admission_number,
       name: `${studentUser.first_name} ${studentUser.last_name}`,
       class_name: currentClass?.name || "",
       term,
@@ -297,7 +297,7 @@ export async function assembleClassReportData(
       student_id,
       student:students(
         student_id,
-        admission_no,
+        admission_number,
         user:users(first_name, last_name)
       )
     `,
@@ -342,7 +342,7 @@ export async function assembleClassReportData(
     studentReports.push({
       student_id: (sc as any).student_id,
       name: user ? `${user.first_name} ${user.last_name}` : "Unknown",
-      admission_no: st?.admission_no || "",
+      admission_no: st?.admission_number || "",
       average_score: avgScore,
     });
   }

@@ -39,7 +39,7 @@ export const GET = withPermission('academics', 'view', async (_request, { user, 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from('subjects')
-    .select('*, learning_area:learning_areas(id, name)')
+    .select('*, learning_area:learning_areas(learning_area_id, name)')
     .eq('id', id)
     .eq('school_id', user.school_id)
     .maybeSingle();

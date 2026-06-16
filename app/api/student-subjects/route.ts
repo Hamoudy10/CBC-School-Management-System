@@ -51,9 +51,9 @@ export const GET = withPermission('academics', 'view', async (request: NextReque
     .select(
       `
       *,
-      student:students(id, first_name, last_name, admission_no),
+      student:students(student_id, first_name, last_name, admission_number),
       subject:subjects(id, name, code),
-      teacher:staff(id, first_name, last_name)
+      teacher:staff(staff_id, user:users(first_name, last_name))
     `,
       { count: 'exact' },
     )
@@ -86,7 +86,7 @@ export const POST = withPermission('academics', 'create', async (request, { user
 
   // Verify student and subject belong to school
   const [studentCheck, subjectCheck] = await Promise.all([
-    supabase.from('students').select('id').eq('id', data.studentId).eq('school_id', user.school_id).maybeSingle(),
+    supabase.from('students').select('student_id').eq('student_id', data.studentId).eq('school_id', user.school_id).maybeSingle(),
     supabase.from('subjects').select('id').eq('id', data.subjectId).eq('school_id', user.school_id).maybeSingle(),
   ]);
 

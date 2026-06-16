@@ -21,21 +21,16 @@ import { z } from 'zod';
 
 const updateSchema = z.object({
   name: z.string().min(1).max(200).optional(),
-  code: z.string().max(20).optional(),
   type: z.enum(['primary', 'secondary', 'mixed', 'academy']).optional(),
   address: z.string().max(500).optional(),
   county: z.string().max(100).optional(),
   subCounty: z.string().max(100).optional(),
   contactEmail: z.string().email().optional(),
   contactPhone: z.string().max(20).optional(),
-  website: z.string().url().optional(),
   motto: z.string().max(200).optional(),
-  mission: z.string().max(1000).optional(),
-  vision: z.string().max(1000).optional(),
   registrationNumber: z.string().max(50).optional(),
-  establishedYear: z.coerce.number().int().min(1900).max(new Date().getFullYear() + 1).optional(),
   logoUrl: z.string().url().optional(),
-  status: z.enum(['active', 'inactive']).optional(),
+  isActive: z.boolean().optional(),
 });
 
 export const GET = withPermission('settings', 'view', async (_request, { user, params }) => {
@@ -48,9 +43,9 @@ export const GET = withPermission('settings', 'view', async (_request, { user, p
   const supabase = await createSupabaseServerClient();
 
   // Users can only access their own school unless they're super_admin
-  const query = supabase.from('schools').select('*').eq('id', id);
+  const query = supabase.from('schools').select('*').eq('school_id', id);
   if (user.role !== 'super_admin') {
-    query.eq('id', user.school_id);
+    query.eq('school_id', user.school_id);
   }
 
   const { data, error } = await query.maybeSingle();
@@ -76,28 +71,32 @@ export const PUT = withPermission('settings', 'update', async (request, { user, 
   const supabase = await createSupabaseServerClient();
 
   // Non-super-admins can only update their own school
-  const updatePayload = {
-    ...updateData,
+  const updatePayload: Record<string, unknown> = {
     sub_county: updateData.subCounty,
     contact_email: updateData.contactEmail,
     contact_phone: updateData.contactPhone,
     registration_number: updateData.registrationNumber,
-    established_year: updateData.establishedYear,
     logo_url: updateData.logoUrl,
+    is_active: updateData.isActive,
     updated_at: new Date().toISOString(),
   };
+  if (updateData.name !== undefined) updatePayload.name = updateData.name;
+  if (updateData.type !== undefined) updatePayload.type = updateData.type;
+  if (updateData.address !== undefined) updatePayload.address = updateData.address;
+  if (updateData.county !== undefined) updatePayload.county = updateData.county;
+  if (updateData.motto !== undefined) updatePayload.motto = updateData.motto;
 
   let query = supabase
     .from('schools')
     .update(updatePayload)
-    .eq('id', id);
+    .eq('school_id', id);
 
   if (user.role !== 'super_admin') {
-    query = query.eq('id', user.school_id);
+    query = query.eq('school_id', user.school_id);
   }
 
   const { error } = await query;
 
   if (error) {return errorResponse(error.message, 400);}
-  return successResponse({ id, message: 'School updated successfully' });
+  return successResponse({ school_id: id, message: 'School updated successfully' });
 });

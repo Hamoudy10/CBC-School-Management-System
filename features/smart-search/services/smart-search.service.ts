@@ -33,8 +33,9 @@ export async function smartSearch(
       classes: 'classes(class_id, name, grade_level, stream)',
       learning_areas: 'learning_areas(learning_area_id, name, code)',
       assessment_aggregates: 'assessment_aggregates(average_score, overall_level, term_id, student_id, learning_area_id)',
-      attendance: 'attendance_records(student_id, date, status: present/absent/late, class_id)',
-      fee_payments: 'fee_payments(amount, paid_at, student_id, fee_structure_id)',
+      attendance: 'attendance(student_id, date, status: present/absent/late, class_id)',
+      student_fees: 'student_fees(id, student_id, amount_due, balance, status)',
+      payments: 'payments(amount_paid, payment_date, receipt_number, payment_method)',
     },
     performanceLevels: {
       exceeding: 'above 80%',

@@ -41,20 +41,33 @@ export const GET = withAuth(async (_request: NextRequest, { user }) => {
         .order('computed_at', { ascending: false })
         .limit(10),
       supabase
-        .from('attendance_records')
+        .from('attendance')
         .select('status')
         .eq('student_id', student.student_id)
         .gte('date', new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0]),
       supabase
-        .from('fee_payments')
-        .select('amount, paid_at')
+        .from('student_fees')
+        .select('id, amount_due, amount_paid, balance, status')
         .eq('student_id', student.student_id)
-        .order('paid_at', { ascending: false })
-        .limit(5),
+        .eq('school_id', user.schoolId),
     ]);
 
-    const totalDays = attendance.data?.length ?? 0;
-    const presentDays = attendance.data?.filter((a) => a.status === 'present').length ?? 0;
+    // Fetch payments through student_fees join
+    const feeIds = (fees.data ?? []).map((sf: any) => sf.id);
+    let recentPayments: any[] = [];
+    if (feeIds.length > 0) {
+      const { data: paymentRows } = await supabase
+        .from('payments')
+        .select('amount_paid, payment_date, receipt_number, payment_method')
+        .in('student_fee_id', feeIds)
+        .order('payment_date', { ascending: false })
+        .limit(5);
+      recentPayments = paymentRows ?? [];
+    }
+
+    const attendanceData = attendance.data ?? [];
+    const totalDays = attendanceData.length;
+    const presentDays = attendanceData.filter((a: any) => a.status === 'present').length ?? 0;
 
     enriched.push({
       studentId: student.student_id,
@@ -76,9 +89,11 @@ export const GET = withAuth(async (_request: NextRequest, { user }) => {
         absentDays: totalDays - presentDays,
         attendanceRate: totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0,
       },
-      recentPayments: (fees.data ?? []).map((p: any) => ({
-        amount: p.amount,
-        paidAt: p.paid_at,
+      recentPayments: recentPayments.map((p: any) => ({
+        amount: p.amount_paid,
+        paidAt: p.payment_date,
+        receiptNumber: p.receipt_number,
+        paymentMethod: p.payment_method,
       })),
       guardian: guardians.find((g) => g.student_id === student.student_id),
     });

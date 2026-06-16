@@ -18,7 +18,8 @@
     "test:coverage": "jest --coverage",
     "seed:test-users": "node scripts/seed-test-users.mjs",
     "db:generate-types": "supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > types/database.types.ts",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "check:schema": "node scripts/check-schema-drift.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.3.4",

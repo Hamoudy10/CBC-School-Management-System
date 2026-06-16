@@ -1,5 +1,6 @@
 import { generateGroqCompletion } from '../../../lib/ai/groq.client';
 import type { AIResponse } from '../../../lib/ai/ai.types';
+import { createSupabaseServerClient } from '../../../lib/supabase/server';
 import { logger } from '../../../lib/logger';
 import type { 
   AIReportGenerationRequest, 
@@ -54,13 +55,178 @@ export class AIReportService {
   }
 
     private async buildCBCContext(request: AIReportGenerationRequest) {
-    // This would typically fetch CBC-specific data from the database
-    // For now, we'll use a mock implementation
+    const supabase = await createSupabaseServerClient();
+    const { student_id, term_id, academic_year, school_id } = request;
+
+    // Resolve academic year (accept UUID or year label)
+    let academicYearId = academic_year;
+    const { data: ayByUuid } = await supabase
+      .from('academic_years')
+      .select('academic_year_id')
+      .eq('academic_year_id', academic_year)
+      .maybeSingle();
+    if (!ayByUuid) {
+      const { data: ayByYear } = await supabase
+        .from('academic_years')
+        .select('academic_year_id')
+        .eq('year', parseInt(academic_year, 10))
+        .eq('school_id', school_id)
+        .maybeSingle();
+      if (ayByYear) academicYearId = ayByYear.academic_year_id;
+    }
+
+    // Student info with class and school
+    const { data: student } = await supabase
+      .from('students')
+      .select(`
+        student_id, first_name, last_name, admission_number,
+        class_id, classes!inner(name),
+        schools!inner(name)
+      `)
+      .eq('student_id', student_id)
+      .eq('school_id', school_id)
+      .maybeSingle();
+
+    // Class teacher from teacher_subjects for this class or staff assignment
+    let classTeacherName = '';
+    if (student?.class_id) {
+      const { data: ct } = await supabase
+        .from('teacher_subjects')
+        .select('staff:staff(staff_id, user:users(first_name, last_name))')
+        .eq('class_id', student.class_id)
+        .eq('school_id', school_id)
+        .limit(1)
+        .maybeSingle();
+      if (ct?.staff) {
+        const s = ct.staff as any;
+        classTeacherName = s.user ? `${(s.user as any).first_name} ${(s.user as any).last_name}` : '';
+      }
+    }
+
+    // Learning areas
+    const { data: learningAreas } = await supabase
+      .from('learning_areas')
+      .select('learning_area_id, name, code, description')
+      .eq('school_id', school_id)
+      .order('name' as any);
+
+    // Competencies with sub-strand → strand → learning area chain
+    const { data: competencies } = await supabase
+      .from('competencies')
+      .select(`
+        competency_id, name, description, sort_order,
+        sub_strand_id,
+        sub_strands!inner(
+          sub_strand_id, name,
+          strand_id,
+          strands!inner(
+            strand_id, name,
+            learning_area_id,
+            learning_areas!inner(learning_area_id, name)
+          )
+        )
+      `)
+      .eq('school_id', school_id)
+      .order('sort_order' as any);
+
+    // Assessments for this student in this term/academic year
+    const { data: assessments } = await supabase
+      .from('assessments')
+      .select(`
+        assessment_id, score, remarks, assessment_date,
+        competency_id,
+        competencies!inner(competency_id, name),
+        learning_area_id,
+        learning_areas!inner(learning_area_id, name)
+      `)
+      .eq('student_id', student_id)
+      .eq('term_id', term_id)
+      .eq('academic_year_id', academicYearId);
+
+    // Assessment aggregates per learning area (precomputed)
+    const { data: aggregates } = await supabase
+      .from('assessment_aggregates')
+      .select('*')
+      .eq('student_id', student_id)
+      .eq('term_id', term_id)
+      .eq('academic_year_id', academicYearId);
+
+    // Attendance summary
+    const { data: attendance } = await supabase
+      .from('attendance')
+      .select('status, date')
+      .eq('student_id', student_id)
+      .eq('term_id', term_id)
+      .eq('school_id', school_id);
+    const totalDays = (attendance ?? []).length;
+    const presentCount = (attendance ?? []).filter((a: any) => a.status === 'present').length;
+    const absentCount = (attendance ?? []).filter((a: any) => a.status === 'absent').length;
+    const lateCount = (attendance ?? []).filter((a: any) => a.status === 'late').length;
+    const attendancePct = totalDays > 0 ? Math.round((presentCount / totalDays) * 100) : 0;
+
+    // Teacher remarks from existing report card
+    const { data: existingReport } = await supabase
+      .from('report_cards')
+      .select('class_teacher_remarks, principal_remarks')
+      .eq('student_id', student_id)
+      .eq('term_id', term_id)
+      .eq('academic_year_id', academicYearId)
+      .maybeSingle();
+
+    // Term info
+    const { data: term } = await supabase
+      .from('terms')
+      .select('name')
+      .eq('term_id', term_id)
+      .maybeSingle();
+
     return {
-      learning_areas: [],
-      competencies: [],
-      student_performance: []
-    } as any;
+      student: student ? {
+        id: (student as any).student_id,
+        name: `${(student as any).first_name} ${(student as any).last_name}`,
+        admission_number: (student as any).admission_number,
+        class: (student as any).classes?.name ?? '',
+        class_teacher: classTeacherName,
+        school: (student as any).schools?.name ?? '',
+      } : null,
+      term: term?.name ?? '',
+      learning_areas: (learningAreas ?? []).map((la: any) => ({
+        id: la.learning_area_id,
+        name: la.name,
+        code: la.code ?? '',
+        description: la.description ?? '',
+        average_score: (aggregates ?? []).find((a: any) => a.learning_area_id === la.learning_area_id)?.average_score ?? null,
+        overall_level: (aggregates ?? []).find((a: any) => a.learning_area_id === la.learning_area_id)?.overall_level ?? null,
+      })),
+      competencies: (competencies ?? []).map((c: any) => ({
+        id: c.competency_id,
+        name: c.name,
+        description: c.description ?? '',
+        learning_area: c.sub_strands?.strands?.learning_areas?.name ?? '',
+        learning_area_id: c.sub_strands?.strands?.learning_area_id ?? '',
+      })),
+      assessments: (assessments ?? []).map((a: any) => ({
+        id: a.assessment_id,
+        score: a.score,
+        remarks: a.remarks ?? '',
+        date: a.assessment_date,
+        competency: a.competencies?.name ?? '',
+        competency_id: a.competency_id,
+        learning_area: a.learning_areas?.name ?? '',
+        learning_area_id: a.learning_area_id,
+      })),
+      attendance: {
+        total_days: totalDays,
+        present: presentCount,
+        absent: absentCount,
+        late: lateCount,
+        percentage: attendancePct,
+      },
+      teacher_remarks: {
+        class_teacher: (existingReport as any)?.class_teacher_remarks ?? '',
+        principal: (existingReport as any)?.principal_remarks ?? '',
+      },
+    };
   }
 
     private async generateStructuredReport(

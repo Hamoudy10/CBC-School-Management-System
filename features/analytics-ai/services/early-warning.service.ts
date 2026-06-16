@@ -39,7 +39,7 @@ async function collectStudentSignals(
 ): Promise<Record<string, any>> {
   const [attendance, assessments, discipline, fees] = await Promise.all([
     supabase
-      .from('attendance_records')
+      .from('attendance')
       .select('status, date')
       .eq('student_id', studentId)
       .eq('school_id', schoolId)
@@ -68,7 +68,7 @@ async function collectStudentSignals(
 
   const attendanceRecords = attendance.data || [];
   const totalDays = attendanceRecords.length;
-  const absences = attendanceRecords.filter((r: any) => r.status === 'Absent').length;
+  const absences = attendanceRecords.filter((r: any) => r.status === 'absent').length;
   const attendanceRate = totalDays > 0 ? ((totalDays - absences) / totalDays) * 100 : 100;
 
   const assessmentScores = (assessments.data || []).map((a: any) => Number(a.average_score || 0));

@@ -19,7 +19,7 @@ export class ReportDataService {
     const { data, error } = await supabase
       .from("schools")
       .select("name, address, contact_phone, contact_email, logo_url, motto")
-      .eq("id", schoolId)
+      .eq("school_id", schoolId)
       .single();
 
     if (error || !data) throw new Error("School not found");
@@ -37,24 +37,24 @@ export class ReportDataService {
       .from("students")
       .select(
         `
-        first_name, last_name, admission_no, date_of_birth, gender,
-        class:classes!students_current_class_id_fkey(name),
-        parent:student_parents(
-          parent:users(first_name, last_name, phone)
+        first_name, last_name, admission_number, date_of_birth, gender,
+        class:classes!current_class_id(name),
+        student_guardians(
+          guardian:users!guardian_user_id(first_name, last_name, phone)
         )
       `,
       )
-      .eq("id", studentId)
+      .eq("student_id", studentId)
       .eq("school_id", schoolId)
       .single();
 
     if (error || !data) throw new Error("Student not found");
 
-    const parentInfo = (data.parent as any)?.[0]?.parent;
+    const parentInfo = (data.student_guardians as any)?.[0]?.guardian;
 
     return {
       name: `${data.first_name} ${data.last_name}`,
-      admission_no: data.admission_no,
+      admission_no: data.admission_number,
       class_name: (data.class as any)?.name || "",
       date_of_birth: data.date_of_birth,
       gender: data.gender,
@@ -287,10 +287,10 @@ export class ReportDataService {
       .select(
         `
         name,
-        class_teacher:users!classes_class_teacher_id_fkey(first_name, last_name)
+        class_teacher:users!class_teacher_id(first_name, last_name)
       `,
       )
-      .eq("id", classId)
+      .eq("class_id", classId)
       .eq("school_id", schoolId)
       .single();
 
@@ -301,9 +301,9 @@ export class ReportDataService {
       .from("students")
       .select(
         `
-        admission_no, first_name, last_name, gender, date_of_birth,
-        parent:student_parents(
-          parent:users(first_name, last_name, phone)
+        admission_number, first_name, last_name, gender, date_of_birth,
+        student_guardians(
+          guardian:users!guardian_user_id(first_name, last_name, phone)
         )
       `,
       )
@@ -313,10 +313,10 @@ export class ReportDataService {
       .order("first_name");
 
     const studentList = (students || []).map((s: any, idx: number) => {
-      const parent = s.parent?.[0]?.parent;
+      const parent = s.student_guardians?.[0]?.guardian;
       return {
         no: idx + 1,
-        admission_no: s.admission_no,
+        admission_no: s.admission_number,
         name: `${s.first_name} ${s.last_name}`,
         gender: s.gender || "N/A",
         date_of_birth: s.date_of_birth || "N/A",
@@ -373,23 +373,29 @@ export class ReportDataService {
       .eq("student_id", studentId)
       .eq("school_id", schoolId);
 
-    // Get payments
-    const { data: payments } = await supabase
-      .from("payments")
-      .select(
-        `
-        amount_paid, payment_method, transaction_id, receipt_no, paid_at,
-        student_fee:student_fees(
-          fee_structure:fee_structures(name)
-        )
-      `,
-      )
-      .eq("school_id", schoolId)
-      .eq("student_fee.student_id", studentId)
-      .order("paid_at", { ascending: false });
+    // Get student fee IDs for this student, then payments through student_fee_id
+    const feeRows = fees ?? [];
+    const feeIds = feeRows.map((f: any) => f.id).filter(Boolean);
 
-    const feeList = (fees || []).map((f: any) => {
-      const paid = (payments || [])
+    let paymentRows: any[] = [];
+    if (feeIds.length > 0) {
+      const { data: p } = await supabase
+        .from("payments")
+        .select(
+          `
+          amount_paid, payment_method, transaction_id, receipt_number, payment_date,
+          student_fee:student_fees!student_fee_id(
+            fee_structure:fee_structures(name)
+          )
+        `,
+        )
+        .in("student_fee_id", feeIds)
+        .order("payment_date", { ascending: false });
+      paymentRows = p ?? [];
+    }
+
+    const feeList = (fees ?? []).map((f: any) => {
+      const paid = (paymentRows ?? [])
         .filter(
           (p: any) =>
             p.student_fee?.fee_structure?.name === f.fee_structure?.name,
@@ -406,9 +412,9 @@ export class ReportDataService {
       };
     });
 
-    const paymentList = (payments || []).map((p: any) => ({
-      date: p.paid_at,
-      receipt_no: p.receipt_no || p.transaction_id || "N/A",
+    const paymentList = paymentRows.map((p: any) => ({
+      date: p.payment_date,
+      receipt_no: p.receipt_number || p.transaction_id || "N/A",
       amount: p.amount_paid,
       method: p.payment_method,
     }));
@@ -441,14 +447,14 @@ export class ReportDataService {
     const { data: classData } = await supabase
       .from("classes")
       .select("name")
-      .eq("id", classId)
+      .eq("class_id", classId)
       .eq("school_id", schoolId)
       .single();
 
     // Get students in class
     const { data: students } = await supabase
       .from("students")
-      .select("id, admission_no, first_name, last_name")
+      .select("student_id, admission_number, first_name, last_name")
       .eq("school_id", schoolId)
       .eq("current_class_id", classId)
       .eq("status", "active")
@@ -473,7 +479,7 @@ export class ReportDataService {
       } as AttendanceReportData;
     }
 
-    const studentIds = students.map((s) => s.id);
+    const studentIds = students.map((s) => s.student_id);
 
     const { data: records } = await supabase
       .from("attendance")
@@ -498,7 +504,7 @@ export class ReportDataService {
 
     let totalRate = 0;
     const studentReports = students.map((s) => {
-      const statuses = studentMap.get(s.id) || [];
+      const statuses = studentMap.get(s.student_id) || [];
       const present = statuses.filter((st) => st === "present").length;
       const absent = statuses.filter((st) => st === "absent").length;
       const late = statuses.filter((st) => st === "late").length;
@@ -509,7 +515,7 @@ export class ReportDataService {
 
       return {
         name: `${s.first_name} ${s.last_name}`,
-        admission_no: s.admission_no,
+        admission_no: s.admission_number,
         class_name: classData?.name || "",
         present,
         absent,
