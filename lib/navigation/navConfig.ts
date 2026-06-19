@@ -46,6 +46,8 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Academics', href: '/academics', icon: BookOpen, module: 'academics', category: 'academic' },
   { label: 'CBC Copilot', href: '/cbc-copilot', icon: Sparkles, module: 'academics', category: 'academic' },
   { label: 'Teacher AI', href: '/teacher-ai', icon: Brain, module: 'assessments', category: 'academic' },
+  { label: 'AI Grading', href: '/ai-tools/grading', icon: ClipboardCheck, module: 'assessments', category: 'academic' },
+  { label: 'AI Lesson Planner', href: '/ai-tools/lesson-planner', icon: BookOpen, module: 'academics', category: 'academic' },
   { label: 'Assessments', href: '/assessments', icon: ClipboardCheck, module: 'assessments', category: 'academic' },
   { label: 'Portfolio', href: '/assessments/portfolio', icon: FolderOpen, module: 'assessments', category: 'academic' },
   { label: 'Extracurricular', href: '/extracurricular', icon: Trophy, module: 'academics', category: 'academic' },
@@ -62,8 +64,11 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Discipline', href: '/discipline', icon: ShieldAlert, module: 'compliance', category: 'admin' },
   { label: 'Communication', href: '/communication', icon: MessageSquare, module: 'communication', category: 'admin' },
   { label: 'Parent Portal', href: '/parent', icon: Users, module: 'communication', category: 'core' },
+  { label: 'Parent Engagement', href: '/parent/engagement', icon: MessageSquare, module: 'communication', category: 'core' },
   { label: 'Reports', href: '/reports', icon: BarChart3, module: 'reports', category: 'admin' },
   { label: 'Analytics AI', href: '/analytics', icon: LineChart, module: 'analytics', category: 'admin' },
+  { label: 'Predictive Analytics', href: '/analytics/predictive', icon: LineChart, module: 'analytics', category: 'admin' },
+  { label: 'AI Data Query', href: '/analytics/nl-query', icon: MessageSquare, module: 'analytics', category: 'admin' },
 
   // Support
   { label: 'Library', href: '/library', icon: Library, module: 'library', category: 'support' },
@@ -117,6 +122,7 @@ const ROUTE_MODULES: { prefix: string; module: ModuleName }[] = [
   { prefix: '/users', module: 'users' },
   { prefix: '/settings', module: 'settings' },
   { prefix: '/analytics', module: 'analytics' },
+  { prefix: '/ai-tools', module: 'assessments' },
   { prefix: '/compliance', module: 'compliance' },
 ];
 
