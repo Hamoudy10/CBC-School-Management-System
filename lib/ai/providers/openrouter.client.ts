@@ -155,7 +155,8 @@ async function openRouterGenerate<TJson>(
 
       let data: TJson | string;
       if (responseFormat === "json") {
-        const parsed = safeJsonParse<unknown>(rawText);
+        const cleaned = rawText.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
+        const parsed = safeJsonParse<unknown>(cleaned);
         if (!parsed.success) {
           throw new AIProviderError(
             `OpenRouter returned invalid JSON: ${(parsed as { success: false; error: string }).error}`,

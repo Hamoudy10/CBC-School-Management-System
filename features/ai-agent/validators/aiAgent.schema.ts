@@ -5,8 +5,8 @@ export const agentPlanSchema = z.object({
   userGoal: z.string().min(0).max(500).default(""),
   toolName: z.string().nullable(),
   toolInput: z.record(z.unknown()).nullable(),
-  requiresConfirmation: z.boolean(),
-  riskLevel: z.enum(["low", "medium", "high", "critical"]),
+  requiresConfirmation: z.boolean().default(false),
+  riskLevel: z.enum(["low", "medium", "high", "critical"]).default("low"),
   reasoningSummary: z.string().min(0).max(1000).default(""),
   userFacingMessage: z.string().min(1).max(2000),
 });

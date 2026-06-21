@@ -388,19 +388,44 @@ export function buildCurrentTimeAnswer(date = new Date(), timeZone = DEFAULT_AGE
   return `The current time is ${time}.`;
 }
 
-const GREETING_PATTERNS = [
-  /^(?:hello|hi|hey|heyy|heya|howdy)\b/i,
-  /\b(?:good\s+(?:morning|afternoon|evening|day)|greetings|sup|yo)\b/i,
-  /^nice\s+to\s+(?:meet|see)\s+(?:you|ya)\b/i,
-  /^what'?s?\s+up\b/i,
-  /^how\s+(?:are\s+you|are\s+things|is\s+it\s+going)\s*\??$/i,
+const SOCIAL_PATTERNS = [
+  // Greetings
+  [/^(?:hello|hi|hey|heyy|heya|howdy)\b/i, true],
+  [/\b(?:good\s+(?:morning|afternoon|evening|day)|greetings|sup|yo)\b/i, true],
+  [/^nice\s+to\s+(?:meet|see)\s+(?:you|ya)\b/i, true],
+  [/^what'?s?\s+up\b/i, true],
+  // Wellbeing checks
+  [/^(?:how\s+are\s+you|how're\s+you|how\s+are\s+things|how's\s+it\s+going|you\s+okay|are\s+you\s+okay|are\s+you\s+ok|u\s+ok|you\s+alright|everything\s+okay)\s*\??$/i, true],
+  [/^(?:how\s+(?:are|do)\s+you\s+(?:feel|do|doing))\s*\??$/i, true],
+  // Single-word pleasantries
+  [/^(?:thanks|thank\s+you|thankyou|ty|thx|ok|okay|k|sure|alright|fine|good|great|nice|cool|awesome|perfect|welcome|yw|np)$/i, true],
+  // Short vague inputs that aren't data queries
+  [/^(?:yeah|yes|no|nope|yep|nah|maybe|idk|dunno|sure|whatever)$/i, true],
 ];
 
-function handleGreeting(message: string): string | null {
+function isSocialQuery(message: string): boolean {
   const n = message.trim().toLowerCase();
-  if (GREETING_PATTERNS.some((p) => p.test(n))) {
+  return SOCIAL_PATTERNS.some(([pattern]) => (pattern as RegExp).test(n));
+}
+
+function handleGreeting(message: string): string | null {
+  if (isSocialQuery(message)) {
     const hour = new Date().getHours();
     const timeGreeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+    const n = message.trim().toLowerCase();
+    const isThankYou = /^(?:thanks|thank\s+you|thankyou|ty|thx)$/i.test(n);
+    const isWellbeing = /^(?:how\s+are\s+you|are\s+you\s+okay|you\s+okay|you\s+alright|how're\s+you|how\s+are\s+things|how's\s+it\s+going|how\s+are\s+you\s+(?:feeling|doing)|are\s+you\s+ok)\s*\??$/i.test(n);
+    if (isThankYou) {
+      return "You're welcome! Let me know if you need anything else.";
+    }
+    if (isWellbeing) {
+      const responses = [
+        "I'm doing great, thank you for asking! How can I help you with the school management system today?",
+        "I'm functioning well! Ready to assist you. What do you need?",
+        "All good here! What can I help you with?",
+      ];
+      return responses[Math.floor(Math.random() * responses.length)];
+    }
     const responses = [
       `${timeGreeting}! I'm the CBC School Management AI assistant. How can I help you today?`,
       `Hi there! Welcome back. What would you like to work on in the system?`,
