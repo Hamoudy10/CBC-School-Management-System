@@ -174,12 +174,15 @@ ${request.message}${retryContextStr}`;
       if (attempt < MAX_RETRY_ATTEMPTS) {
         continue;
       }
-      const isSchemaError = msg.includes("did not match schema") || msg.includes("invalid JSON");
-      const userMessage = isSchemaError
-        ? "I had trouble understanding your request. Please try rephrasing it more clearly."
-        : "I encountered an issue while processing your request. Please try rephrasing.";
       await tryCompact(sessionId, schoolId);
-      return buildErrorResponse(sessionId, userMessage);
+      const userMessage = buildConversationalFallback(request.message);
+      await saveMessage(sessionId, "assistant", userMessage, schoolId);
+      return {
+        sessionId,
+        message: { role: "assistant", content: userMessage },
+        confidence: 0,
+        warnings: [],
+      };
     }
 
     if (!planResult.success) {
@@ -188,7 +191,14 @@ ${request.message}${retryContextStr}`;
         continue;
       }
       await tryCompact(sessionId, schoolId);
-      return buildErrorResponse(sessionId, "Failed to analyze your request. Please try again.");
+      const userMessage = buildConversationalFallback(request.message);
+      await saveMessage(sessionId, "assistant", userMessage, schoolId);
+      return {
+        sessionId,
+        message: { role: "assistant", content: userMessage },
+        confidence: 0,
+        warnings: [],
+      };
     }
 
     const plan = planResult.data as AgentPlan;
@@ -365,6 +375,23 @@ async function tryCompact(sessionId: string, schoolId: string): Promise<void> {
   }
 }
 
+function buildConversationalFallback(message: string): string {
+  const n = message.trim().toLowerCase();
+  if (/^(?:how\s+are\s+you|are\s+you\s+(?:ok|okay)\s*)\??$/i.test(n)) {
+    const responses = [
+      "I'm doing well! I'm here to help you with the school management system. You can ask me about students, attendance, fees, grades, or anything else school-related. What would you like to know?",
+      "I'm great, thanks for asking! I can help you manage students, track attendance, view fee records, check grades, and more. What do you need help with?",
+    ];
+    return responses[Math.floor(Math.random() * responses.length)];
+  }
+  const fallbacks = [
+    "I'm here to help you manage the school system. You can ask me about students, attendance, fees, report cards, timetables, or any other school management task. What would you like to do?",
+    "I'm your AI assistant for the school management system. I can help you look up information, generate reports, draft messages, and more. What are you working on?",
+    "I'm ready to help! I can answer questions about student records, attendance data, fee balances, academic performance, and other school operations. What would you like me to look into?",
+  ];
+  return fallbacks[Math.floor(Math.random() * fallbacks.length)];
+}
+
 export function buildCurrentDateAnswer(date = new Date(), timeZone = DEFAULT_AGENT_TIME_ZONE): string {
   const weekday = new Intl.DateTimeFormat("en-GB", { weekday: "long", timeZone }).format(date);
   const fullDate = new Intl.DateTimeFormat("en-GB", {
@@ -388,44 +415,16 @@ export function buildCurrentTimeAnswer(date = new Date(), timeZone = DEFAULT_AGE
   return `The current time is ${time}.`;
 }
 
-const SOCIAL_PATTERNS = [
-  // Greetings
-  [/^(?:hello|hi|hey|heyy|heya|howdy)\b/i, true],
-  [/\b(?:good\s+(?:morning|afternoon|evening|day)|greetings|sup|yo)\b/i, true],
-  [/^nice\s+to\s+(?:meet|see)\s+(?:you|ya)\b/i, true],
-  [/^what'?s?\s+up\b/i, true],
-  // Wellbeing checks
-  [/^(?:how\s+are\s+you|how're\s+you|how\s+are\s+things|how's\s+it\s+going|you\s+okay|are\s+you\s+okay|are\s+you\s+ok|u\s+ok|you\s+alright|everything\s+okay)\s*\??$/i, true],
-  [/^(?:how\s+(?:are|do)\s+you\s+(?:feel|do|doing))\s*\??$/i, true],
-  // Single-word pleasantries
-  [/^(?:thanks|thank\s+you|thankyou|ty|thx|ok|okay|k|sure|alright|fine|good|great|nice|cool|awesome|perfect|welcome|yw|np)$/i, true],
-  // Short vague inputs that aren't data queries
-  [/^(?:yeah|yes|no|nope|yep|nah|maybe|idk|dunno|sure|whatever)$/i, true],
+const GREETING_PATTERNS = [
+  /^(?:hello|hi|hey|heyy|heya|howdy)\b/i,
+  /\b(?:good\s+(?:morning|afternoon|evening|day)|greetings)\b/i,
 ];
 
-function isSocialQuery(message: string): boolean {
-  const n = message.trim().toLowerCase();
-  return SOCIAL_PATTERNS.some(([pattern]) => (pattern as RegExp).test(n));
-}
-
 function handleGreeting(message: string): string | null {
-  if (isSocialQuery(message)) {
+  const n = message.trim().toLowerCase();
+  if (GREETING_PATTERNS.some((p) => p.test(n))) {
     const hour = new Date().getHours();
     const timeGreeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-    const n = message.trim().toLowerCase();
-    const isThankYou = /^(?:thanks|thank\s+you|thankyou|ty|thx)$/i.test(n);
-    const isWellbeing = /^(?:how\s+are\s+you|are\s+you\s+okay|you\s+okay|you\s+alright|how're\s+you|how\s+are\s+things|how's\s+it\s+going|how\s+are\s+you\s+(?:feeling|doing)|are\s+you\s+ok)\s*\??$/i.test(n);
-    if (isThankYou) {
-      return "You're welcome! Let me know if you need anything else.";
-    }
-    if (isWellbeing) {
-      const responses = [
-        "I'm doing great, thank you for asking! How can I help you with the school management system today?",
-        "I'm functioning well! Ready to assist you. What do you need?",
-        "All good here! What can I help you with?",
-      ];
-      return responses[Math.floor(Math.random() * responses.length)];
-    }
     const responses = [
       `${timeGreeting}! I'm the CBC School Management AI assistant. How can I help you today?`,
       `Hi there! Welcome back. What would you like to work on in the system?`,
