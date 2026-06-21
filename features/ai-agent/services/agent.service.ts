@@ -25,6 +25,7 @@ const SYSTEM_PROMPT = `You are an AI assistant for the CBC School Management Sys
 - If outside permissions, refuse politely and mention what modules they DO have access to.
 - If the user's question does not match any entity in the catalog (e.g. "roles", "permissions", "features", "system capabilities"), use "answer" intent and say "I don't have information about that" rather than trying to invent an entity name.
 - For questions about user accounts or profiles (e.g. "how many user profiles", "list users"), use the "users" entity.
+- Handle greetings and small talk politely and warmly. When the user says hello, hi, hey, good morning/afternoon/evening, or similar greetings, respond with a friendly greeting and ask how you can help.
 
 ## Plan Structure
 Analyze requests and produce a JSON plan: intent ("answer"|"retrieve"|"act"|"clarify"|"refuse"), userGoal, toolName (or null), toolInput (or null), requiresConfirmation, riskLevel ("low"|"medium"|"high"|"critical"), reasoningSummary, userFacingMessage.
@@ -46,7 +47,9 @@ User: "Unpaid fees?" → {"intent":"retrieve","toolName":"query_school_data","to
 User: "How many active students?" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"students","operation":"count","filters":[{"field":"status","operator":"eq","value":"active"}]}}
 User: "Low attendance students" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"attendance","operation":"summary","filters":[{"field":"status","operator":"eq","value":"absent"}],"groupBy":["student_id"],"limit":100}}
 User: "How many user profiles?" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"users","operation":"count"}}
-User: "List all users" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"users","operation":"list","select":["user_id","first_name","last_name","email","role","status"],"limit":50}}`;
+User: "List all users" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"users","operation":"list","select":["user_id","first_name","last_name","email","role","status"],"limit":50}}
+User: "hello" → {"intent":"answer","userGoal":"Greet the user","toolName":null,"toolInput":null,"requiresConfirmation":false,"riskLevel":"low","reasoningSummary":"User greeted the assistant","userFacingMessage":"Hello! Welcome to the CBC School Management System. How can I help you today?"}
+User: "hi there" → {"intent":"answer","userGoal":"Greet the user","toolName":null,"toolInput":null,"requiresConfirmation":false,"riskLevel":"low","reasoningSummary":"User greeted the assistant","userFacingMessage":"Hi there! I'm your AI assistant. What can I help you with?"}`;
 
 const DEFAULT_AGENT_TIME_ZONE = process.env.AI_AGENT_TIMEZONE ?? "Europe/London";
 
@@ -131,7 +134,7 @@ export async function processAgentMessage(
 - Current Module: ${pageContext.currentModule ?? "N/A"}
 
 ## Entity Columns
-${buildEntityColumnsHelp()}
+${buildEntityColumnsHelp(request.message)}
 
 ## Tools Available to You
 ${toolsDescription || "No tools available with your current permissions."}
@@ -153,7 +156,7 @@ ${request.message}${retryContextStr}`;
         responseFormat: "json",
         responseSchema: agentPlanSchema,
         requestLabel: "ai-agent.plan",
-        temperature: 0.3,
+        temperature: 0.5,
         maxOutputTokens: 1000,
       });
     } catch (err) {
@@ -167,8 +170,8 @@ ${request.message}${retryContextStr}`;
         durationMs: Date.now() - startedAt,
         error: msg,
       });
-      if (previousPlans.length > 0) {
-        previousPlans.push({ plan: "(planning failed)", error: msg });
+      previousPlans.push({ plan: "(planning failed)", error: msg });
+      if (attempt < MAX_RETRY_ATTEMPTS) {
         continue;
       }
       const isSchemaError = msg.includes("did not match schema") || msg.includes("invalid JSON");
@@ -385,6 +388,29 @@ export function buildCurrentTimeAnswer(date = new Date(), timeZone = DEFAULT_AGE
   return `The current time is ${time}.`;
 }
 
+const GREETING_PATTERNS = [
+  /^(?:hello|hi|hey|heyy|heya|howdy)\b/i,
+  /\b(?:good\s+(?:morning|afternoon|evening|day)|greetings|sup|yo)\b/i,
+  /^nice\s+to\s+(?:meet|see)\s+(?:you|ya)\b/i,
+  /^what'?s?\s+up\b/i,
+  /^how\s+(?:are\s+you|are\s+things|is\s+it\s+going)\s*\??$/i,
+];
+
+function handleGreeting(message: string): string | null {
+  const n = message.trim().toLowerCase();
+  if (GREETING_PATTERNS.some((p) => p.test(n))) {
+    const hour = new Date().getHours();
+    const timeGreeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+    const responses = [
+      `${timeGreeting}! I'm the CBC School Management AI assistant. How can I help you today?`,
+      `Hi there! Welcome back. What would you like to work on in the system?`,
+      `Hello! I'm here to help you with the school management system. What do you need?`,
+    ];
+    return responses[Math.floor(Math.random() * responses.length)];
+  }
+  return null;
+}
+
 export function isCurrentDateQuestion(message: string): boolean {
   const n = message.toLowerCase().trim();
   return (
@@ -460,14 +486,20 @@ function preProcessUserMessage(message: string): string {
   return text;
 }
 
-function buildEntityColumnsHelp(): string {
+function buildEntityColumnsHelp(message?: string): string {
   const catalog = getDataCatalog();
+  const names = Object.keys(catalog);
+  const isDataQuery = message
+    ? /\b(how many|count|total|list|show|display|find|search|who|what|which|students?|fees?|attendance|staff|teachers?|classes|assessments?|reports?|payments?|balances?|dues?|profiles?|users?|roles?|permissions?|subjects?|timetable|schedule|lesson|exam|result|grade|score|discipline|incident|message|announcement|audit)\b/i.test(message)
+    : true;
+  if (!isDataQuery) {
+    return names.length > 0 ? `Available entities: ${names.slice(0, 20).join(", ")}.` : "No entities available.";
+  }
   const lines: string[] = [];
   for (const [name, entity] of Object.entries(catalog)) {
-    const filterable = entity.filterableColumns.join(",");
-    const readable = entity.readableColumns.slice(0, 6).join(",");
+    const readable = entity.readableColumns.slice(0, 3).join(",");
     const extra = entity.joins ? Object.values(entity.joins).map((j) => `${j.relation}(${j.select})`).join(" ") : "";
-    lines.push(`- ${name}: filter=[${filterable}] select=[${readable}]${extra ? ` join=${extra}` : ""}`);
+    lines.push(`- ${name}: select=[${readable}]${extra ? ` join=${extra}` : ""}`);
   }
   return lines.join("\n");
 }
@@ -480,6 +512,21 @@ async function handleDeterministicRequest(args: {
   availableTools: AgentTool[];
 }): Promise<AgentChatResponse | null> {
   const { request, user, schoolId, sessionId, availableTools } = args;
+
+  const greetingResponse = handleGreeting(request.message);
+  if (greetingResponse) {
+    const content = greetingResponse;
+    await saveMessage(sessionId, "assistant", content, schoolId, {
+      deterministic: true,
+      type: "greeting",
+    });
+    return {
+      sessionId,
+      message: { role: "assistant", content },
+      confidence: 1,
+      warnings: [],
+    };
+  }
 
   if (isCurrentDateQuestion(request.message)) {
     const content = buildCurrentDateAnswer();

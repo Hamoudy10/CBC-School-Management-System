@@ -2,12 +2,12 @@ import { z } from "zod";
 
 export const agentPlanSchema = z.object({
   intent: z.enum(["answer", "retrieve", "act", "clarify", "refuse"]),
-  userGoal: z.string().min(1).max(500),
+  userGoal: z.string().min(0).max(500).default(""),
   toolName: z.string().nullable(),
   toolInput: z.record(z.unknown()).nullable(),
   requiresConfirmation: z.boolean(),
   riskLevel: z.enum(["low", "medium", "high", "critical"]),
-  reasoningSummary: z.string().min(1).max(1000),
+  reasoningSummary: z.string().min(0).max(1000).default(""),
   userFacingMessage: z.string().min(1).max(2000),
 });
 
