@@ -44,7 +44,15 @@ function validateAgainstCatalog(input: QuerySchoolDataInput): DataCatalogEntity 
 
   if (input.select) {
     for (const col of input.select) {
-      const isJoinColumn = entity.joins && Object.values(entity.joins).some((j: DataCatalogJoin) => j.select.split(",").map((s: string) => s.trim()).includes(col));
+      const dotIdx = col.indexOf(".");
+      const colName = dotIdx > 0 ? col.slice(dotIdx + 1) : col;
+      const relationName = dotIdx > 0 ? col.slice(0, dotIdx) : null;
+      const isJoinColumn = entity.joins && Object.values(entity.joins).some((j: DataCatalogJoin) => {
+        const joinCols = j.select.split(",").map((s: string) => s.trim());
+        if (joinCols.includes(col) || joinCols.includes(colName)) return true;
+        if (relationName && j.relation === relationName && joinCols.includes(colName)) return true;
+        return false;
+      });
       if (!isJoinColumn && !entity.readableColumns.includes(col)) {
         throw new QueryValidationError(`Column "${col}" is not readable for entity "${input.entity}". Allowed: ${entity.readableColumns.join(", ")}`);
       }
