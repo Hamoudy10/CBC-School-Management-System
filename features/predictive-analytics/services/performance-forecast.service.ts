@@ -98,7 +98,8 @@ export async function generatePerformanceForecast(
         .map((a) => a.score);
 
       const trend = determineTrend(areaScores);
-      const studentName = `${student.users?.first_name ?? student.first_name} ${student.users?.last_name ?? student.last_name}`;
+      const usersArr = student.users as { first_name?: string; last_name?: string }[] | undefined;
+      const studentName = `${usersArr?.[0]?.first_name ?? student.first_name} ${usersArr?.[0]?.last_name ?? student.last_name}`;
       const areaName = Array.isArray(agg.learning_areas)
         ? agg.learning_areas[0]?.name
         : (agg.learning_areas as any)?.name ?? "Unknown";

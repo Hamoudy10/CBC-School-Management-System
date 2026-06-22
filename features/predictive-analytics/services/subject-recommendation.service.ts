@@ -59,8 +59,9 @@ export async function generateSubjectRecommendation(
     .select("learning_area_id, name, code")
     .eq("school_id", schoolId);
 
+  const usersArr = student.users as { first_name?: string; last_name?: string }[] | undefined;
   const studentName =
-    `${student.users?.first_name ?? ""} ${student.users?.last_name ?? ""}`.trim();
+    `${usersArr?.[0]?.first_name ?? ""} ${usersArr?.[0]?.last_name ?? ""}`.trim();
   const className = student.classes?.name ?? "";
   const grade = student.classes?.grade?.name ?? "";
 

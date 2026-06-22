@@ -84,8 +84,9 @@ export async function generateStudentClusters(
       (d: any) => d.severity === "high" || d.severity === "severe"
     ).length;
 
+    const usersArr = student.users as { first_name?: string; last_name?: string }[] | undefined;
     const studentName =
-      `${student.users?.first_name ?? student.first_name} ${student.users?.last_name ?? student.last_name}`.trim();
+      `${usersArr?.[0]?.first_name ?? student.first_name} ${usersArr?.[0]?.last_name ?? student.last_name}`.trim();
 
     studentProfiles.push({
       studentId: student.student_id,
