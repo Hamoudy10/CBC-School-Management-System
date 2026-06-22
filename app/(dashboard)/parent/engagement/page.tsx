@@ -148,7 +148,7 @@ function WeeklySummaryView({ students, toastError }: { students: any[]; toastErr
                   <CardTitle>Weekly Summary: {result.summary.studentName}</CardTitle>
                   <CardDescription>{result.summary.className} | {result.summary.term}</CardDescription>
                 </div>
-                <Badge variant="secondary">Confidence: {Math.round(result.confidence * 100)}%</Badge>
+                <Badge variant="info">Confidence: {Math.round(result.confidence * 100)}%</Badge>
               </div>
             </CardHeader>
           </Card>
@@ -511,7 +511,7 @@ function MeetingSchedulerView({ students, toastError }: { students: any[]; toast
                     <CardContent className="p-3 text-center">
                       <p className="text-sm font-medium">{slot.date}</p>
                       <p className="text-lg font-bold text-primary">{slot.startTime} - {slot.endTime}</p>
-                      {slot.available && <Badge variant="secondary" className="mt-1">Available</Badge>}
+                      {slot.available && <Badge variant="success" className="mt-1">Available</Badge>}
                     </CardContent>
                   </Card>
                 ))}

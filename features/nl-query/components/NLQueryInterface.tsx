@@ -207,7 +207,7 @@ export function NLQueryInterface({
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-lg">Ask a Question</CardTitle>
-            <Badge variant="secondary">AI Powered</Badge>
+            <Badge variant="info">AI Powered</Badge>
           </div>
         </CardHeader>
         <CardContent>

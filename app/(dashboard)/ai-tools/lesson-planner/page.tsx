@@ -143,7 +143,7 @@ export default function LessonPlannerPage() {
                     {result.lessonPlan.grade} | {result.lessonPlan.subject} | {result.lessonPlan.duration} min
                   </CardDescription>
                 </div>
-                <Badge variant="secondary">Confidence: {Math.round(result.confidence * 100)}%</Badge>
+                <Badge variant="info">Confidence: {Math.round(result.confidence * 100)}%</Badge>
               </div>
             </CardHeader>
           </Card>
