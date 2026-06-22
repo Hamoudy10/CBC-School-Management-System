@@ -287,12 +287,19 @@ async function executeListQuery(
   // join via that FK, we remove it from direct select and rely on the
   // join embed to provide the related data.
   const fkColumns = new Set<string>();
+  const relationNames = new Set<string>();
   if (entity.joins) {
     for (const [, j] of Object.entries(entity.joins)) {
       fkColumns.add((j as DataCatalogJoin).foreignKey);
+      relationNames.add((j as DataCatalogJoin).relation);
     }
   }
-  const directSelect = selectCols.filter((col) => !fkColumns.has(col));
+  const directSelect = selectCols.filter((col) => {
+    if (fkColumns.has(col)) return false;
+    const dotIdx = col.indexOf(".");
+    if (dotIdx > 0 && relationNames.has(col.slice(0, dotIdx))) return false;
+    return true;
+  });
   const allSelect = [...directSelect];
 
   if (entity.joins) {

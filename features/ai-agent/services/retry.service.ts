@@ -61,7 +61,7 @@ export function buildRetryPrompt(
       : errorMessage.includes("not readable")
         ? `\n\nThe error says a column is not readable. Check the readable columns listed for that entity in Entity Columns below. Only those exact columns can be selected.`
         : errorMessage.includes("specified more than once")
-          ? `\n\nThe query failed because of a database conflict. Remove the foreign key column from your select — the join provides the related data automatically. For example if you selected "current_class_id", remove it and rely on the classes join.`
+          ? `\n\nThe query failed because of a database conflict caused by selecting columns from a joined table (e.g. "users.first_name"). Remove any "relation.column" entries from your select — the join already provides those columns automatically.`
           : errorMessage.includes("failed")
             ? `\n\nThe database query failed. Simplify your query: reduce the number of columns selected, remove unnecessary filters, and avoid using joins if possible.`
             : "";
