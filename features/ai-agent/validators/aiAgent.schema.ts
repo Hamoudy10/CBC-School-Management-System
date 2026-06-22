@@ -334,45 +334,13 @@ export const toolInputSchemas = {
     reason: z.string().min(1).max(500),
   }),
 
-  query_school_data: z.object({
-    entity: z.string().min(1).max(50),
-    operation: z.enum(["count", "list", "summary", "exists"]),
-    select: z.array(z.string().min(1).max(100)).min(1).max(20).optional(),
-    filters: z.array(
-      z.object({
-        field: z.string().min(1).max(100),
-        operator: z.enum(["eq", "neq", "in", "gte", "lte", "gt", "lt", "contains", "ilike", "is_null", "not_null"]),
-        value: z.any().optional(),
-      }),
-    ).max(20).optional(),
-    search: z.string().max(200).optional(),
-    searchFields: z.array(z.string().min(1).max(100)).max(5).optional(),
-    groupBy: z.array(z.string().min(1).max(100)).max(5).optional(),
-    orderBy: z.string().max(100).optional(),
-    orderDirection: z.enum(["asc", "desc"]).optional(),
-    limit: z.number().int().min(1).max(500).optional(),
-    offset: z.number().int().min(0).optional(),
+  get_db_schema: z.object({
+    refresh: z.boolean().optional(),
+  }),
+
+  execute_sql: z.object({
+    sql: z.string().min(1).max(10000),
   }),
 } as const;
-
-export const querySchoolDataSchema = z.object({
-  entity: z.string().min(1).max(50),
-  operation: z.enum(["count", "list", "summary", "exists"]),
-  select: z.array(z.string().min(1).max(100)).min(1).max(20).optional(),
-  filters: z.array(
-    z.object({
-      field: z.string().min(1).max(100),
-      operator: z.enum(["eq", "neq", "in", "gte", "lte", "gt", "lt", "contains", "ilike", "is_null", "not_null"]),
-      value: z.any().optional(),
-    }),
-  ).max(20).optional(),
-  search: z.string().max(200).optional(),
-  searchFields: z.array(z.string().min(1).max(100)).max(5).optional(),
-  groupBy: z.array(z.string().min(1).max(100)).max(5).optional(),
-  orderBy: z.string().max(100).optional(),
-  orderDirection: z.enum(["asc", "desc"]).optional(),
-  limit: z.number().int().min(1).max(500).optional(),
-  offset: z.number().int().min(0).optional(),
-});
 
 export type ToolName = keyof typeof toolInputSchemas;

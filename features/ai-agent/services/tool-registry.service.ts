@@ -6,8 +6,9 @@ import type { AgentTool } from "@/features/ai-agent/types";
 import { toolInputSchemas } from "@/features/ai-agent/validators/aiAgent.schema";
 import { canAccessStudent, sanitizeForAgent } from "./context-builder.service";
 import { getProvider } from "@/lib/ai/providers";
-import { executeSafeQuery } from "./safe-query-executor.service";
-import type { QuerySchoolDataOutput } from "./safe-query-executor.service";
+import { getDbSchema, formatSchemaForPrompt } from "./db-schema.service";
+import { analyzeSql } from "./sql-analyzer.service";
+import { executeSqlQuery } from "./sql-executor.service";
 import { z } from "zod";
 
 const TEACHING_POSITIONS = new Set([
@@ -1098,20 +1099,79 @@ const change_active_term = makeTool(
 );
 
 // ═══════════════════════════════════════════
-// QUERY SCHOOL DATA — Dynamic read-only query tool
+// GET DB SCHEMA — Live database introspection
 // ═══════════════════════════════════════════
 
-const query_school_data = makeTool(
-  "query_school_data",
-  "Query school data dynamically. Use for counting, listing, or summarizing any entity. Supports filtering, grouping, search, and ordering. Safe read-only queries against the data catalog.",
+const schemaOutput = z.object({
+  summary: z.string(),
+  schema: z.string(),
+  raw: z.any().optional(),
+});
+
+const get_db_schema_tool = makeTool(
+  "get_db_schema",
+  "Get the live database schema including all tables, columns, primary keys, foreign keys, and enum types. Use this to understand the database structure before writing SQL queries.",
   "analytics",
   "view",
   "low",
-  toolInputSchemas.query_school_data,
-  queryOutput,
-  async (input, { user }) => {
-    const result = await executeSafeQuery(input, user);
-    return result as unknown as QuerySchoolDataOutput;
+  toolInputSchemas.get_db_schema,
+  schemaOutput,
+  async () => {
+    const dbSchema = await getDbSchema();
+    const formatted = formatSchemaForPrompt(dbSchema);
+    return {
+      summary: `Database has ${dbSchema.tables.length} tables`,
+      schema: formatted,
+      raw: dbSchema,
+    };
+  },
+);
+
+// ═══════════════════════════════════════════
+// EXECUTE SQL — Run analyzed read-only SQL
+// ═══════════════════════════════════════════
+
+const executeSqlOutput = z.object({
+  success: z.boolean(),
+  summary: z.string(),
+  rows: z.array(z.record(z.unknown())),
+  count: z.number(),
+  error: z.string().optional(),
+  warnings: z.array(z.string()),
+  executionMs: z.number(),
+});
+
+const execute_sql_tool = makeTool(
+  "execute_sql",
+  "Execute a read-only SQL query against the database. The SQL is automatically analyzed for safety — only SELECT queries are allowed. A LIMIT clause is added if missing. Returns the query results as rows.",
+  "analytics",
+  "view",
+  "low",
+  toolInputSchemas.execute_sql,
+  executeSqlOutput,
+  async (input) => {
+    const analysis = analyzeSql(input.sql, {});
+    if (!analysis.safe) {
+      return {
+        success: false,
+        summary: "SQL query was rejected",
+        rows: [],
+        count: 0,
+        error: analysis.error ?? "Query rejected by safety analyzer",
+        warnings: analysis.warnings,
+        executionMs: 0,
+      };
+    }
+    const result = await executeSqlQuery(analysis.sql);
+    return {
+      success: result.success,
+      summary: result.success ? `Query returned ${result.count} row(s)` : "Query failed",
+      rows: result.rows,
+      count: result.count,
+      error: result.error,
+      warnings: [...analysis.warnings, ...(result.success ? [] : [result.error ?? ""])].filter(Boolean),
+      executionMs: result.executionMs,
+    };
   },
 );
 
@@ -1121,7 +1181,8 @@ const query_school_data = makeTool(
 
 const ALL_TOOLS: AgentTool<any, any>[] = [
   // Phase B: Read-only
-  query_school_data,
+  get_db_schema_tool,
+  execute_sql_tool,
   search_students,
   get_student_profile,
   get_student_attendance_summary,

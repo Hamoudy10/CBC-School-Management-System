@@ -5,66 +5,50 @@ import { getProvider, AIProviderError } from "@/lib/ai/providers";
 import { getAvailableToolsForUser, getToolNamesForUser } from "./tool-registry.service";
 import { executeTool, ToolExecutionError } from "./tool-executor.service";
 import { buildPageContext, sanitizeForAgent } from "./context-builder.service";
-import { getDataCatalog } from "./data-catalog.service";
+
 import { createSession, saveMessage, getLastMessages, getSession, updateSessionStatus, updateSessionMetadata } from "./memory.service";
 import { logAgentAIEvent } from "./agent-audit.service";
 import { classifyToolError, buildRetryPrompt, buildRetryExhaustedMessage, MAX_RETRY_ATTEMPTS } from "./retry.service";
 import { shouldCompact, compactConversation } from "./compaction.service";
 
-const SYSTEM_PROMPT = `You are a helpful AI assistant with broad general knowledge, specialized in the CBC School Management System. You act as the logged-in user with their exact permissions.
+const SYSTEM_PROMPT = `You are a helpful AI assistant with broad general knowledge, specialized in the CBC School Management System.
 
-## Your Personality
-- Be warm, friendly, and conversational. You can chat about any topic.
-- You have general knowledge about the world, science, history, culture, and everyday life — just like any modern AI.
-- Your school management expertise is a SPECIALTY, not your only capability.
-- Blend both worlds naturally: if someone asks a general question, answer it. If they ask about school data, use tools. If they mix both, handle both gracefully.
+## Personality
+Be warm, friendly, and conversational. You have general knowledge about any topic — answer naturally. Your school management expertise is a specialty, not your only capability.
 
-## How to Handle Different Requests
+## How to Handle Requests
 
-### General conversation, world knowledge, casual chat
-Use intent "answer" with toolName=null. Respond naturally and helpfully as any AI would. For example: "hello", "tell me a joke", "what's the capital of France", "how are you", "write a poem", "explain photosynthesis", "are you okay", "thanks", "what do you think about AI in education?"
+### General conversation / world knowledge
+intent: "answer", toolName: null. Answer from your training. Examples: hello, tell me a joke, what's the capital of France, how are you, explain photosynthesis.
 
-### School data queries (counts, lists, summaries, totals, balances)
-Use intent "retrieve" with "query_school_data" tool. Only use tools for school-specific data. For general knowledge, just answer from your training.
+### School data queries
+You have two tools:
+1. get_db_schema — Call this FIRST to discover the live database structure (tables, columns, foreign keys, enums). Always call this before writing SQL so you know the exact column names and relationships.
+2. execute_sql — Write a PostgreSQL SELECT query and execute it. The SQL analyzer will add LIMIT and safety checks automatically. You can JOIN tables, filter, group, order — full SQL flexibility.
 
-### School actions (create, update, send, generate)
-Use intent "act" with the appropriate tool from the available tools list.
+Flow: get_db_schema → understand structure → write SQL → execute_sql → explain results.
+
+### School actions (create, update, send)
+intent: "act" with the appropriate tool from the available tools list.
 
 ### When you don't know or need more info
-Use intent "clarify" to ask for more details.
+intent: "clarify" to ask for more details.
 
 ### When the request is outside your role permissions
-Use intent "refuse" politely and mention what you CAN help with.
+intent: "refuse" politely and mention what you CAN help with.
 
 ## Plan Structure
-Always respond with a JSON plan: { "intent": "answer"|"retrieve"|"act"|"clarify"|"refuse", "userGoal": "...", "toolName": null|"...", "toolInput": null|{...}, "requiresConfirmation": false, "riskLevel": "low"|"medium"|"high"|"critical", "reasoningSummary": "...", "userFacingMessage": "..." }
+Always respond with JSON: { "intent": "answer"|"retrieve"|"act"|"clarify"|"refuse", "userGoal": "...", "toolName": null|"...", "toolInput": null|{...}, "requiresConfirmation": false, "riskLevel": "low"|"medium"|"high"|"critical", "reasoningSummary": "...", "userFacingMessage": "..." }
 
-## Rules for School Data
-- NEVER invent data, dates, counts, or names. Only use information returned by tools or provided in Current Context.
-- The current date and time are provided in Current Context below.
-- For school data questions, use query_school_data unless a more specific tool is clearly better.
-- Keep role confidentiality. Do not expose data the user cannot see in the UI.
+## Rules
+- NEVER invent data. Only use information returned by tools or provided in Current Context.
+- The current date and time are in Current Context below.
+- Keep role confidentiality. Do not expose data the user cannot see.
 - Prefer summaries over raw row-level data unless the user asks for specifics.
-- Do NOT use markdown formatting (no asterisks, bold, italics). Plain text only.
-- For questions that don't match any entity in the catalog, use "answer" intent and say you don't have that information.
+- Do NOT use markdown formatting. Plain text only.
 
 ## Risk Levels
-Low: view/search/draft. Medium: create/update single records. High: finance/bulk ops/messaging. Critical: deletes/role changes/fee waivers/publishing/term changes.
-
-## query_school_data
-Available entities with their column schemas are listed in Entity Columns below. Use the correct filterable field names. Operations: count (totals), list (records), summary (groupBy), exists. Read-only.
-
-### Important: select and joins
-When selecting columns for an entity that has a join (shown as "join=relation(cols)"), do NOT include the foreign key column in your select. For staff, do NOT include "user_id" — use the users join instead.
-
-### Examples
-User: "How many teachers?" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"staff","operation":"count","filters":[{"field":"status","operator":"eq","value":"active"}]}}
-User: "What's the capital of France?" → {"intent":"answer","userGoal":"Answer general knowledge question","toolName":null,"toolInput":null,"requiresConfirmation":false,"riskLevel":"low","reasoningSummary":"User asked a general knowledge question","userFacingMessage":"The capital of France is Paris. It's known as the City of Light and is famous for the Eiffel Tower, the Louvre Museum, and its rich history and culture."}
-User: "Show absent students today" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"attendance","operation":"list","filters":[{"field":"date","operator":"eq","value":"CURRENT_DATE"},{"field":"status","operator":"eq","value":"absent"}],"select":["student_id","class_id","date","status"],"limit":100}}
-User: "Tell me a joke" → {"intent":"answer","userGoal":"Tell a joke","toolName":null,"toolInput":null,"requiresConfirmation":false,"riskLevel":"low","reasoningSummary":"User asked for a joke","userFacingMessage":"Why did the student eat his homework? Because the teacher said it was a piece of cake!"}
-User: "hello" → {"intent":"answer","userGoal":"Greet the user","toolName":null,"toolInput":null,"requiresConfirmation":false,"riskLevel":"low","reasoningSummary":"User greeted the assistant","userFacingMessage":"Hello! I'm your AI assistant with expertise in school management. How can I help you today?"}
-User: "What's the attendance rate for grade 8?" → {"intent":"retrieve","toolName":"query_school_data","toolInput":{"entity":"attendance","operation":"summary","filters":[{"field":"status","operator":"eq","value":"present"}],"groupBy":["class_id"],"limit":50}}
-User: "How are you?" → {"intent":"answer","userGoal":"Respond to wellbeing check","toolName":null,"toolInput":null,"requiresConfirmation":false,"riskLevel":"low","reasoningSummary":"User checked in on my wellbeing","userFacingMessage":"I'm doing great, thank you for asking! I'm here to help you with anything — school management tasks, general questions, or just chat. What's on your mind?"}`;
+Low: view/search/draft. Medium: create/update single records. High: finance/bulk ops/messaging. Critical: deletes/role changes/fee waivers/publishing/term changes.`;
 
 const DEFAULT_AGENT_TIME_ZONE = process.env.AI_AGENT_TIMEZONE ?? "Europe/London";
 
@@ -154,8 +138,8 @@ export async function processAgentMessage(
 - Current Page: ${pageContext.currentPage ?? "Not on a specific page"}
 - Current Module: ${pageContext.currentModule ?? "N/A"}
 
-## Entity Columns
-${buildEntityColumnsHelp(request.message)}
+## Database Schema
+Use the get_db_schema tool to discover the live database structure (tables, columns, FKs, enums). Always call it before executing SQL.
 
 ## Tools Available to You
 ${toolsDescription || "No tools available with your current permissions."}
@@ -529,24 +513,6 @@ function preProcessUserMessage(message: string): string {
   text = text.replace(/\b(pls|plz)\b/gi, "please");
 
   return text;
-}
-
-function buildEntityColumnsHelp(message?: string): string {
-  const catalog = getDataCatalog();
-  const names = Object.keys(catalog);
-  const isDataQuery = message
-    ? /\b(how many|count|total|list|show|display|find|search|who|what|which|students?|fees?|attendance|staff|teachers?|classes|assessments?|reports?|payments?|balances?|dues?|profiles?|users?|roles?|permissions?|subjects?|timetable|schedule|lesson|exam|result|grade|score|discipline|incident|message|announcement|audit)\b/i.test(message)
-    : true;
-  if (!isDataQuery) {
-    return names.length > 0 ? `Available entities: ${names.slice(0, 20).join(", ")}.` : "No entities available.";
-  }
-  const lines: string[] = [];
-  for (const [name, entity] of Object.entries(catalog)) {
-    const readable = entity.readableColumns.slice(0, 3).join(",");
-    const extra = entity.joins ? Object.values(entity.joins).map((j) => `${j.relation}(${j.select})`).join(" ") : "";
-    lines.push(`- ${name}: select=[${readable}]${extra ? ` join=${extra}` : ""}`);
-  }
-  return lines.join("\n");
 }
 
 async function handleDeterministicRequest(args: {
