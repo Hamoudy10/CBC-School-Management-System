@@ -165,7 +165,7 @@ export default function LessonPlannerPage() {
               <CardContent>
                 <div className="flex flex-wrap gap-1.5">
                   {result.lessonPlan.coreCompetencies.map((c: string, i: number) => (
-                    <Badge key={i} variant="secondary">{c}</Badge>
+                    <Badge key={i} variant="default">{c}</Badge>
                   ))}
                 </div>
               </CardContent>
