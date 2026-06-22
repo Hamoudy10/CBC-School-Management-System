@@ -283,7 +283,7 @@ export default function GradingPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Results</CardTitle>
-                <Badge variant="secondary">Confidence: {Math.round(result.confidence * 100)}%</Badge>
+                <Badge variant="info">Confidence: {Math.round(result.confidence * 100)}%</Badge>
               </div>
             </CardHeader>
             <CardContent>
