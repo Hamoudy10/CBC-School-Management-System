@@ -26,6 +26,6 @@ export const POST = withPermission(
         500
       );
     }
-  },
-  "ai_generation"
+  }
 );
+

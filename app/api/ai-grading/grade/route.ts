@@ -21,7 +21,6 @@ export const POST = withPermission(
       );
     }
   },
-  "ai_generation"
 );
 
 export async function GET() {

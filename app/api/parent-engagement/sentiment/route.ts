@@ -23,8 +23,7 @@ export const POST = withPermission(
         500
       );
     }
-  },
-  "ai_generation"
+  }
 );
 
 export async function GET() {
@@ -33,3 +32,4 @@ export async function GET() {
     usage: "POST an array of messages to analyze sentiment patterns",
   });
 }
+

@@ -24,8 +24,7 @@ export const POST = withPermission(
         500
       );
     }
-  },
-  "ai_generation"
+  }
 );
 
 export async function GET() {
@@ -38,3 +37,4 @@ export async function GET() {
     },
   });
 }
+

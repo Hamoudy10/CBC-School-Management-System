@@ -30,8 +30,7 @@ export const POST = withPermission(
         500
       );
     }
-  },
-  "ai_generation"
+  }
 );
 
 export async function GET() {
@@ -40,3 +39,4 @@ export async function GET() {
     usage: "POST parent/teacher/student IDs with preferences to get suggested meeting slots and agenda",
   });
 }
+
