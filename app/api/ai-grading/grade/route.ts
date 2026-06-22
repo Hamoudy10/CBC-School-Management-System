@@ -9,7 +9,7 @@ export const POST = withPermission(
   { module: "assessments", action: "create" },
   async (request: NextRequest, { user }: any) => {
     const validation = await validateBody(request, gradingRequestSchema);
-    if (!validation.success) return validationErrorResponse(validation.errors);
+    if (!validation.success) return validationErrorResponse(validation.errors ?? {});
 
     try {
       const result = await gradeStudentResponses(validation.data, user.school_id);

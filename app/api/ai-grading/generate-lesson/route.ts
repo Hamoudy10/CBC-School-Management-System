@@ -9,7 +9,7 @@ export const POST = withPermission(
   { module: "academics", action: "create" },
   async (request: NextRequest, { user }: any) => {
     const validation = await validateBody(request, lessonPlanRequestSchema);
-    if (!validation.success) return validationErrorResponse(validation.errors);
+    if (!validation.success) return validationErrorResponse(validation.errors ?? {});
 
     try {
       const result = await generateLessonPlan(validation.data, user.school_id);
