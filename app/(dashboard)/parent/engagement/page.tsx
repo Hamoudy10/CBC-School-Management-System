@@ -37,7 +37,7 @@ const TABS: TabConfig[] = [
 export default function ParentEngagementPage() {
   const [activeTab, setActiveTab] = useState("summary");
   const [students, setStudents] = useState<any[]>([]);
-  const { toast } = useToast();
+  const { error: toastError } = useToast();
 
   useEffect(() => {
     fetch("/api/students?limit=100")
@@ -74,14 +74,14 @@ export default function ParentEngagementPage() {
 
       <p className="text-sm text-gray-500">{TABS.find((t) => t.id === activeTab)?.description}</p>
 
-      {activeTab === "summary" && <WeeklySummaryView students={students} toast={toast} />}
-      {activeTab === "sentiment" && <SentimentView toast={toast} />}
-      {activeTab === "meeting" && <MeetingSchedulerView students={students} toast={toast} />}
+      {activeTab === "summary" && <WeeklySummaryView students={students} toastError={toastError} />}
+      {activeTab === "sentiment" && <SentimentView toastError={toastError} />}
+      {activeTab === "meeting" && <MeetingSchedulerView students={students} toastError={toastError} />}
     </div>
   );
 }
 
-function WeeklySummaryView({ students, toast }: { students: any[]; toast: any }) {
+function WeeklySummaryView({ students, toastError }: { students: any[]; toastError: (title: string, description?: string) => void }) {
   const [selectedStudent, setSelectedStudent] = useState("");
   const [language, setLanguage] = useState("en");
   const [result, setResult] = useState<any>(null);
@@ -98,13 +98,13 @@ function WeeklySummaryView({ students, toast }: { students: any[]; toast: any })
       });
       const json = await res.json();
       if (json.success) setResult(json.data);
-      else toast({ title: "Error", description: json.error, variant: "error" });
+      else toastError("Error", json.error);
     } catch {
-      toast({ title: "Error", description: "Failed to generate summary", variant: "error" });
+      toastError("Error", "Failed to generate summary");
     } finally {
       setLoading(false);
     }
-  }, [selectedStudent, language, toast]);
+  }, [selectedStudent, language, toastError]);
 
   return (
     <div className="space-y-4">
@@ -234,7 +234,7 @@ function WeeklySummaryView({ students, toast }: { students: any[]; toast: any })
   );
 }
 
-function SentimentView({ toast }: { toast: any }) {
+function SentimentView({ toastError }: { toastError: (title: string, description?: string) => void }) {
   const [messages, setMessages] = useState<{ id: string; text: string; sender: string; timestamp: string }[]>([
     { id: "1", text: "", sender: "parent", timestamp: new Date().toISOString() },
   ]);
@@ -261,7 +261,7 @@ function SentimentView({ toast }: { toast: any }) {
   const analyze = useCallback(async () => {
     const validMessages = messages.filter((m) => m.text.trim());
     if (validMessages.length === 0) {
-      toast({ title: "Error", description: "Add at least one message.", variant: "error" });
+      toastError("Error", "Add at least one message.");
       return;
     }
     setLoading(true);
@@ -273,13 +273,13 @@ function SentimentView({ toast }: { toast: any }) {
       });
       const json = await res.json();
       if (json.success) setResult(json.data);
-      else toast({ title: "Error", description: json.error, variant: "error" });
+      else toastError("Error", json.error);
     } catch {
-      toast({ title: "Error", description: "Failed to analyze sentiment", variant: "error" });
+      toastError("Error", "Failed to analyze sentiment");
     } finally {
       setLoading(false);
     }
-  }, [messages, toast]);
+  }, [messages, toastError]);
 
   const sentimentColor = (s: string) => {
     switch (s) {
@@ -405,7 +405,7 @@ function SentimentView({ toast }: { toast: any }) {
   );
 }
 
-function MeetingSchedulerView({ students, toast }: { students: any[]; toast: any }) {
+function MeetingSchedulerView({ students, toastError }: { students: any[]; toastError: (title: string, description?: string) => void }) {
   const [selectedStudent, setSelectedStudent] = useState("");
   const [reason, setReason] = useState("");
   const [urgency, setUrgency] = useState("normal");
@@ -416,7 +416,7 @@ function MeetingSchedulerView({ students, toast }: { students: any[]; toast: any
 
   const schedule = useCallback(async () => {
     if (!selectedStudent || !reason.trim() || !preferredDate) {
-      toast({ title: "Missing fields", description: "Student, reason, and date are required.", variant: "error" });
+      toastError("Missing fields", "Student, reason, and date are required.");
       return;
     }
     setLoading(true);
@@ -437,13 +437,13 @@ function MeetingSchedulerView({ students, toast }: { students: any[]; toast: any
       });
       const json = await res.json();
       if (json.success) setResult(json.data);
-      else toast({ title: "Error", description: json.error, variant: "error" });
+      else toastError("Error", json.error);
     } catch {
-      toast({ title: "Error", description: "Failed to schedule meeting", variant: "error" });
+      toastError("Error", "Failed to schedule meeting");
     } finally {
       setLoading(false);
     }
-  }, [selectedStudent, reason, urgency, preferredDate, preferredTime, toast]);
+  }, [selectedStudent, reason, urgency, preferredDate, preferredTime, toastError]);
 
   return (
     <div className="space-y-4">

@@ -40,7 +40,7 @@ export default function GradingPage() {
   const [studentAnswers, setStudentAnswers] = useState<StudentAnswer[]>([]);
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
+  const { error: toastError } = useToast();
 
   const addQuestion = () => {
     setQuestions((prev) => [
@@ -96,7 +96,7 @@ export default function GradingPage() {
 
   const runGrading = useCallback(async () => {
     if (!subject.trim() || !grade.trim() || questions.length === 0 || studentAnswers.length === 0) {
-      toast({ title: "Missing fields", description: "Subject, grade, questions, and at least one student are required.", variant: "error" });
+      toastError("Missing fields", "Subject, grade, questions, and at least one student are required.");
       return;
     }
 
@@ -120,13 +120,13 @@ export default function GradingPage() {
       });
       const json = await res.json();
       if (json.success) setResult(json.data);
-      else toast({ title: "Error", description: json.error, variant: "error" });
+      else toastError("Error", json.error);
     } catch {
-      toast({ title: "Error", description: "Failed to grade", variant: "error" });
+      toastError("Error", "Failed to grade");
     } finally {
       setLoading(false);
     }
-  }, [subject, grade, questions, studentAnswers, toast]);
+  }, [subject, grade, questions, studentAnswers, toastError]);
 
   return (
     <div className="space-y-6">

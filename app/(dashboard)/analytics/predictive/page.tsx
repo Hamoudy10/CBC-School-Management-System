@@ -51,7 +51,7 @@ function RiskBadge({ level }: { level: string }) {
 function ForecastView({ classId }: { classId: string }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
+  const { error: toastError } = useToast();
 
   const run = useCallback(async () => {
     if (!classId) return;
@@ -64,13 +64,13 @@ function ForecastView({ classId }: { classId: string }) {
       });
       const json = await res.json();
       if (json.success) setData(json.data);
-      else toast({ title: "Error", description: json.error, variant: "error" });
+      else toastError("Error", json.error);
     } catch {
-      toast({ title: "Error", description: "Failed to generate forecast", variant: "error" });
+      toastError("Error", "Failed to generate forecast");
     } finally {
       setLoading(false);
     }
-  }, [classId, toast]);
+  }, [classId, toastError]);
 
   return (
     <div className="space-y-4">
@@ -130,7 +130,7 @@ function ClusterView({ classId }: { classId: string }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(null);
-  const { toast } = useToast();
+  const { error: toastError } = useToast();
 
   const run = useCallback(async () => {
     if (!classId) return;
@@ -143,13 +143,13 @@ function ClusterView({ classId }: { classId: string }) {
       });
       const json = await res.json();
       if (json.success) setData(json.data);
-      else toast({ title: "Error", description: json.error, variant: "error" });
+      else toastError("Error", json.error);
     } catch {
-      toast({ title: "Error", description: "Failed to generate clusters", variant: "error" });
+      toastError("Error", "Failed to generate clusters");
     } finally {
       setLoading(false);
     }
-  }, [classId, toast]);
+  }, [classId, toastError]);
 
   return (
     <div className="space-y-4">
@@ -207,7 +207,7 @@ function ClusterView({ classId }: { classId: string }) {
 function InterventionView({ classId }: { classId: string }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
+  const { error: toastError } = useToast();
 
   const run = useCallback(async () => {
     if (!classId) return;
@@ -220,13 +220,13 @@ function InterventionView({ classId }: { classId: string }) {
       });
       const json = await res.json();
       if (json.success) setData(json.data);
-      else toast({ title: "Error", description: json.error, variant: "error" });
+      else toastError("Error", json.error);
     } catch {
-      toast({ title: "Error", description: "Failed to generate interventions", variant: "error" });
+      toastError("Error", "Failed to generate interventions");
     } finally {
       setLoading(false);
     }
-  }, [classId, toast]);
+  }, [classId, toastError]);
 
   const riskColor = (level: string) => {
     switch (level) {
@@ -379,7 +379,7 @@ function StudentRecommendationView({ classId }: { classId: string }) {
   const [selectedStudent, setSelectedStudent] = useState("");
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
+  const { error: toastError } = useToast();
 
   useEffect(() => {
     if (!classId) return;
@@ -402,13 +402,13 @@ function StudentRecommendationView({ classId }: { classId: string }) {
       });
       const json = await res.json();
       if (json.success) setData(json.data);
-      else toast({ title: "Error", description: json.error, variant: "error" });
+      else toastError("Error", json.error);
     } catch {
-      toast({ title: "Error", description: "Failed to get recommendations", variant: "error" });
+      toastError("Error", "Failed to get recommendations");
     } finally {
       setLoading(false);
     }
-  }, [selectedStudent, classId, toast]);
+  }, [selectedStudent, classId, toastError]);
 
   return (
     <div className="space-y-4">

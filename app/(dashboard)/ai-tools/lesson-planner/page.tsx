@@ -30,7 +30,7 @@ export default function LessonPlannerPage() {
   const [approach, setApproach] = useState("learner-centered");
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
+  const { error: toastError } = useToast();
 
   useEffect(() => {
     fetch("/api/classes")
@@ -53,7 +53,7 @@ export default function LessonPlannerPage() {
 
   const generate = useCallback(async () => {
     if (!classId || !learningAreaId) {
-      toast({ title: "Missing fields", description: "Class and learning area are required.", variant: "error" });
+      toastError("Missing fields", "Class and learning area are required.");
       return;
     }
 
@@ -73,13 +73,13 @@ export default function LessonPlannerPage() {
       });
       const json = await res.json();
       if (json.success) setResult(json.data);
-      else toast({ title: "Error", description: json.error, variant: "error" });
+      else toastError("Error", json.error);
     } catch {
-      toast({ title: "Error", description: "Failed to generate lesson plan", variant: "error" });
+      toastError("Error", "Failed to generate lesson plan");
     } finally {
       setLoading(false);
     }
-  }, [classId, learningAreaId, duration, approach, toast]);
+  }, [classId, learningAreaId, duration, approach, toastError]);
 
   return (
     <div className="space-y-6">
