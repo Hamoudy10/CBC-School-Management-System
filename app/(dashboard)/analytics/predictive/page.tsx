@@ -436,7 +436,7 @@ function StudentRecommendationView({ classId }: { classId: string }) {
             <h3 className="text-sm font-medium text-gray-700 mb-2">Current Performance</h3>
             <div className="flex flex-wrap gap-2">
               {data.recommendation.currentLearningAreas.map((a: any) => (
-                <Badge key={a.id} variant={a.score >= 3 ? "default" : a.score >= 2 ? "secondary" : "outline"}>
+                <Badge key={a.id} variant={a.score >= 3 ? "default" : a.score >= 2 ? "warning" : "outline"}>
                   {a.name}: {a.score.toFixed(1)}
                 </Badge>
               ))}
