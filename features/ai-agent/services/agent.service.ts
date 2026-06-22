@@ -75,10 +75,16 @@ export async function processAgentMessage(
   const startedAt = Date.now();
   const schoolId = user.schoolId ?? "";
 
-  let sessionId = request.sessionId;
+  let sessionId = request.sessionId?.trim();
 
   if (sessionId) {
-    const existing = await getSession(sessionId);
+    let existing = null;
+    try {
+      existing = await getSession(sessionId);
+    } catch {
+      // Transient error — try once more before falling back
+      try { existing = await getSession(sessionId); } catch { /* give up */ }
+    }
     if (!existing) {
       sessionId = await createSession(user.id, schoolId, request.mode ?? "assist");
     } else if (existing.status !== "active") {

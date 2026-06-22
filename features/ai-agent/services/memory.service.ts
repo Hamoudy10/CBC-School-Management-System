@@ -149,31 +149,56 @@ export async function saveMessage(
 export async function getSessionMessages(
   sessionId: string,
   limit = 50,
+  offset?: number,
 ): Promise<StoredMessage[]> {
   const supabase = await createSupabaseServerClient();
-  const { data } = await supabase
+  let query = supabase
     .from("ai_agent_messages")
     .select("*")
     .eq("session_id", sessionId)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(limit);
+
+  if (offset) query = query.range(offset, offset + limit - 1);
+
+  const { data } = await query;
 
   if (!data) return [];
 
-  return data.map((row: any) => ({
-    messageId: row.message_id,
-    sessionId: row.session_id,
-    role: row.role,
-    content: row.content,
-    structuredPayload: row.structured_payload ?? undefined,
-    createdAt: row.created_at,
-  }));
+  return data
+    .map((row: any) => ({
+      messageId: row.message_id,
+      sessionId: row.session_id,
+      role: row.role,
+      content: row.content,
+      structuredPayload: row.structured_payload ?? undefined,
+      createdAt: row.created_at,
+    }))
+    .reverse();
 }
 
 export async function getLastMessages(
   sessionId: string,
   count = 10,
 ): Promise<StoredMessage[]> {
-  const messages = await getSessionMessages(sessionId, count);
-  return messages.slice(-count);
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase
+    .from("ai_agent_messages")
+    .select("*")
+    .eq("session_id", sessionId)
+    .order("created_at", { ascending: false })
+    .limit(count);
+
+  if (!data) return [];
+
+  return data
+    .map((row: any) => ({
+      messageId: row.message_id,
+      sessionId: row.session_id,
+      role: row.role,
+      content: row.content,
+      structuredPayload: row.structured_payload ?? undefined,
+      createdAt: row.created_at,
+    }))
+    .reverse();
 }
