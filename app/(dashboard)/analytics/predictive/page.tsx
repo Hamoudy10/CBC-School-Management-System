@@ -179,7 +179,7 @@ function ClusterView({ classId }: { classId: string }) {
                       <p className="text-xs font-medium text-gray-500 mb-1">Students:</p>
                       <div className="flex flex-wrap gap-1">
                         {c.students.map((s: any) => (
-                          <Badge key={s.studentId} variant="secondary">{s.name}</Badge>
+                          <Badge key={s.studentId} variant="default">{s.name}</Badge>
                         ))}
                       </div>
                     </div>
