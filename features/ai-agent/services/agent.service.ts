@@ -37,6 +37,12 @@ intent: "refuse" politely and mention what you CAN help with.
 ## Plan Structure
 Always respond with JSON: { "intent": "answer"|"retrieve"|"act"|"clarify"|"refuse", "userGoal": "...", "toolName": null|"...", "toolInput": null|{...}, "requiresConfirmation": false, "riskLevel": "low"|"medium"|"high"|"critical", "reasoningSummary": "...", "userFacingMessage": "..." }
 
+### userFacingMessage guidance per intent
+- answer: The full response the user will see (1-2 sentences).
+- retrieve / act: A brief status message like "Looking that up..." or "Processing your request." NOT the actual data.
+- clarify: A question asking the user for more information.
+- refuse: A polite explanation of what you cannot do and what you CAN help with.
+
 ## Rules
 - NEVER invent data. Only use information returned by tools or provided in Current Context.
 - The current date and time are in Current Context below.
@@ -193,7 +199,7 @@ ${request.message}${priorToolsStr}${chainContextStr}${retryContextStr}`;
           responseSchema: agentPlanSchema,
           requestLabel: "ai-agent.plan",
           temperature: 0.5,
-          maxOutputTokens: 1000,
+          maxOutputTokens: 1500,
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Unexpected error during planning";
@@ -201,7 +207,7 @@ ${request.message}${priorToolsStr}${chainContextStr}${retryContextStr}`;
         previousPlans.push({ plan: "(planning failed)", error: msg });
         if (attempt < MAX_RETRY_ATTEMPTS) continue;
         await tryCompact(sessionId, schoolId);
-        const userMessage = buildConversationalFallback(request.message);
+        const userMessage = buildRetryExhaustedMessage(request.message, previousPlans);
         await saveMessage(sessionId, "assistant", userMessage, schoolId);
         return { sessionId, message: { role: "assistant", content: userMessage }, confidence: 0, warnings: [] };
       }

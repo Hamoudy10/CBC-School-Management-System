@@ -8,7 +8,7 @@ export const agentPlanSchema = z.object({
   requiresConfirmation: z.boolean(),
   riskLevel: z.enum(["low", "medium", "high", "critical"]),
   reasoningSummary: z.string().min(0).max(1000),
-  userFacingMessage: z.string().min(1).max(2000),
+  userFacingMessage: z.string().min(1).max(4000),
 });
 
 export const chatRequestSchema = z.object({
