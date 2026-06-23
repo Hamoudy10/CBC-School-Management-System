@@ -23,7 +23,7 @@ export function analyzeSql(
 ): AnalysisResult {
   const warnings: string[] = [];
 
-  const trimmed = rawSql.trim();
+  const trimmed = rawSql.trim().replace(/;+\s*$/, "");
   if (!trimmed) {
     return { safe: false, sql: "", warnings, error: "Empty SQL query" };
   }
@@ -89,23 +89,15 @@ export function analyzeSql(
     warnings.push("Could not parse SQL structure, using basic safety checks");
   }
 
-  // Inject LIMIT if missing
-  let modified = trimmed;
-  const hasLimit = /\blimit\s+\d+/i.test(modified);
-  if (!hasLimit) {
-    modified = modified.replace(/;?\s*$/, " LIMIT 100");
-    warnings.push("Added LIMIT 100 to prevent large result sets");
-  }
-
   // Warn about missing WHERE clause
-  const hasWhere = /\bwhere\s/i.test(modified);
+  const hasWhere = /\bwhere\s/i.test(trimmed);
   if (!hasWhere) {
     warnings.push("Query has no WHERE clause — this may return many rows");
   }
 
   return {
     safe: true,
-    sql: modified,
+    sql: trimmed,
     warnings,
   };
 }
