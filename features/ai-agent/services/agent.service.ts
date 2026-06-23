@@ -135,7 +135,7 @@ export async function processAgentMessage(
         : "";
 
       const chainContextStr = hasPriorTools && attempt === 1
-        ? `\n\nYou already called: ${toolChainResults.map((r) => r.toolName).join(" → ")}.\nDecide: if you have the data to answer the user, set intent "answer". Otherwise call the next tool.`
+        ? `\n\nYou already called: ${toolChainResults.map((r) => r.toolName).join(" → ")}.\nThe user asked for: "${request.message}".\nCheck if the prior tool results directly contain the specific records or values the user asked for (e.g. names, counts, lists of people). If the results only contain metadata, schema structure, or partial information, you MUST call another tool to get what the user actually wants. Only set intent "answer" when the prior tool results already include the exact information requested.`
         : "";
 
       const systemContext = `${SYSTEM_PROMPT}
@@ -166,7 +166,7 @@ ${request.message}${priorToolsStr}${chainContextStr}${retryContextStr}`;
         const planPrompt = previousPlans.length > 0
           ? `Your previous plan failed. Review the error below and produce a corrected plan. Original request: "${request.message}". Error: ${previousPlans[previousPlans.length - 1].error}`
           : toolChainResults.length > 0
-            ? `You already called: ${toolChainResults.map((r) => r.toolName).join(" → ")}.\nOriginal request: "${request.message}".\nIf you have the data to answer, set intent "answer". Otherwise call the next tool.`
+            ? `You already called: ${toolChainResults.map((r) => r.toolName).join(" → ")}.\nOriginal request: "${request.message}".\nThe prior tool results contain the schema or intermediate data — not the actual records the user asked for yet. Call execute_sql with a PostgreSQL query to retrieve the real data. Only set intent "answer" when the exact requested information (names, rows, values) is already in the prior results.`
             : `Analyze this request and produce a JSON plan with intent, toolName (if applicable), toolInput, requiresConfirmation, riskLevel, reasoningSummary, and userFacingMessage.`;
 
         planResult = await provider.generate<AgentPlan>({
@@ -376,6 +376,10 @@ const GREETING_PATTERNS = [
 function handleGreeting(message: string): string | null {
   const n = message.trim().toLowerCase();
   if (GREETING_PATTERNS.some((p) => p.test(n))) {
+    const stripped = n.replace(/^(?:hello|hi|hey|heyy|heya|howdy)\b\s*,*\s*/i, "")
+      .replace(/^(?:good\s+(?:morning|afternoon|evening|day)|greetings)\b\s*,*\s*/i, "")
+      .trim();
+    if (stripped.length > 0 && !/^[!.,;:?]+$/.test(stripped)) return null;
     const hour = new Date().getHours();
     const timeGreeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
     const responses = [
