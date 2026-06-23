@@ -6,6 +6,7 @@ import { getAvailableToolsForUser, getToolNamesForUser } from "./tool-registry.s
 import { executeTool, ToolExecutionError } from "./tool-executor.service";
 import { buildPageContext, sanitizeForAgent } from "./context-builder.service";
 
+import { getDbSchema, formatSchemaForPrompt } from "./db-schema.service";
 import { createSession, saveMessage, getLastMessages, getSession, updateSessionStatus, updateSessionMetadata } from "./memory.service";
 import { logAgentAIEvent } from "./agent-audit.service";
 import { classifyToolError, buildRetryPrompt, buildRetryExhaustedMessage, MAX_RETRY_ATTEMPTS } from "./retry.service";
@@ -22,11 +23,7 @@ Be warm, friendly, and conversational. You have general knowledge about any topi
 intent: "answer", toolName: null. Answer from your training. Examples: hello, tell me a joke, what's the capital of France, how are you, explain photosynthesis.
 
 ### School data queries
-You have two tools:
-1. get_db_schema — Call this FIRST to discover the live database structure (tables, columns, foreign keys, enums). Always call this before writing SQL so you know the exact column names and relationships.
-2. execute_sql — Write a PostgreSQL SELECT query and execute it. The SQL analyzer will add LIMIT and safety checks automatically. You can JOIN tables, filter, group, order — full SQL flexibility.
-
-Flow: get_db_schema → understand structure → write SQL → execute_sql → explain results.
+The database schema is provided in the ## Database Schema section below. Use execute_sql to write a PostgreSQL SELECT query and get the data. The SQL analyzer will add LIMIT and safety checks automatically. You can JOIN tables, filter, group, order — full SQL flexibility.
 
 ### School actions (create, update, send)
 intent: "act" with the appropriate tool from the available tools list.
@@ -108,14 +105,29 @@ export async function processAgentMessage(
     .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
     .join("\n");
 
-  const toolsDescription = availableTools
-    .map(
-      (t) =>
-        `- ${t.name}: ${t.description} [${t.module}/${t.action}] (risk: ${t.riskLevel})`,
-    )
-    .join("\n");
-
   const provider = getProvider();
+
+  // ── Pre-load database schema (so the model doesn't need a two-step chain) ──
+  let preloadedSchema: string | null = null;
+  let preloadedSchemaSummary: string | null = null;
+  try {
+    const schemaResult = await getDbSchema();
+    if (schemaResult.success && schemaResult.tables.length > 0) {
+      preloadedSchema = formatSchemaForPrompt(schemaResult.tables);
+      preloadedSchemaSummary = `Database has ${schemaResult.tables.length} tables`;
+    }
+  } catch {
+    // Schema pre-load failed — fall through, get_db_schema tool remains available
+  }
+
+  // Filter get_db_schema from tools when schema is already loaded
+  const toolsForModel = preloadedSchema
+    ? availableTools.filter((t) => t.name !== "get_db_schema")
+    : availableTools;
+
+  const toolsDescription = toolsForModel
+    .map((t) => `- ${t.name}: ${t.description} [${t.module}/${t.action}] (risk: ${t.riskLevel})`)
+    .join("\n");
 
   // ── Multi-round tool chain: plan → execute → replan → execute → ... → respond ──
   // Each round can retry on error (MAX_RETRY_ATTEMPTS per round)
@@ -138,6 +150,10 @@ export async function processAgentMessage(
         ? `\n\nYou already called: ${toolChainResults.map((r) => r.toolName).join(" → ")}.\nThe user asked for: "${request.message}".\nCheck if the prior tool results directly contain the specific records or values the user asked for (e.g. names, counts, lists of people). If the results only contain metadata, schema structure, or partial information, you MUST call another tool to get what the user actually wants. Only set intent "answer" when the prior tool results already include the exact information requested.`
         : "";
 
+      const schemaSection = preloadedSchema
+        ? `\n## Database Schema\n${preloadedSchemaSummary}\n\n${preloadedSchema}\n`
+        : "";
+
       const systemContext = `${SYSTEM_PROMPT}
 
 ## Current Context
@@ -149,8 +165,7 @@ export async function processAgentMessage(
 - Your Role: ${pageContext.userRole}
 - Your Modules: ${pageContext.allowedModules.join(", ")}
 - Current Page: ${pageContext.currentPage ?? "Not on a specific page"}
-- Current Module: ${pageContext.currentModule ?? "N/A"}
-
+- Current Module: ${pageContext.currentModule ?? "N/A"}${schemaSection}
 ## Tools Available to You
 ${toolsDescription || "No tools available with your current permissions."}
 
@@ -163,11 +178,13 @@ ${request.message}${priorToolsStr}${chainContextStr}${retryContextStr}`;
       // Step 1: Plan
       let planResult: import("@/features/ai-agent/types").AIProviderResponse<AgentPlan | string>;
       try {
-        const planPrompt = previousPlans.length > 0
-          ? `Your previous plan failed. Review the error below and produce a corrected plan. Original request: "${request.message}". Error: ${previousPlans[previousPlans.length - 1].error}`
-          : toolChainResults.length > 0
-            ? `You already called: ${toolChainResults.map((r) => r.toolName).join(" → ")}.\nOriginal request: "${request.message}".\nThe prior tool results contain the schema or intermediate data — not the actual records the user asked for yet. Call execute_sql with a PostgreSQL query to retrieve the real data. Only set intent "answer" when the exact requested information (names, rows, values) is already in the prior results.`
-            : `Analyze this request and produce a JSON plan with intent, toolName (if applicable), toolInput, requiresConfirmation, riskLevel, reasoningSummary, and userFacingMessage.`;
+        const planPrompt = toolChainResults.length > 0
+          ? `You already called: ${toolChainResults.map((r) => r.toolName).join(" → ")}.\nOriginal request: "${request.message}".\nThe prior tool results contain intermediate data — not the actual records the user asked for yet. Call execute_sql with a PostgreSQL query to retrieve the real data. Only set intent "answer" when the exact requested information (names, rows, values) is already in the prior results.`
+          : previousPlans.length > 0
+            ? `Your previous plan failed. Review the error below and produce a corrected plan. Original request: "${request.message}". Error: ${previousPlans[previousPlans.length - 1].error}`
+            : preloadedSchema
+              ? `The database schema is already loaded above. Write a PostgreSQL SELECT query and call execute_sql to retrieve the data. Use intent "retrieve" with toolName "execute_sql" and toolInput containing your query.`
+              : `The database schema is NOT pre-loaded. Call get_db_schema first to discover the structure, then call execute_sql with a PostgreSQL SELECT query.`;
 
         planResult = await provider.generate<AgentPlan>({
           system: systemContext,
@@ -210,7 +227,7 @@ ${request.message}${priorToolsStr}${chainContextStr}${retryContextStr}`;
           }
           const chainSummary = toolChainResults.map((r) => `Tool "${r.toolName}" result: ${r.output}`).join("\n");
           const responseResult = await provider.generate({
-            system: `You are a helpful school assistant. Explain the following result to the user in a clear, friendly way. Keep it concise. Do not invent additional information. Do NOT use markdown formatting.`,
+            system: `You are a helpful school assistant. Explain the following result to the user in a clear, friendly way. Keep it concise. Do not invent additional information. Do NOT use markdown formatting. The following tools are available: ${toolsDescription}. If the current results don't fully answer the user's question, you can mention what additional information could be retrieved.`,
             prompt: `The user asked: "${request.message}"\n\nHere are the tool results:\n${chainSummary}\n\nExplain these results to the user in a natural way.`,
             responseFormat: "text",
             requestLabel: "ai-agent.answer",
@@ -287,7 +304,7 @@ ${request.message}${priorToolsStr}${chainContextStr}${retryContextStr}`;
   if (toolChainResults.length > 0) {
     const chainSummary = toolChainResults.map((r) => `Tool "${r.toolName}" result: ${r.output}`).join("\n");
     const responseResult = await provider.generate({
-      system: `You are a helpful school assistant. Explain the following result to the user in a clear, friendly way. Keep it concise. Do not invent additional information. Do NOT use markdown formatting.`,
+      system: `You are a helpful school assistant. Explain the following result to the user in a clear, friendly way. Keep it concise. Do not invent additional information. Do NOT use markdown formatting. The following tools are available: ${toolsDescription}.`,
       prompt: `The user asked: "${request.message}"\n\nHere are the tool results:\n${chainSummary}\n\nExplain these results to the user.`,
       responseFormat: "text",
       requestLabel: "ai-agent.chain",
