@@ -45,13 +45,15 @@ export function buildRetryPrompt(
   attempt: number,
   maxAttempts: number,
 ): string {
-  const entityGuidance = errorMessage.includes("rejected")
-    ? `\n\nThe SQL query was rejected by the safety analyzer. Make sure you use only SELECT statements with a LIMIT clause. Write plain PostgreSQL SQL.`
-    : errorMessage.includes("syntax error") || errorMessage.includes("does not exist") || errorMessage.includes("column") || errorMessage.includes("relation")
-      ? `\n\nThe database rejected the SQL. Use get_db_schema to verify table and column names. Check your JOIN conditions.`
-      : errorMessage.includes("failed")
-        ? `\n\nThe database query failed. Check your SQL syntax and verify column/table names with get_db_schema.`
-        : "";
+  const entityGuidance = errorMessage.includes("Invalid input")
+    ? `\n\nThe tool rejected your input — a required field is missing or invalid. Check the tool's input schema and provide all required fields. For execute_sql, you MUST include the "sql" field with your PostgreSQL SELECT query.`
+    : errorMessage.includes("rejected")
+      ? `\n\nThe SQL query was rejected by the safety analyzer. Make sure you use only SELECT statements with a LIMIT clause. Write plain PostgreSQL SQL.`
+      : errorMessage.includes("syntax error") || errorMessage.includes("does not exist") || errorMessage.includes("column") || errorMessage.includes("relation")
+        ? `\n\nThe database rejected the SQL. Use get_db_schema to verify table and column names. Check your JOIN conditions.`
+        : errorMessage.includes("failed")
+          ? `\n\nThe database query failed. Check your SQL syntax and verify column/table names with get_db_schema.`
+          : "";
 
   return `Your previous attempt failed. Please analyze the error and produce a corrected plan.
 

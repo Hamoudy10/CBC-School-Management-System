@@ -199,12 +199,12 @@ ${request.message}${priorToolsStr}${chainContextStr}${retryContextStr}`;
       // Non-tool intents — assemble all chain results and respond
       if (plan.intent === "refuse" || plan.intent === "clarify" || plan.intent === "answer" || !plan.toolName) {
         if (toolChainResults.length > 0) {
-          // If the model wants to "answer" but the chain only got schema (no actual data),
-          // that's premature — force a retry with execute_sql
-          if (plan.intent === "answer" && toolChainResults.every((r) => r.toolName === "get_db_schema")) {
+          // If the chain only has schema (no actual data), ANY non-tool intent is premature —
+          // reject it and force a retry with execute_sql
+          if (toolChainResults.every((r) => r.toolName === "get_db_schema")) {
             previousPlans.push({
               plan: JSON.stringify(plan),
-              error: `You set intent "answer" but the chain only has database schema — not the actual records the user asked for. You MUST call execute_sql with a SELECT query to retrieve the real data. Only use intent "answer" when the prior results contain the exact requested information (names, rows, values).`,
+              error: `You set intent "${plan.intent}" but the chain only has database schema — not the actual records the user asked for. You MUST call execute_sql with a SELECT query to retrieve the real data. Do NOT ask for clarification or refuse — you have the tools you need. Call execute_sql now. Only use non-tool intents when the prior results contain the exact requested information (names, rows, values).`,
             });
             continue;
           }
