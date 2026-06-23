@@ -329,7 +329,8 @@ function formatToolOutput(output: unknown): string {
       if (typeof obj.schema === "string") {
         return `${obj.summary}\n\n${obj.schema}`;
       }
-      return `${obj.summary}`;
+      const errorText = typeof obj.error === "string" && obj.error ? `: ${obj.error}` : "";
+      return `${obj.summary}${errorText}`;
     }
   }
   return JSON.stringify(output, null, 2);
