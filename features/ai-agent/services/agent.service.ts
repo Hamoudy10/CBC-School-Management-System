@@ -331,6 +331,7 @@ function formatToolOutput(output: unknown): string {
       }
       const errorText = typeof obj.error === "string" && obj.error ? `: ${obj.error}` : "";
       let result = `${obj.summary}${errorText}`;
+
       if (Array.isArray(obj.rows) && obj.rows.length > 0) {
         const sample = obj.rows.slice(0, 20).map((r: unknown, i: number) => {
           const row = r as Record<string, unknown>;
@@ -339,6 +340,26 @@ function formatToolOutput(output: unknown): string {
         result += `\n\nRows:\n${sample}`;
         if (obj.rows.length > 20) result += `\n... and ${obj.rows.length - 20} more row(s)`;
       }
+
+      if (obj.details !== undefined) {
+        const details = obj.details;
+        if (Array.isArray(details)) {
+          const sample = details.slice(0, 20).map((item: unknown, i: number) => {
+            if (item !== null && typeof item === "object") {
+              return `${i + 1}. ${Object.entries(item as Record<string, unknown>).map(([k, v]) => `${k}: ${v}`).join(", ")}`;
+            }
+            return `${i + 1}. ${item}`;
+          }).join("\n");
+          result += `\n\nDetails:\n${sample}`;
+          if (details.length > 20) result += `\n... and ${details.length - 20} more`;
+        } else if (details !== null && typeof details === "object") {
+          const str = JSON.stringify(details);
+          result += `\n\nDetails: ${str.length > 2000 ? str.slice(0, 2000) + "..." : str}`;
+        } else {
+          result += `\n\nDetails: ${details}`;
+        }
+      }
+
       return result;
     }
   }
