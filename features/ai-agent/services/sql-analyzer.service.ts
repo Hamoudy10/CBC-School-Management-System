@@ -89,15 +89,19 @@ export function analyzeSql(
     warnings.push("Could not parse SQL structure, using basic safety checks");
   }
 
+  // Strip trailing LIMIT clause — the RPC wraps the query in FROM (... LIMIT 1000),
+  // so a model-added LIMIT would cause a double-LIMIT syntax error
+  let sql = trimmed.replace(/\s+LIMIT\s+\d+(?:\s+OFFSET\s+\d+)?\s*$/i, "").trim();
+
   // Warn about missing WHERE clause
-  const hasWhere = /\bwhere\s/i.test(trimmed);
+  const hasWhere = /\bwhere\s/i.test(sql);
   if (!hasWhere) {
     warnings.push("Query has no WHERE clause — this may return many rows");
   }
 
   return {
     safe: true,
-    sql: trimmed,
+    sql,
     warnings,
   };
 }

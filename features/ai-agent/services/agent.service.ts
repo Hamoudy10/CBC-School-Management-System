@@ -402,12 +402,8 @@ function buildConversationalFallback(message: string): string {
     ];
     return responses[Math.floor(Math.random() * responses.length)];
   }
-  const fallbacks = [
-    "I'm here to help you manage the school system. You can ask me about students, attendance, fees, report cards, timetables, or any other school management task. What would you like to do?",
-    "I'm your AI assistant for the school management system. I can help you look up information, generate reports, draft messages, and more. What are you working on?",
-    "I'm ready to help! I can answer questions about student records, attendance data, fee balances, academic performance, and other school operations. What would you like me to look into?",
-  ];
-  return fallbacks[Math.floor(Math.random() * fallbacks.length)];
+  // Only called when all retry attempts failed — be transparent
+  return "I wasn't able to process that request right now. You can try rephrasing your question or ask something else about students, attendance, fees, or other school operations.";
 }
 
 export function buildCurrentDateAnswer(date = new Date(), timeZone = DEFAULT_AGENT_TIME_ZONE): string {
