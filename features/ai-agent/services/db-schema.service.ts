@@ -30,18 +30,25 @@ export interface DbSchema {
   tables: DbTable[];
 }
 
-export function formatSchemaForPrompt(schema: DbSchema): string {
+export interface SchemaResult {
+  success: boolean;
+  tables: DbTable[];
+  error?: string;
+}
+
+export function formatSchemaForPrompt(tables: DbTable[]): string {
+  if (!tables || tables.length === 0) return "(no tables found)";
   const lines: string[] = [];
-  for (const table of schema.tables) {
-    const cols = table.columns.map((c) => {
+  for (const table of tables) {
+    const cols = (table.columns ?? []).map((c) => {
       const parts = [`  - ${c.name} (${c.type})${c.nullable ? "" : " NOT NULL"}`];
-      if (table.primary_key.includes(c.name)) parts.push(" [PK]");
-      const fk = table.foreign_keys.find((f) => f.column === c.name);
+      if ((table.primary_key ?? []).includes(c.name)) parts.push(" [PK]");
+      const fk = (table.foreign_keys ?? []).find((f) => f.column === c.name);
       if (fk) parts.push(` -> ${fk.ref_table}.${fk.ref_column}`);
       return parts.join("");
     });
-    const enumInfo = table.enums.length > 0
-      ? table.enums.map((e) => `  ENUM ${e.column}: ${e.values.join(", ")}`)
+    const enumInfo = (table.enums ?? []).length > 0
+      ? (table.enums ?? []).map((e) => `  ENUM ${e.column}: ${e.values.join(", ")}`)
       : [];
     lines.push(`- ${table.table_name}`);
     lines.push(...cols);
@@ -50,13 +57,15 @@ export function formatSchemaForPrompt(schema: DbSchema): string {
   return lines.join("\n");
 }
 
-export async function getDbSchema(): Promise<DbSchema> {
+export async function getDbSchema(): Promise<SchemaResult> {
   try {
     const supabase = await createSupabaseAdminClient();
     const { data, error } = await supabase.rpc("get_db_schema");
-    if (error) throw error;
-    return { tables: data as DbTable[] };
+    if (error) return { success: false, tables: [], error: error.message };
+    const tables = (data ?? []) as DbTable[];
+    return { success: true, tables };
   } catch (err) {
-    return { tables: [] };
+    const msg = err instanceof Error ? err.message : "Unknown error fetching schema";
+    return { success: false, tables: [], error: msg };
   }
 }

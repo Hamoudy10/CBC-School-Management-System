@@ -6,7 +6,7 @@ import type { AgentTool } from "@/features/ai-agent/types";
 import { toolInputSchemas } from "@/features/ai-agent/validators/aiAgent.schema";
 import { canAccessStudent, sanitizeForAgent } from "./context-builder.service";
 import { getProvider } from "@/lib/ai/providers";
-import { getDbSchema, formatSchemaForPrompt } from "./db-schema.service";
+import { getDbSchema, formatSchemaForPrompt, type SchemaResult } from "./db-schema.service";
 import { analyzeSql } from "./sql-analyzer.service";
 import { executeSqlQuery } from "./sql-executor.service";
 import { z } from "zod";
@@ -1117,12 +1117,19 @@ const get_db_schema_tool = makeTool(
   toolInputSchemas.get_db_schema,
   schemaOutput,
   async () => {
-    const dbSchema = await getDbSchema();
-    const formatted = formatSchemaForPrompt(dbSchema);
+    const result = await getDbSchema();
+    if (!result.success) {
+      return {
+        summary: `Could not fetch database schema: ${result.error}`,
+        schema: "(schema unavailable)",
+        raw: result,
+      };
+    }
+    const formatted = formatSchemaForPrompt(result.tables);
     return {
-      summary: `Database has ${dbSchema.tables.length} tables`,
+      summary: `Database has ${result.tables.length} tables`,
       schema: formatted,
-      raw: dbSchema,
+      raw: result,
     };
   },
 );
