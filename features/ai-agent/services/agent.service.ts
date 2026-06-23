@@ -330,7 +330,16 @@ function formatToolOutput(output: unknown): string {
         return `${obj.summary}\n\n${obj.schema}`;
       }
       const errorText = typeof obj.error === "string" && obj.error ? `: ${obj.error}` : "";
-      return `${obj.summary}${errorText}`;
+      let result = `${obj.summary}${errorText}`;
+      if (Array.isArray(obj.rows) && obj.rows.length > 0) {
+        const sample = obj.rows.slice(0, 20).map((r: unknown, i: number) => {
+          const row = r as Record<string, unknown>;
+          return `${i + 1}. ${Object.entries(row).map(([k, v]) => `${k}: ${v}`).join(", ")}`;
+        }).join("\n");
+        result += `\n\nRows:\n${sample}`;
+        if (obj.rows.length > 20) result += `\n... and ${obj.rows.length - 20} more row(s)`;
+      }
+      return result;
     }
   }
   return JSON.stringify(output, null, 2);
