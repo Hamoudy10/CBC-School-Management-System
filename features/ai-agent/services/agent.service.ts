@@ -126,7 +126,7 @@ export async function processAgentMessage(
   for (let round = 1; round <= MAX_TOOL_ROUNDS; round += 1) {
     const hasPriorTools = toolChainResults.length > 0;
     const priorToolsStr = hasPriorTools
-      ? `\n\n## Prior Tool Results\n${toolChainResults.map((r) => `- ${r.toolName}: ${r.output.slice(0, 500)}`).join("\n")}`
+      ? `\n\n## Prior Tool Results\n${toolChainResults.map((r) => `- ${r.toolName}: ${r.output.slice(0, 3000)}`).join("\n")}`
       : "";
 
     for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt += 1) {
@@ -190,14 +190,8 @@ ${request.message}${priorToolsStr}${chainContextStr}${retryContextStr}`;
       }
 
       if (!planResult.success) {
-        if (previousPlans.length > 0) {
-          previousPlans.push({ plan: "(plan result not successful)", error: "Model did not return a valid plan" });
-          continue;
-        }
-        await tryCompact(sessionId, schoolId);
-        const userMessage = buildConversationalFallback(request.message);
-        await saveMessage(sessionId, "assistant", userMessage, schoolId);
-        return { sessionId, message: { role: "assistant", content: userMessage }, confidence: 0, warnings: [] };
+        previousPlans.push({ plan: "(plan result not successful)", error: "Model did not return a valid plan" });
+        continue;
       }
 
       const plan = planResult.data as AgentPlan;
@@ -258,7 +252,7 @@ ${request.message}${priorToolsStr}${chainContextStr}${retryContextStr}`;
           }
 
           // Store result and continue to next tool round
-          const outputStr = typeof result.output === "string" ? result.output : JSON.stringify(result.output, null, 2);
+          const outputStr = formatToolOutput(result.output);
           toolChainResults.push({ toolName: plan.toolName, output: outputStr });
           break; // Exit retry loop, continue to next tool round
         } catch (error) {
@@ -299,6 +293,20 @@ ${request.message}${priorToolsStr}${chainContextStr}${retryContextStr}`;
 
   await tryCompact(sessionId, schoolId);
   return buildErrorResponse(sessionId, buildRetryExhaustedMessage(request.message, previousPlans));
+}
+
+function formatToolOutput(output: unknown): string {
+  if (typeof output === "string") return output;
+  if (output && typeof output === "object" && !Array.isArray(output)) {
+    const obj = output as Record<string, unknown>;
+    if (typeof obj.summary === "string") {
+      if (typeof obj.schema === "string") {
+        return `${obj.summary}\n\n${obj.schema}`;
+      }
+      return `${obj.summary}`;
+    }
+  }
+  return JSON.stringify(output, null, 2);
 }
 
 function buildErrorResponse(sessionId: string, message: string): AgentChatResponse {

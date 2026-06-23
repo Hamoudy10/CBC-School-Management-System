@@ -1105,7 +1105,6 @@ const change_active_term = makeTool(
 const schemaOutput = z.object({
   summary: z.string(),
   schema: z.string(),
-  raw: z.any().optional(),
 });
 
 const get_db_schema_tool = makeTool(
@@ -1122,14 +1121,12 @@ const get_db_schema_tool = makeTool(
       return {
         summary: `Could not fetch database schema: ${result.error}`,
         schema: "(schema unavailable)",
-        raw: result,
       };
     }
     const formatted = formatSchemaForPrompt(result.tables);
     return {
       summary: `Database has ${result.tables.length} tables`,
       schema: formatted,
-      raw: result,
     };
   },
 );
