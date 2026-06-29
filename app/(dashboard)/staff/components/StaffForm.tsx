@@ -184,6 +184,7 @@ export function StaffForm({
         firstName: defaultValues?.firstName || '',
         lastName: defaultValues?.lastName || '',
         middleName: defaultValues?.middleName || '',
+        email: defaultValues?.email || '',
         phone: defaultValues?.phone || '',
         gender: (defaultValues?.gender || undefined) as
           | 'male'
@@ -508,23 +509,14 @@ export function StaffForm({
         icon={<Shield className="h-4 w-4" />}
       >
         <div className="grid gap-4 sm:grid-cols-2">
-          {isCreate ? (
             <Input
               label="Email Address"
-              required
+              required={isCreate}
               type="email"
               placeholder="staff@example.com"
               error={errors.email?.message}
               {...register('email')}
             />
-          ) : (
-            <Input
-              label="Email Address"
-              type="email"
-              value={defaultValues?.email || ''}
-              disabled
-            />
-          )}
 
           <Select
             label="System Role"
@@ -593,10 +585,20 @@ export function StaffForm({
 
       {!isCreate && (
         <FormSection
-          title="Password Reset"
-          description="Generate a new temporary password for this staff member"
+          title="Password"
+          description="Set a new password or generate a temporary one for this staff member"
           icon={<Lock className="h-4 w-4" />}
         >
+          <div className="grid gap-4 sm:grid-cols-1">
+            <Input
+              label="New Password (leave blank to keep current)"
+              type="password"
+              placeholder="Min 8 chars, upper+lower+number+special"
+              error={errors.password?.message}
+              {...register('password')}
+            />
+          </div>
+
           <div className="flex flex-wrap items-center gap-3">
             <Button
               type="button"

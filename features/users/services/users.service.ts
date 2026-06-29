@@ -340,7 +340,6 @@ export async function updateUser(
   const isSelfUpdate = userId === currentUser.id;
 
   if (isSelfUpdate) {
-    // Users cannot change their own role or status
     if (payload.roleId || payload.status) {
       return {
         success: false,
@@ -362,7 +361,6 @@ export async function updateUser(
       };
     }
 
-    // Check target user's current role
     const targetUser = await getUserById(userId, currentUser);
     if (!targetUser) {
       return { success: false, message: "User not found." };
@@ -372,6 +370,26 @@ export async function updateUser(
         success: false,
         message:
           "Cannot modify a user with a role equal to or higher than your own.",
+      };
+    }
+  }
+
+  // Handle email / password changes via Supabase Auth admin API
+  if (payload.email || payload.password) {
+    const adminClient = await createSupabaseAdminClient();
+    const authUpdate: Record<string, string> = {};
+    if (payload.email) authUpdate.email = payload.email;
+    if (payload.password) authUpdate.password = payload.password;
+
+    const { error: authError } = await adminClient.auth.admin.updateUserById(
+      userId,
+      authUpdate,
+    );
+
+    if (authError) {
+      return {
+        success: false,
+        message: `Failed to update auth credentials: ${authError.message}`,
       };
     }
   }
@@ -390,6 +408,8 @@ export async function updateUser(
   if (payload.gender !== undefined) updateData.gender = payload.gender;
   if (payload.status !== undefined) updateData.status = payload.status;
   if (payload.roleId !== undefined) updateData.role_id = payload.roleId;
+
+  if (payload.email !== undefined) updateData.email = payload.email;
 
   const { error } = await (supabase
     .from("users") as any)

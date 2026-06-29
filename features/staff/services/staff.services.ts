@@ -565,6 +565,26 @@ export async function updateStaff(
     }
   }
 
+  // Handle email / password changes via Supabase Auth admin API
+  if (payload.email || payload.password) {
+    const adminClient = await createSupabaseAdminClient();
+    const authUpdate: Record<string, string> = {};
+    if (payload.email) authUpdate.email = payload.email;
+    if (payload.password) authUpdate.password = payload.password;
+
+    const { error: authError } = await adminClient.auth.admin.updateUserById(
+      existingStaff.userId,
+      authUpdate,
+    );
+
+    if (authError) {
+      return {
+        success: false,
+        message: `Failed to update auth credentials: ${authError.message}`,
+      };
+    }
+  }
+
   // Build user update object
   const userUpdate: Record<string, any> = {
     updated_by: currentUser.id,
@@ -576,6 +596,7 @@ export async function updateStaff(
   if (payload.phone !== undefined) userUpdate.phone = payload.phone;
   if (payload.gender !== undefined) userUpdate.gender = payload.gender;
   if (payload.roleId !== undefined) userUpdate.role_id = payload.roleId;
+  if (payload.email !== undefined) userUpdate.email = payload.email;
 
   // Update users table if needed
   if (Object.keys(userUpdate).length > 1) {

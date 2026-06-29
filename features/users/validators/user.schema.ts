@@ -71,6 +71,8 @@ export type CreateUserInput = z.infer<typeof createUserSchema>;
 // ============================================================
 export const updateUserSchema = z
   .object({
+    email: emailField.optional(),
+    password: passwordField.optional(),
     firstName: nameField.optional(),
     lastName: nameField.optional(),
     middleName: z

@@ -71,6 +71,7 @@ export function UsersClient() {
   const [editForm, setEditForm] = useState({
     userId: "",
     email: "",
+    password: "",
     firstName: "",
     lastName: "",
     middleName: "",
@@ -173,6 +174,7 @@ export function UsersClient() {
     setEditForm({
       userId: "",
       email: "",
+      password: "",
       firstName: "",
       lastName: "",
       middleName: "",
@@ -303,6 +305,7 @@ export function UsersClient() {
       setEditForm({
         userId: data.userId || userId,
         email: data.email || row.email || "",
+        password: "",
         firstName: data.firstName || "",
         lastName: data.lastName || "",
         middleName: data.middleName || "",
@@ -413,6 +416,14 @@ export function UsersClient() {
       middleName: editForm.middleName.trim(),
       phone: editForm.phone.trim(),
     };
+
+    if (editForm.email) {
+      payload.email = editForm.email.trim();
+    }
+
+    if (editForm.password) {
+      payload.password = editForm.password;
+    }
 
     if (editForm.gender) {
       payload.gender = editForm.gender;
@@ -820,7 +831,18 @@ export function UsersClient() {
                 label="Email"
                 type="email"
                 value={editForm.email}
-                disabled
+                onChange={(e) =>
+                  setEditForm((prev) => ({ ...prev, email: e.target.value }))
+                }
+              />
+              <Input
+                label="New Password (leave blank to keep current)"
+                type="password"
+                value={editForm.password}
+                onChange={(e) =>
+                  setEditForm((prev) => ({ ...prev, password: e.target.value }))
+                }
+                placeholder="Min 8 chars, upper+lower+number+special"
               />
               <Select
                 label="Role"

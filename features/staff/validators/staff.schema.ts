@@ -117,6 +117,16 @@ export const createStaffSchema = z.object({
 /** PUT /api/staff/[id] — Update an existing staff record */
 export const updateStaffSchema = z.object({
   // User fields (optional updates)
+  email: z
+    .string()
+    .email('Valid email is required')
+    .max(255)
+    .optional(),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(72, 'Password must be 72 characters or less')
+    .optional(),
   firstName: z
     .string()
     .min(1, 'First name is required')
