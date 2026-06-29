@@ -10,7 +10,7 @@ function mpesaResponse(resultCode: number, resultDesc: string) {
 }
 
 export async function POST(request: Request) {
-  if (process.env.MPESA_ENV === "production" && !isValidMpesaOrigin(request)) {
+  if (!isValidMpesaOrigin(request)) {
     return mpesaResponse(1, "Forbidden");
   }
 
@@ -74,6 +74,27 @@ export async function POST(request: Request) {
   if (!recordId) {
     return mpesaResponse(1, "Failed to record transaction");
   }
+
+  // Audit log for confirmation
+  const auditPayload = {
+    school_id: defaultSchoolId,
+    table_name: "mpesa_c2b_transactions",
+    record_id: recordId,
+    action: "MPESA_CONFIRMATION",
+    performed_by: "MPESA_SYSTEM",
+    old_data: existing ? { id: existing.id, payment_id: existing.payment_id } : null,
+    new_data: { trans_id: normalized.transId, trans_amount: normalized.transAmount, status: "confirmed" },
+    details: {
+      type: "mpesa_c2b_confirmation",
+      trans_id: normalized.transId,
+      trans_amount: normalized.transAmount,
+      bill_ref_number: normalized.billRefNumber,
+      invoice_number: normalized.invoiceNumber,
+      msisdn: normalized.msisdn,
+      is_duplicate: !!existing,
+    },
+  };
+  try { await supabase.from("audit_logs").insert(auditPayload); } catch {} 
 
   if (existing?.payment_id) {
     return mpesaResponse(0, "Already reconciled");

@@ -5,7 +5,7 @@ export const STORAGE_BUCKET =
 
 // Allowed file types by category
 export const ALLOWED_FILE_TYPES: Record<string, string[]> = {
-  image: ["image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"],
+  image: ["image/jpeg", "image/png", "image/gif", "image/webp"],
   document: [
     "application/pdf",
     "application/msword",
@@ -15,7 +15,7 @@ export const ALLOWED_FILE_TYPES: Record<string, string[]> = {
     "text/csv",
   ],
   report: ["application/pdf"],
-  logo: ["image/png", "image/jpeg", "image/svg+xml", "image/webp"],
+  logo: ["image/png", "image/jpeg", "image/webp"],
   avatar: ["image/png", "image/jpeg", "image/webp"],
 };
 
@@ -28,14 +28,40 @@ export const MAX_FILE_SIZES: Record<string, number> = {
   avatar: 1 * 1024 * 1024, // 1MB
 };
 
+// Magic byte signatures for file type verification
+const FILE_SIGNATURES: Record<string, Uint8Array[]> = {
+  "image/jpeg": [new Uint8Array([0xFF, 0xD8, 0xFF])],
+  "image/png": [new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])],
+  "image/gif": [new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x37, 0x61]), new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61])],
+  "image/webp": [new Uint8Array([0x52, 0x49, 0x46, 0x46]), new Uint8Array([0x57, 0x45, 0x42, 0x50])],
+  "application/pdf": [new Uint8Array([0x25, 0x50, 0x44, 0x46])],
+};
+
+function startsWithSignature(data: Uint8Array, signature: Uint8Array): boolean {
+  if (data.length < signature.length) { return false; }
+  for (let i = 0; i < signature.length; i++) {
+    if (data[i] !== signature[i]) { return false; }
+  }
+  return true;
+}
+
+export function validateFileSignature(
+  fileBuffer: ArrayBuffer,
+  mimeType: string,
+): boolean {
+  const signatures = FILE_SIGNATURES[mimeType];
+  if (!signatures) { return true; }
+  const data = new Uint8Array(fileBuffer);
+  return signatures.some((sig) => startsWithSignature(data, sig));
+}
+
 // File extension to MIME type mapping
-const EXTENSION_TO_MIME: Record<string, string> = {
+export const EXTENSION_TO_MIME: Record<string, string> = {
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
   png: "image/png",
   gif: "image/gif",
   webp: "image/webp",
-  svg: "image/svg+xml",
   pdf: "application/pdf",
   doc: "application/msword",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -48,6 +74,7 @@ export function validateFile(
   fileName: string,
   fileSize: number,
   category: keyof typeof ALLOWED_FILE_TYPES = "document",
+  fileBuffer?: ArrayBuffer,
 ): { success: boolean; message?: string } {
   const extension = fileName.split(".").pop()?.toLowerCase() ?? "";
   const mimeType = EXTENSION_TO_MIME[extension];
@@ -69,6 +96,13 @@ export function validateFile(
     return {
       success: false,
       message: `File size (${(fileSize / 1024 / 1024).toFixed(1)}MB) exceeds maximum allowed size of ${(maxSize / 1024 / 1024).toFixed(0)}MB for ${category}.`,
+    };
+  }
+
+  if (fileBuffer && !validateFileSignature(fileBuffer, mimeType)) {
+    return {
+      success: false,
+      message: `File content does not match expected signature for .${extension}. The file may be corrupted or renamed.`,
     };
   }
 

@@ -20,7 +20,7 @@ export function SWRProvider({ children }: { children: React.ReactNode }) {
       value={{
         fetcher,
         revalidateOnFocus: false,
-        revalidateOnReconnect: false,
+        revalidateOnReconnect: true,
         dedupingInterval: 10000,
         keepPreviousData: true,
         shouldRetryOnError: false,

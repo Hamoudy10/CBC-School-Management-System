@@ -727,6 +727,35 @@ export async function createPayment(
     };
   }
 
+  const paymentId = (data as any).id;
+  const { error: auditError } = await supabase.from("audit_logs").insert({
+    school_id: schoolId,
+    table_name: "payments",
+    record_id: paymentId,
+    action: "INSERT",
+    performed_by: currentUser.id,
+    old_data: null,
+    new_data: {
+      id: paymentId,
+      student_fee_id: payload.studentFeeId,
+      amount_paid: payload.amountPaid,
+      payment_method: payload.paymentMethod,
+      transaction_id: payload.transactionId || null,
+      receipt_number: receiptNumber,
+      payment_date: payload.paymentDate || new Date().toISOString().split("T")[0],
+    },
+    details: {
+      type: "payment_creation",
+      amount_paid: payload.amountPaid,
+      payment_method: payload.paymentMethod,
+      receipt_number: receiptNumber,
+    },
+  });
+
+  if (auditError) {
+    console.error("Failed to audit payment creation:", auditError);
+  }
+
   try {
     await recalculateStudentFeeBalance(supabase, payload.studentFeeId, schoolId);
   } catch (recalculationError) {
@@ -736,7 +765,7 @@ export async function createPayment(
   return {
     success: true,
     message: "Payment recorded successfully.",
-    id: (data as any).id,
+    id: paymentId,
     receiptNumber,
   };
 }

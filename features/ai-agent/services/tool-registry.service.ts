@@ -1170,7 +1170,7 @@ const execute_sql_tool = makeTool(
   "low",
   toolInputSchemas.execute_sql,
   executeSqlOutput,
-  async (input) => {
+  async (input, context) => {
     const analysis = analyzeSql(input.sql, {});
     if (!analysis.safe) {
       return {
@@ -1183,7 +1183,7 @@ const execute_sql_tool = makeTool(
         executionMs: 0,
       };
     }
-    const result = await executeSqlQuery(analysis.sql);
+    const result = await executeSqlQuery(analysis.sql, context?.schoolId);
     return {
       success: result.success,
       summary: result.success ? `Query returned ${result.count} row(s)` : "Query failed",

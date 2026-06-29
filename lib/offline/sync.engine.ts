@@ -4,7 +4,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import offlineStorage from './storage';
-import { createSupabaseServerClient } from '../supabase/server';
+import { createSupabaseBrowserClient } from '../supabase/client';
 import { logger } from '../logger';
 
 /**
@@ -99,7 +99,7 @@ export async function syncWithServer(): Promise<void> {
       source: 'offline.sync.engine'
     });
     
-    const supabase = await createSupabaseServerClient();
+    const supabase = createSupabaseBrowserClient();
     
     // Process the sync queue
     await processSyncQueue(supabase);

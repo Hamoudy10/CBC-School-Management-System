@@ -11,12 +11,13 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/lib/api/withAuth";
 import { errorResponse } from "@/lib/api/response";
+import { rateLimit } from "@/lib/api/rateLimit";
 import {
   ensureStorageBucket,
   STORAGE_BUCKET,
   validateFile,
   generateStoragePath,
-  getSignedUrl,
+  EXTENSION_TO_MIME,
 } from "@/lib/supabase/storage";
 import {
   isCloudinaryConfigured,
@@ -47,7 +48,6 @@ const FOLDER_TO_CATEGORY: Record<string, string> = {
 
 function uploadSuccess(payload: {
   url: string;
-  signedUrl?: string;
   path: string;
   size: number;
   type: string;
@@ -67,6 +67,14 @@ function uploadSuccess(payload: {
 
 export const POST = withAuth(async (request: NextRequest, user) => {
   try {
+    const rl = rateLimit(`upload:${user.id}`, 30, 60);
+    if (!rl.allowed) {
+      return errorResponse(
+        `Rate limit exceeded. Try again in ${rl.retryAfter} seconds.`,
+        429,
+      );
+    }
+
     const schoolId = user.schoolId || user.school_id;
     if (!schoolId) {
       return errorResponse("No school context available", 400);
@@ -84,9 +92,10 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       return errorResponse("No file uploaded", 400);
     }
 
-    // Validate file type and size
+    // Validate file type, size, and content signature
     const category = (FOLDER_TO_CATEGORY[folder] || "document") as Parameters<typeof validateFile>[2];
-    const validation = validateFile(file.name, file.size, category);
+    const fileBuffer = await file.arrayBuffer();
+    const validation = validateFile(file.name, file.size, category, fileBuffer);
     if (!validation.success) {
       return errorResponse(validation.message!, 400);
     }
@@ -111,6 +120,8 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     }
 
     const fileName = generateStoragePath(schoolId, normalizedFolder, file.name);
+    const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+    const contentType = EXTENSION_TO_MIME[extension] || "application/octet-stream";
 
     const storageSetup = await ensureStorageBucket();
     if (!storageSetup.success) {
@@ -126,7 +137,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       .upload(fileName, file, {
         cacheControl: "3600",
         upsert: false,
-        contentType: file.type || "application/octet-stream",
+        contentType: contentType || "application/octet-stream",
       });
 
     if (uploadError) {
@@ -138,18 +149,15 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       );
     }
 
-    // Generate signed URL for secure access
-    const { url: signedUrl } = await getSignedUrl(fileName, 86400);
     const { data: urlData } = adminClient.storage
       .from(STORAGE_BUCKET)
       .getPublicUrl(fileName);
 
     return uploadSuccess({
       url: urlData.publicUrl,
-      signedUrl,
       path: fileName,
       size: file.size,
-      type: file.type,
+      type: contentType,
       provider: "supabase",
     });
   } catch (error) {

@@ -11,6 +11,7 @@ import { createSession, saveMessage, getLastMessages, getSession, updateSessionS
 import { logAgentAIEvent } from "./agent-audit.service";
 import { classifyToolError, buildRetryPrompt, buildRetryExhaustedMessage, MAX_RETRY_ATTEMPTS } from "./retry.service";
 import { shouldCompact, compactConversation } from "./compaction.service";
+import { detectPromptInjection, moderateOutput } from "@/lib/ai/ai.guard";
 
 const SYSTEM_PROMPT = `You are a helpful AI assistant with broad general knowledge, specialized in the CBC School Management System.
 
@@ -82,6 +83,13 @@ export async function processAgentMessage(
   }
 
   const normalizedMessage = preProcessUserMessage(request.message);
+
+  const injectionCheck = detectPromptInjection(normalizedMessage);
+  if (injectionCheck.injected) {
+    const content = "I can only help with school management tasks. Please ask a question about students, fees, attendance, or other school operations.";
+    await saveMessage(sessionId, "assistant", content, schoolId, { pageContext: request.pageContext });
+    return { sessionId, message: { role: "assistant", content }, confidence: 0, warnings: ["Prompt injection blocked"] };
+  }
 
   await saveMessage(sessionId, "user", normalizedMessage, schoolId, {
     pageContext: request.pageContext,

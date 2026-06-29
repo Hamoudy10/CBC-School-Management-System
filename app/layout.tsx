@@ -9,6 +9,7 @@ import { ThemeProvider } from "next-themes";
 import { ToastProvider } from "@/components/ui/Toast";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { SWRProvider } from "@/components/providers/SWRProvider";
+import PWAProvider from "@/components/providers/PWAProvider";
 import "@/styles/globals.css";
 
 const inter = Inter({
@@ -39,6 +40,10 @@ export const metadata: Metadata = {
     index: false,
     follow: false,
   },
+  manifest: "/manifest.json",
+  icons: {
+    apple: [{ url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" }],
+  },
 };
 
 export const viewport: Viewport = {
@@ -59,7 +64,9 @@ export default function RootLayout({
         <ThemeProvider attribute="data-theme" defaultTheme="light" enableSystem disableTransitionOnChange>
           <SWRProvider>
             <AuthProvider>
-              <ToastProvider>{children}</ToastProvider>
+              <PWAProvider>
+                <ToastProvider>{children}</ToastProvider>
+              </PWAProvider>
             </AuthProvider>
           </SWRProvider>
         </ThemeProvider>

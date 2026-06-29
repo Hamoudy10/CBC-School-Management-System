@@ -11,8 +11,9 @@ const nextConfig = {
   // Strict mode for better development experience
   reactStrictMode: true,
 
-  // Image optimization domains
+  // Image optimization
   images: {
+    formats: ["image/avif", "image/webp"],
     remotePatterns: [
       {
         protocol: "https",
@@ -35,6 +36,9 @@ const nextConfig = {
   
   // Enable SWC minification for faster builds
   swcMinify: true,
+
+  // Standalone output for Docker/self-hosted deployments
+  output: "standalone",
 
   // Headers for security
   async headers() {
