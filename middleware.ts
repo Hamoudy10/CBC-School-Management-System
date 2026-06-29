@@ -16,6 +16,7 @@ const PUBLIC_ROUTES = [
   "/auth/callback",
   "/auth/reset-password",
   "/auth/verify",
+  "/api/auth/password-reset",
 ];
 
 // Static/asset routes that skip all auth checks
