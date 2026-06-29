@@ -10,8 +10,8 @@ export async function GET() {
   // Check database connectivity
   try {
     const supabase = await createSupabaseServerClient();
-    const { data, error } = await supabase.from("health_check").select("id").limit(1).maybeSingle();
-    if (error && !error.message.includes("relation") && !error.message.includes("does not exist")) {
+    const { data, error } = await supabase.from("schools").select("id").limit(1).maybeSingle();
+    if (error) {
       checks.database = `unhealthy: ${error.message}`;
       healthy = false;
     } else {
