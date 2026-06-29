@@ -6,7 +6,7 @@ import { getSession, getSessionMessages, updateSessionStatus } from "@/features/
 export const dynamic = "force-dynamic";
 
 export const GET = withAuth(
-  async (request: NextRequest, { user }: any, { params }: any) => {
+  async (request: NextRequest, user: any, { params }: any) => {
     try {
       const { id } = params;
       const session = await getSession(id);
@@ -25,7 +25,7 @@ export const GET = withAuth(
 );
 
 export const PATCH = withAuth(
-  async (request: NextRequest, { user }: any, { params }: any) => {
+  async (request: NextRequest, user: any, { params }: any) => {
     try {
       const { id } = params;
       const session = await getSession(id);

@@ -162,7 +162,9 @@ function AIAgentPage() {
       const res = await fetch("/api/ai-agent/chat", { credentials: "include" });
       const json = await res.json();
       if (json.success) setSessions(json.data.sessions ?? []);
-    } catch {}
+    } catch (e) {
+      console.error("Failed to load sessions:", e);
+    }
   };
 
   const loadSession = async (sid: string) => {
@@ -181,9 +183,12 @@ function AIAgentPage() {
               timestamp: new Date(m.createdAt),
             })),
         );
-        setShowSessions(false);
+      } else {
+        console.error("Failed to load session:", json.error);
       }
-    } catch {}
+    } catch (e) {
+      console.error("Failed to load session:", e);
+    }
   };
 
   const newSession = () => {
