@@ -62,7 +62,7 @@ export default function GradingPage() {
   };
 
   const addStudent = () => {
-    if (!studentName.trim()) return;
+    if (!studentName.trim()) {return;}
     const newStudent: StudentAnswer = {
       studentId: `student_${Date.now()}`,
       studentName: studentName.trim(),
@@ -119,8 +119,8 @@ export default function GradingPage() {
         }),
       });
       const json = await res.json();
-      if (json.success) setResult(json.data);
-      else toastError("Error", json.error);
+      if (json.success) {setResult(json.data);}
+      else {toastError("Error", json.error);}
     } catch {
       toastError("Error", "Failed to grade");
     } finally {

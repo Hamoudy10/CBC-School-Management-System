@@ -17,7 +17,7 @@ export const GET = withPermission('exams', 'view', async (_request: NextRequest,
 
 export const POST = withPermission('exams', 'create', async (request: NextRequest, { user }) => {
   const validation = await validateBody(request, createExamRoomSchema);
-  if (!validation.success) return validationErrorResponse(validation.errors!);
+  if (!validation.success) {return validationErrorResponse(validation.errors!);}
   try {
     const room = await createExamRoom(validation.data!, user.schoolId!);
     return successResponse(room);

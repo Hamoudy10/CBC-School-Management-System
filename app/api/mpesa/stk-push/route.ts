@@ -18,7 +18,7 @@ const stkPushSchema = z.object({
 
 export const POST = withPermission('finance', 'create', async (request: NextRequest, { user }) => {
   const validation = await validateBody(request, stkPushSchema);
-  if (!validation.success) return validationErrorResponse(validation.errors!);
+  if (!validation.success) {return validationErrorResponse(validation.errors!);}
 
   const supabase = await createSupabaseServerClient();
   const config = getMpesaConfig();
@@ -51,7 +51,7 @@ export const POST = withPermission('finance', 'create', async (request: NextRequ
     });
 
     const result = await response.json();
-    if (!response.ok) throw new Error(result.errorMessage || 'STK push failed');
+    if (!response.ok) {throw new Error(result.errorMessage || 'STK push failed');}
 
     await supabase.from('mpesa_stk_requests').insert({
       school_id: user.schoolId!,

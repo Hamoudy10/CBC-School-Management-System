@@ -33,7 +33,7 @@ export default function ApplyPage() {
         body: JSON.stringify({ firstName, lastName, dateOfBirth: dob, gender, gradeApplyingFor: grade, previousSchool: prevSchool || undefined, parentName, parentPhone, parentEmail: parentEmail || undefined, parentIdNumber: parentId || undefined }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Submission failed');
+      if (!res.ok) {throw new Error(json.error || 'Submission failed');}
       setDone(true);
       success('Application submitted');
     } catch (err) {

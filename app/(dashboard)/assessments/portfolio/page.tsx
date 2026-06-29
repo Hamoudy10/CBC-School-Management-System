@@ -56,9 +56,9 @@ export default function PortfolioPage() {
 
   const fetchEntries = useCallback(async () => {
     const params = new URLSearchParams();
-    if (filterStatus) params.set('status', filterStatus);
-    if (filterStudent) params.set('studentId', filterStudent);
-    if (filterLA) params.set('learningAreaId', filterLA);
+    if (filterStatus) {params.set('status', filterStatus);}
+    if (filterStudent) {params.set('studentId', filterStudent);}
+    if (filterLA) {params.set('learningAreaId', filterLA);}
     try {
       const res = await fetch(`/api/portfolio/entries?${params}`, { credentials: 'include' });
       if (res.ok) { const j = await res.json(); setEntries(j.data ?? []); }
@@ -83,7 +83,7 @@ export default function PortfolioPage() {
         body: JSON.stringify({ studentId: sStudent, learningAreaId: sLA, title: sTitle.trim(), evidenceType: sType, evidenceContent: sContent.trim() || undefined }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed');
+      if (!res.ok) {throw new Error(json.error || 'Failed');}
       setEntries((prev) => [json.data, ...prev]);
       setShowSubmit(false); setSTitle(''); setSContent('');
       success('Portfolio entry submitted');
@@ -97,7 +97,7 @@ export default function PortfolioPage() {
         body: JSON.stringify({ score: parseInt(aScore), level: aLevel, comment: aComment || undefined, status: 'assessed' }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed');
+      if (!res.ok) {throw new Error(json.error || 'Failed');}
       setEntries((prev) => prev.map((e) => e.entryId === entryId ? { ...e, ...json.data } : e));
       setAssessing(null); setAComment('');
       success('Entry assessed');
@@ -193,7 +193,7 @@ export default function PortfolioPage() {
                           <span>{new Date(entry.submittedAt).toLocaleDateString()}</span>
                         </div>
                         {entry.description && <p className="mt-1 text-sm text-gray-600">{entry.description}</p>}
-                        {entry.assessedScore != null && (
+                        {entry.assessedScore !== null && (
                           <div className="mt-2 flex items-center gap-2 text-sm">
                             <span className="font-medium text-gray-700">Score: {entry.assessedScore}/4</span>
                             <Badge variant={entry.assessedLevel as any} size="xs">{entry.assessedLevel?.replace('_', ' ')}</Badge>

@@ -55,7 +55,7 @@ export default function FeePredictorPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Analysis failed');
+      if (!res.ok) {throw new Error(data.error || 'Analysis failed');}
 
       const items = Array.isArray(data.data) ? data.data : [data.data];
       setResults(items);

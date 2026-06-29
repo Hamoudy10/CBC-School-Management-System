@@ -13,7 +13,7 @@ export const GET = withPermission('library', 'view', async (_request, { user }) 
 
 export const POST = withPermission('library', 'create', async (request, { user }) => {
   const v = await validateBody(request, createBookSchema);
-  if (!v.success) return validationErrorResponse(v.errors!);
+  if (!v.success) {return validationErrorResponse(v.errors!);}
   try { return successResponse(await createBook(v.data!, user.schoolId!)); }
   catch (e) { return errorResponse(e instanceof Error ? e.message : 'Failed', 500); }
 });

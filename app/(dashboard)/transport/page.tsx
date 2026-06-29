@@ -57,7 +57,7 @@ export default function TransportPage() {
         body: JSON.stringify({ registrationNumber: vReg.trim(), capacity: parseInt(vCapacity), driverName: vDriver.trim() || undefined, driverPhone: vPhone.trim() || undefined }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed');
+      if (!res.ok) {throw new Error(json.error || 'Failed');}
       setVehicles((prev) => [...prev, json.data]);
       setVReg(''); setVCapacity('30'); setVDriver(''); setVPhone('');
       success('Vehicle added');
@@ -72,7 +72,7 @@ export default function TransportPage() {
         body: JSON.stringify({ name: rName.trim(), zone: rZone.trim() || undefined }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed');
+      if (!res.ok) {throw new Error(json.error || 'Failed');}
       setRoutes((prev) => [...prev, json.data]);
       setRName(''); setRZone('');
       success('Route added');
@@ -87,7 +87,7 @@ export default function TransportPage() {
         body: JSON.stringify({ studentId: aStudent, routeId: aRoute, pickupPoint: aPickup.trim(), dropoffPoint: aDropoff.trim() }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed');
+      if (!res.ok) {throw new Error(json.error || 'Failed');}
       setAssignments((prev) => [...prev, json.data]);
       setAStudent(''); setARoute(''); setAPickup(''); setADropoff('');
       success('Student assigned');

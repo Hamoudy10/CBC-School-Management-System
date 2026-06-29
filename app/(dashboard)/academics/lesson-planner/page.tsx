@@ -73,7 +73,7 @@ export default function LessonPlannerPage() {
   const [result, setResult] = useState<LessonPlanData | null>(null);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {return;}
     let active = true;
     async function load() {
       try {
@@ -83,7 +83,7 @@ export default function LessonPlannerPage() {
         ]);
         const refJson = await refRes.json();
         const hierJson = await hierRes.json();
-        if (!active) return;
+        if (!active) {return;}
         if (refRes.ok) {
           setClasses((refJson.data?.classes ?? []).map((c: any) => ({
             classId: c.classId, name: c.name, gradeName: c.gradeName || `Grade ${c.gradeLevel ?? ''}`,
@@ -93,7 +93,7 @@ export default function LessonPlannerPage() {
           setHierarchy(normalizeHierarchy(hierJson.data ?? []));
         }
       } catch { error('Failed to load data'); }
-      finally { if (active) setLoading(false); }
+      finally { if (active) {setLoading(false);} }
     }
     void load();
     return () => { active = false; };
@@ -123,7 +123,7 @@ export default function LessonPlannerPage() {
         }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Generation failed');
+      if (!res.ok) {throw new Error(json.error || 'Generation failed');}
       setResult(json.data);
       success('Lesson plan generated');
     } catch (err) {

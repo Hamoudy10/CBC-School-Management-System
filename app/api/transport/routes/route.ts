@@ -13,7 +13,7 @@ export const GET = withPermission('timetable', 'view', async (_request, { user }
 
 export const POST = withPermission('timetable', 'create', async (request, { user }) => {
   const v = await validateBody(request, createRouteSchema);
-  if (!v.success) return validationErrorResponse(v.errors!);
+  if (!v.success) {return validationErrorResponse(v.errors!);}
   try { return successResponse(await createRoute(v.data!, user.schoolId!)); }
   catch (e) { return errorResponse(e instanceof Error ? e.message : 'Failed', 500); }
 });

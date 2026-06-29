@@ -9,7 +9,7 @@ export const POST = withPermission(
   { module: "communication", action: "view" },
   async (request: NextRequest, { user }: any) => {
     const validation = await validateBody(request, sentimentAnalysisRequestSchema);
-    if (!validation.success) return validationErrorResponse(validation.errors ?? {});
+    if (!validation.success) {return validationErrorResponse(validation.errors ?? {});}
 
     try {
       const result = await analyzeParentSentiment(

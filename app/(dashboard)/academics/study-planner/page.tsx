@@ -102,7 +102,7 @@ export default function StudyPlannerPage() {
         }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Generation failed');
+      if (!res.ok) {throw new Error(json.error || 'Generation failed');}
       setResult(json.data);
       success('Study plan generated');
     } catch (err) {
@@ -113,7 +113,7 @@ export default function StudyPlannerPage() {
   const toggleSession = (idx: number) => {
     setCompletedSessions((prev) => {
       const next = new Set(prev);
-      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      if (next.has(idx)) {next.delete(idx);} else {next.add(idx);}
       return next;
     });
   };

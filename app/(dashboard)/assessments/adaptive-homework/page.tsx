@@ -100,7 +100,7 @@ export default function AdaptiveHomeworkPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Generation failed');
+      if (!res.ok) {throw new Error(data.error || 'Generation failed');}
 
       setResult(data.data);
       success('Worksheet generated successfully');

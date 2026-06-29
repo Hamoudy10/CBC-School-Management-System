@@ -8,7 +8,7 @@ import { generateSeatingPlan, generateSeatingPlanSchema } from '@/features/exam-
 
 export const POST = withPermission('exams', 'create', async (request: NextRequest, { user }) => {
   const validation = await validateBody(request, generateSeatingPlanSchema);
-  if (!validation.success) return validationErrorResponse(validation.errors!);
+  if (!validation.success) {return validationErrorResponse(validation.errors!);}
   try {
     const chart = await generateSeatingPlan(validation.data!, user.schoolId!);
     return successResponse(chart);

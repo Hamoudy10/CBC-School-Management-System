@@ -106,7 +106,7 @@ export default function ExamGeneratorPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Generation failed');
+      if (!res.ok) {throw new Error(data.error || 'Generation failed');}
 
       setResult(data.data);
       success('Exam paper generated successfully');

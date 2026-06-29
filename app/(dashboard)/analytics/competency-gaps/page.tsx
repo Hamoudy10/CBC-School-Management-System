@@ -56,7 +56,7 @@ export default function CompetencyGapsPage() {
   const [selectedArea, setSelectedArea] = useState('');
 
   const fetchData = useCallback(async () => {
-    if (!classId) return;
+    if (!classId) {return;}
     setLoading(true);
     try {
       const params = new URLSearchParams({ classId });
@@ -92,7 +92,7 @@ export default function CompetencyGapsPage() {
   }, [classId, error]);
 
   const analyzeGaps = useCallback(async () => {
-    if (!classId) return;
+    if (!classId) {return;}
     setLoading(true);
     try {
       const res = await fetch('/api/reports-ai/insights', {
@@ -111,7 +111,7 @@ export default function CompetencyGapsPage() {
   }, [classId, success, error]);
 
   useEffect(() => {
-    if (classId) fetchData();
+    if (classId) {fetchData();}
   }, [classId, fetchData]);
 
   const weakestAreas = weakAreas.slice(0, 5);

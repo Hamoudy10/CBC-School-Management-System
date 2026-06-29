@@ -49,7 +49,7 @@ export default function InventoryPage() {
         body: JSON.stringify({ name: iName.trim(), category: iCategory, quantity: parseInt(iQty) || 1, condition: iCondition.trim() || undefined, location: iLocation.trim() || undefined, assignedTo: iAssigned.trim() || undefined }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed');
+      if (!res.ok) {throw new Error(json.error || 'Failed');}
       setItems((prev) => [...prev, json.data]);
       setIName(''); setIQty('1'); setICondition(''); setILocation(''); setIAssigned('');
       success('Item added');

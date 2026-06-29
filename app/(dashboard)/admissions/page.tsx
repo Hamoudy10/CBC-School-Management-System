@@ -56,7 +56,7 @@ export default function AdmissionsPage() {
         body: JSON.stringify({ status, notes: reviewNotes || undefined }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed');
+      if (!res.ok) {throw new Error(json.error || 'Failed');}
       setApps((prev) => prev.map((a) => a.applicationId === id ? json.data : a));
       setSelectedApp(null); setReviewNotes('');
       success(`Application ${status}`);

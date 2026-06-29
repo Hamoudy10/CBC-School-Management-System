@@ -73,7 +73,7 @@ export default function TimetableOptimizerPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Generation failed');
+      if (!res.ok) {throw new Error(data.error || 'Generation failed');}
 
       setResult(data.data);
       success('Timetable suggestions generated');

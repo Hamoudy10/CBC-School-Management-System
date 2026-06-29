@@ -16,7 +16,7 @@ function ThemeToggle({ className }: ThemeToggleProps) {
   useEffect(() => setMounted(true), []);
 
   if (!mounted)
-    return <div className={cn("h-9 w-9 rounded-lg", className)} />;
+    {return <div className={cn("h-9 w-9 rounded-lg", className)} />;}
 
   const isDark = theme === "dark";
 

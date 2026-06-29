@@ -9,10 +9,10 @@ import { rateLimit } from '@/lib/api/rateLimit';
 export const POST = async (request: NextRequest) => {
   const ip = request.headers.get('x-forwarded-for') || 'anonymous';
   const rl = rateLimit(ip, 5, 60000);
-  if (!rl.allowed) return errorResponse('Too many requests', 429);
+  if (!rl.allowed) {return errorResponse('Too many requests', 429);}
 
   const validation = await validateBody(request, submitApplicationSchema);
-  if (!validation.success) return validationErrorResponse(validation.errors!);
+  if (!validation.success) {return validationErrorResponse(validation.errors!);}
   try {
     const app = await submitApplication(validation.data!);
     return successResponse(app);

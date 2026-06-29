@@ -65,7 +65,7 @@ export default function CurriculumAlignmentPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Check failed');
+      if (!res.ok) {throw new Error(data.error || 'Check failed');}
 
       setResult(data.data);
       success('Alignment check complete');

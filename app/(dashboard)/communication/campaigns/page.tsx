@@ -42,7 +42,7 @@ export default function CampaignsPage() {
   const handleTemplateChange = (val: string) => {
     setTemplate(val);
     const tpl = TEMPLATES.find((t) => t.value === val);
-    if (tpl) setMessage(tpl.defaultMessage);
+    if (tpl) {setMessage(tpl.defaultMessage);}
   };
 
   const handleSend = useCallback(async () => {
@@ -64,7 +64,7 @@ export default function CampaignsPage() {
         }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Send failed');
+      if (!res.ok) {throw new Error(json.error || 'Send failed');}
 
       setResult({
         sent: json.data?.sent ?? 0,

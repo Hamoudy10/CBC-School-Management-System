@@ -191,7 +191,7 @@ export default function ProfilePage() {
     try {
       const body: Record<string, any> = {};
       for (const [key, value] of Object.entries(editForm)) {
-        if (value !== "") body[key] = value;
+        if (value !== "") {body[key] = value;}
       }
       const response = await fetch(`/api/users/${user.id}/profile`, {
         method: "PUT",

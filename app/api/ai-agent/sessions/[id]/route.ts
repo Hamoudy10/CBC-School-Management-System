@@ -11,7 +11,7 @@ export const GET = withAuth(
       const { id } = params;
       const session = await getSession(id);
 
-      if (!session) return errorResponse("Session not found", 404);
+      if (!session) {return errorResponse("Session not found", 404);}
       if (session.userId !== user.id && session.schoolId !== user.schoolId) {
         return errorResponse("Access denied", 403);
       }
@@ -30,7 +30,7 @@ export const PATCH = withAuth(
       const { id } = params;
       const session = await getSession(id);
 
-      if (!session) return errorResponse("Session not found", 404);
+      if (!session) {return errorResponse("Session not found", 404);}
       if (session.userId !== user.id && user.role !== "super_admin") {
         return errorResponse("Access denied", 403);
       }

@@ -80,11 +80,11 @@ export const PUT = withPermission('settings', 'update', async (request, { user, 
     is_active: updateData.isActive,
     updated_at: new Date().toISOString(),
   };
-  if (updateData.name !== undefined) updatePayload.name = updateData.name;
-  if (updateData.type !== undefined) updatePayload.type = updateData.type;
-  if (updateData.address !== undefined) updatePayload.address = updateData.address;
-  if (updateData.county !== undefined) updatePayload.county = updateData.county;
-  if (updateData.motto !== undefined) updatePayload.motto = updateData.motto;
+  if (updateData.name !== undefined) {updatePayload.name = updateData.name;}
+  if (updateData.type !== undefined) {updatePayload.type = updateData.type;}
+  if (updateData.address !== undefined) {updatePayload.address = updateData.address;}
+  if (updateData.county !== undefined) {updatePayload.county = updateData.county;}
+  if (updateData.motto !== undefined) {updatePayload.motto = updateData.motto;}
 
   let query = supabase
     .from('schools')

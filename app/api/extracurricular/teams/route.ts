@@ -13,7 +13,7 @@ export const GET = withPermission('academics', 'view', async (_request, { user }
 
 export const POST = withPermission('academics', 'create', async (request, { user }) => {
   const v = await validateBody(request, createTeamSchema);
-  if (!v.success) return validationErrorResponse(v.errors!);
+  if (!v.success) {return validationErrorResponse(v.errors!);}
   try { return successResponse(await createTeam(v.data!, user.schoolId!)); }
   catch (e) { return errorResponse(e instanceof Error ? e.message : 'Failed', 500); }
 });

@@ -9,7 +9,7 @@ export const POST = withPermission(
   { module: "analytics", action: "view" },
   async (request: NextRequest, { user }: any) => {
     const validation = await validateBody(request, performanceForecastRequestSchema);
-    if (!validation.success) return validationErrorResponse(validation.errors!);
+    if (!validation.success) {return validationErrorResponse(validation.errors!);}
 
     try {
       const result = await generatePerformanceForecast(validation.data, user.school_id);

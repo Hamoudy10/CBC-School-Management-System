@@ -93,9 +93,6 @@ const CANONICAL_TABLES = new Set([
   'ai_agent_messages',
   'ai_agent_actions',
   'ai_agent_tool_catalog',
-  'user_roles',           // used by AI agent tools
-  'timetable_entries',     // used by AI agent tools
-  'fee_waivers',           // used by AI agent tools
   'ai_logs',
   'ai_cache',
 
@@ -145,11 +142,7 @@ const BANNED_TABLES = new Map([
   ['student_parents', 'use "student_guardians" instead'],
   ['assessment_results', 'use "assessments" instead'],
   ['discipline_records', 'use "disciplinary_records" instead'],
-  ['timetable_entries', 'use "timetable_slots" instead'],
-  ['user_roles', 'use roles on users table instead'],
-  ['fee_waivers', 'use "fee_exemptions" instead'],
 
-  ['user_roles', 'verify this is the correct table name'],
 ]);
 
 // Known bad column references in code (only flag DB-side usage, not output mapping)

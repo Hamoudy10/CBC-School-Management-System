@@ -9,7 +9,7 @@ export const POST = withPermission(
   { module: "communication", action: "create" },
   async (request: NextRequest, { user }: any) => {
     const validation = await validateBody(request, meetingScheduleRequestSchema);
-    if (!validation.success) return validationErrorResponse(validation.errors ?? {});
+    if (!validation.success) {return validationErrorResponse(validation.errors ?? {});}
 
     try {
       const result = await scheduleParentTeacherMeeting(

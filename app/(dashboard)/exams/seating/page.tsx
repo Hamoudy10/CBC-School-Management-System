@@ -58,7 +58,7 @@ export default function ExamSeatingPage() {
         body: JSON.stringify({ name: newRoomName.trim(), capacity: parseInt(newRoomCapacity), building: newRoomBuilding.trim() || undefined }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed');
+      if (!res.ok) {throw new Error(json.error || 'Failed');}
       setRooms((prev) => [...prev, json.data]);
       setNewRoomName(''); setNewRoomCapacity('30'); setNewRoomBuilding('');
       success('Room added');
@@ -85,7 +85,7 @@ export default function ExamSeatingPage() {
         body: JSON.stringify({ examSetId: selectedExamSet, roomIds: selectedRoomIds, seatsPerRow: parseInt(seatsPerRow) || 4, shuffleStudents: true }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed');
+      if (!res.ok) {throw new Error(json.error || 'Failed');}
       setChart(json.data);
       success('Seating plan generated');
     } catch (err) { error(err instanceof Error ? err.message : 'Failed'); }

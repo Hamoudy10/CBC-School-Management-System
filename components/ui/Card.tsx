@@ -101,11 +101,11 @@ function AnimatedCounter({ value, duration = 600 }: { value: number; duration?: 
       const progress = Math.min(elapsed / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
       setDisplay(Math.round(from + (value - from) * eased));
-      if (progress < 1) ref.current = requestAnimationFrame(tick);
+      if (progress < 1) {ref.current = requestAnimationFrame(tick);}
     }
 
     ref.current = requestAnimationFrame(tick);
-    return () => { if (ref.current) cancelAnimationFrame(ref.current); };
+    return () => { if (ref.current) {cancelAnimationFrame(ref.current);} };
   }, [value, duration]);
 
   return <>{display.toLocaleString()}</>;

@@ -67,7 +67,7 @@ export default function ExtracurricularPage() {
     if (!cName.trim()) { error('Enter club name'); return; }
     try {
       const res = await fetch('/api/extracurricular/clubs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: cName.trim(), patronName: cPatron.trim() || undefined, meetingSchedule: cMeeting.trim() || undefined }) });
-      const json = await res.json(); if (!res.ok) throw new Error(json.error || 'Failed');
+      const json = await res.json(); if (!res.ok) {throw new Error(json.error || 'Failed');}
       setClubs((prev) => [...prev, json.data]); setCName(''); setCPatron(''); setCMeeting(''); success('Club created');
     } catch (err) { error(err instanceof Error ? err.message : 'Failed'); }
   }, [cName, cPatron, cMeeting, success, error]);
@@ -76,7 +76,7 @@ export default function ExtracurricularPage() {
     if (!tName.trim() || !tSport.trim()) { error('Enter team name and sport'); return; }
     try {
       const res = await fetch('/api/extracurricular/teams', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: tName.trim(), sport: tSport.trim(), coachName: tCoach.trim() || undefined, category: tCat }) });
-      const json = await res.json(); if (!res.ok) throw new Error(json.error || 'Failed');
+      const json = await res.json(); if (!res.ok) {throw new Error(json.error || 'Failed');}
       setTeams((prev) => [...prev, json.data]); setTName(''); setTSport(''); setTCoach(''); success('Team created');
     } catch (err) { error(err instanceof Error ? err.message : 'Failed'); }
   }, [tName, tSport, tCoach, tCat, success, error]);
@@ -85,7 +85,7 @@ export default function ExtracurricularPage() {
     if (!selectedClub || !mStudent) { error('Select club and student'); return; }
     try {
       const res = await fetch(`/api/extracurricular/clubs/${selectedClub}/members`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clubId: selectedClub, studentId: mStudent, role: mRole }) });
-      const json = await res.json(); if (!res.ok) throw new Error(json.error || 'Failed');
+      const json = await res.json(); if (!res.ok) {throw new Error(json.error || 'Failed');}
       setMembers((prev) => [...prev, json.data]); setMStudent(''); success('Member added');
     } catch (err) { error(err instanceof Error ? err.message : 'Failed'); }
   }, [selectedClub, mStudent, mRole, success, error]);
@@ -94,7 +94,7 @@ export default function ExtracurricularPage() {
     if (!selectedTeam || !tmStudent) { error('Select team and student'); return; }
     try {
       const res = await fetch(`/api/extracurricular/teams/${selectedTeam}/members`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ teamId: selectedTeam, studentId: tmStudent, position: tmPos.trim() || undefined, jerseyNumber: tmJersey ? parseInt(tmJersey) : undefined }) });
-      const json = await res.json(); if (!res.ok) throw new Error(json.error || 'Failed');
+      const json = await res.json(); if (!res.ok) {throw new Error(json.error || 'Failed');}
       setTmembers((prev) => [...prev, json.data]); setTmStudent(''); setTmPos(''); setTmJersey(''); success('Player added');
     } catch (err) { error(err instanceof Error ? err.message : 'Failed'); }
   }, [selectedTeam, tmStudent, tmPos, tmJersey, success, error]);

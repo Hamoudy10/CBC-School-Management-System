@@ -35,7 +35,7 @@ export default function ParentFeesPage() {
         const json = await res.json();
         if (res.ok && json.data?.students) {
           setStudents(json.data.students.map((s: any) => ({ studentId: s.studentId, firstName: s.firstName, lastName: s.lastName, className: s.className })));
-          if (json.data.students.length > 0) setSelectedStudent(json.data.students[0].studentId);
+          if (json.data.students.length > 0) {setSelectedStudent(json.data.students[0].studentId);}
         }
       } catch {} finally { setLoading(false); }
     }
@@ -43,7 +43,7 @@ export default function ParentFeesPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedStudent) return;
+    if (!selectedStudent) {return;}
     async function loadFees() {
       try {
         const res = await fetch(`/api/student-fees?studentId=${selectedStudent}`, { credentials: 'include' });
@@ -66,7 +66,7 @@ export default function ParentFeesPage() {
         }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Payment failed');
+      if (!res.ok) {throw new Error(json.error || 'Payment failed');}
       setPaidFee(fee.studentFeeId);
       success('STK Push sent! Check your phone to complete payment.');
     } catch (err) {
@@ -74,7 +74,7 @@ export default function ParentFeesPage() {
     } finally { setPaying(null); }
   };
 
-  if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><Spinner size="lg" /></div>;
+  if (loading) {return <div className="flex items-center justify-center min-h-[60vh]"><Spinner size="lg" /></div>;}
 
   return (
     <div className="space-y-6">

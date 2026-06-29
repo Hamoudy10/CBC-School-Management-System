@@ -8,7 +8,7 @@ import { reviewApplication, reviewApplicationSchema } from '@/features/admission
 
 export const PATCH = withPermission('students', 'create', async (request: NextRequest, { user, params }) => {
   const validation = await validateBody(request, reviewApplicationSchema);
-  if (!validation.success) return validationErrorResponse(validation.errors!);
+  if (!validation.success) {return validationErrorResponse(validation.errors!);}
   try {
     const app = await reviewApplication(params.id, validation.data!, user.id, user.schoolId!);
     return successResponse(app);

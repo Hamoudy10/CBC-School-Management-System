@@ -43,7 +43,7 @@ export default function ParentEngagementPage() {
     fetch("/api/students?limit=100")
       .then((r) => r.json())
       .then((d) => {
-        if (d.success) setStudents(d.data || []);
+        if (d.success) {setStudents(d.data || []);}
       })
       .catch(() => {});
   }, []);
@@ -88,7 +88,7 @@ function WeeklySummaryView({ students, toastError }: { students: any[]; toastErr
   const [loading, setLoading] = useState(false);
 
   const generate = useCallback(async () => {
-    if (!selectedStudent) return;
+    if (!selectedStudent) {return;}
     setLoading(true);
     try {
       const res = await fetch("/api/parent-engagement/weekly-summary", {
@@ -97,8 +97,8 @@ function WeeklySummaryView({ students, toastError }: { students: any[]; toastErr
         body: JSON.stringify({ studentId: selectedStudent, language }),
       });
       const json = await res.json();
-      if (json.success) setResult(json.data);
-      else toastError("Error", json.error);
+      if (json.success) {setResult(json.data);}
+      else {toastError("Error", json.error);}
     } catch {
       toastError("Error", "Failed to generate summary");
     } finally {
@@ -272,8 +272,8 @@ function SentimentView({ toastError }: { toastError: (title: string, description
         body: JSON.stringify({ messages: validMessages, scope: "parent-teacher" }),
       });
       const json = await res.json();
-      if (json.success) setResult(json.data);
-      else toastError("Error", json.error);
+      if (json.success) {setResult(json.data);}
+      else {toastError("Error", json.error);}
     } catch {
       toastError("Error", "Failed to analyze sentiment");
     } finally {
@@ -436,8 +436,8 @@ function MeetingSchedulerView({ students, toastError }: { students: any[]; toast
         }),
       });
       const json = await res.json();
-      if (json.success) setResult(json.data);
-      else toastError("Error", json.error);
+      if (json.success) {setResult(json.data);}
+      else {toastError("Error", json.error);}
     } catch {
       toastError("Error", "Failed to schedule meeting");
     } finally {

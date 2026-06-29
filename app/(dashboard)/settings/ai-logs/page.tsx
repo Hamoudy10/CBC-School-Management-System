@@ -63,16 +63,16 @@ export default function AILogsPage() {
       const params = new URLSearchParams();
       params.set('page', String(page));
       params.set('pageSize', '50');
-      if (statusFilter) params.set('status', statusFilter);
-      if (labelFilter) params.set('label', labelFilter);
+      if (statusFilter) {params.set('status', statusFilter);}
+      if (labelFilter) {params.set('label', labelFilter);}
 
       const res = await fetch(`/api/admin/ai-logs?${params}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {throw new Error(`HTTP ${res.status}`);}
       const data = await res.json();
 
       setLogs(data.data ?? []);
       setPagination(data.pagination);
-      if (data.filters?.labels) setLabels(data.filters.labels);
+      if (data.filters?.labels) {setLabels(data.filters.labels);}
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load logs');
     } finally {

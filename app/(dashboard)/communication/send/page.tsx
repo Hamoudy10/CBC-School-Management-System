@@ -46,7 +46,7 @@ export default function SendCommunicationPage() {
   const handleTemplateChange = useCallback((value: string) => {
     setTemplate(value);
     const t = TEMPLATES.find((t) => t.value === value);
-    if (t) setMessage(t.defaultMessage);
+    if (t) {setMessage(t.defaultMessage);}
   }, []);
 
   const handleSend = useCallback(async () => {
@@ -75,7 +75,7 @@ export default function SendCommunicationPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Send failed');
+      if (!res.ok) {throw new Error(data.error || 'Send failed');}
 
       setResult(data.data);
       success(`Message sent to ${data.data?.sent || 0} recipients`);

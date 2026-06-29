@@ -81,7 +81,7 @@ export default function VoiceMarkEntryPage() {
   }, [resetTranscript]);
 
   const handleParse = useCallback(async () => {
-    if (!transcript.trim()) return;
+    if (!transcript.trim()) {return;}
 
     setIsProcessing(true);
 
@@ -110,7 +110,7 @@ export default function VoiceMarkEntryPage() {
   }, [transcript, selectedClassId, error]);
 
   const handleSave = useCallback(async () => {
-    if (!result?.parsedAssessment) return;
+    if (!result?.parsedAssessment) {return;}
 
     setIsSaving(true);
 

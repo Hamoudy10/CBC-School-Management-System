@@ -36,17 +36,17 @@ export default function LessonPlannerPage() {
     fetch("/api/classes")
       .then((r) => r.json())
       .then((d) => {
-        if (d.success) setClasses(d.data || []);
+        if (d.success) {setClasses(d.data || []);}
       })
       .catch(() => {});
   }, []);
 
   useEffect(() => {
-    if (!classId) return;
+    if (!classId) {return;}
     fetch("/api/learning-areas")
       .then((r) => r.json())
       .then((d) => {
-        if (d.success) setLearningAreas(d.data || []);
+        if (d.success) {setLearningAreas(d.data || []);}
       })
       .catch(() => {});
   }, [classId]);
@@ -72,8 +72,8 @@ export default function LessonPlannerPage() {
         }),
       });
       const json = await res.json();
-      if (json.success) setResult(json.data);
-      else toastError("Error", json.error);
+      if (json.success) {setResult(json.data);}
+      else {toastError("Error", json.error);}
     } catch {
       toastError("Error", "Failed to generate lesson plan");
     } finally {

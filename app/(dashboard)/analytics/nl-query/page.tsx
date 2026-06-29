@@ -17,7 +17,7 @@ export default function NLQueryPage() {
     fetch("/api/classes")
       .then((r) => r.json())
       .then((d) => {
-        if (d.success) setClasses(d.data || []);
+        if (d.success) {setClasses(d.data || []);}
       })
       .catch(() => {});
   }, []);

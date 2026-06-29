@@ -58,7 +58,7 @@ export default function SmartSearchPage() {
         body: JSON.stringify({ query: searchQuery.trim(), scope }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Search failed');
+      if (!res.ok) {throw new Error(json.error || 'Search failed');}
       setResult(json.data);
       success('Search complete');
     } catch (err) {

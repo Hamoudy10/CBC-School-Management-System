@@ -54,7 +54,7 @@ function ForecastView({ classId }: { classId: string }) {
   const { error: toastError } = useToast();
 
   const run = useCallback(async () => {
-    if (!classId) return;
+    if (!classId) {return;}
     setLoading(true);
     try {
       const res = await fetch("/api/predictive-analytics/performance-forecast", {
@@ -63,8 +63,8 @@ function ForecastView({ classId }: { classId: string }) {
         body: JSON.stringify({ classId }),
       });
       const json = await res.json();
-      if (json.success) setData(json.data);
-      else toastError("Error", json.error);
+      if (json.success) {setData(json.data);}
+      else {toastError("Error", json.error);}
     } catch {
       toastError("Error", "Failed to generate forecast");
     } finally {
@@ -133,7 +133,7 @@ function ClusterView({ classId }: { classId: string }) {
   const { error: toastError } = useToast();
 
   const run = useCallback(async () => {
-    if (!classId) return;
+    if (!classId) {return;}
     setLoading(true);
     try {
       const res = await fetch("/api/predictive-analytics/student-clusters", {
@@ -142,8 +142,8 @@ function ClusterView({ classId }: { classId: string }) {
         body: JSON.stringify({ classId, clusterCount: 4 }),
       });
       const json = await res.json();
-      if (json.success) setData(json.data);
-      else toastError("Error", json.error);
+      if (json.success) {setData(json.data);}
+      else {toastError("Error", json.error);}
     } catch {
       toastError("Error", "Failed to generate clusters");
     } finally {
@@ -210,7 +210,7 @@ function InterventionView({ classId }: { classId: string }) {
   const { error: toastError } = useToast();
 
   const run = useCallback(async () => {
-    if (!classId) return;
+    if (!classId) {return;}
     setLoading(true);
     try {
       const res = await fetch("/api/predictive-analytics/intervention-recommendations", {
@@ -219,8 +219,8 @@ function InterventionView({ classId }: { classId: string }) {
         body: JSON.stringify({ classId, minRiskLevel: "medium" }),
       });
       const json = await res.json();
-      if (json.success) setData(json.data);
-      else toastError("Error", json.error);
+      if (json.success) {setData(json.data);}
+      else {toastError("Error", json.error);}
     } catch {
       toastError("Error", "Failed to generate interventions");
     } finally {
@@ -301,7 +301,7 @@ export default function PredictiveAnalyticsPage() {
     fetch("/api/classes")
       .then((r) => r.json())
       .then((d) => {
-        if (d.success) setClasses(d.data || []);
+        if (d.success) {setClasses(d.data || []);}
       })
       .catch(() => {});
   }, []);
@@ -382,17 +382,17 @@ function StudentRecommendationView({ classId }: { classId: string }) {
   const { error: toastError } = useToast();
 
   useEffect(() => {
-    if (!classId) return;
+    if (!classId) {return;}
     fetch(`/api/students?classId=${classId}`)
       .then((r) => r.json())
       .then((d) => {
-        if (d.success) setStudents(d.data || []);
+        if (d.success) {setStudents(d.data || []);}
       })
       .catch(() => {});
   }, [classId]);
 
   const getRecommendations = useCallback(async () => {
-    if (!selectedStudent) return;
+    if (!selectedStudent) {return;}
     setLoading(true);
     try {
       const res = await fetch("/api/predictive-analytics/subject-recommendations", {
@@ -401,8 +401,8 @@ function StudentRecommendationView({ classId }: { classId: string }) {
         body: JSON.stringify({ studentId: selectedStudent, classId, includeCareerPaths: true }),
       });
       const json = await res.json();
-      if (json.success) setData(json.data);
-      else toastError("Error", json.error);
+      if (json.success) {setData(json.data);}
+      else {toastError("Error", json.error);}
     } catch {
       toastError("Error", "Failed to get recommendations");
     } finally {

@@ -18,7 +18,7 @@ export const GET = withPermission('assessments', 'view', async (request: NextReq
 
 export const POST = withPermission('assessments', 'create', async (request, { user }) => {
   const validation = await validateBody(request, submitEntrySchema);
-  if (!validation.success) return validationErrorResponse(validation.errors!);
+  if (!validation.success) {return validationErrorResponse(validation.errors!);}
   try {
     const entry = await submitEntry(validation.data!, user.schoolId!);
     return successResponse(entry);

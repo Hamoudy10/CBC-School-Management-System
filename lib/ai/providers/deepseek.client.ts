@@ -20,8 +20,8 @@ function getApiKey(): string {
 }
 
 function resolveModel(model?: string, highRisk?: boolean): string {
-  if (model) return model;
-  if (highRisk) return DEFAULT_MODEL_REASONING;
+  if (model) {return model;}
+  if (highRisk) {return DEFAULT_MODEL_REASONING;}
   return DEFAULT_MODEL_FAST;
 }
 
@@ -58,7 +58,7 @@ async function deepSeekGenerate<TJson>(
   const promptGuard = enforcePromptLimit(request.prompt);
   const warnings: string[] = [];
 
-  if (promptGuard.warning) warnings.push(promptGuard.warning);
+  if (promptGuard.warning) {warnings.push(promptGuard.warning);}
 
   const cacheConfig = request.cache === false ? null : request.cache ?? {};
   const cacheHash = cacheConfig

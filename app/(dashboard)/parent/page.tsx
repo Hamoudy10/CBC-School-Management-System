@@ -62,7 +62,7 @@ export default function ParentPage() {
   const [selectedStudent, setSelectedStudent] = useState<string>('');
 
   useEffect(() => {
-    if (authLoading) return;
+    if (authLoading) {return;}
     if (!user) { router.replace('/login'); return; }
     if (user.role !== 'parent') { router.replace('/dashboard'); return; }
 

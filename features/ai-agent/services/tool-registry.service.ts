@@ -816,14 +816,31 @@ const create_timetable_slot = makeTool(
   voidOutput,
   async (input, { schoolId }) => {
     const supabase = await createSupabaseServerClient();
-    const { error } = await supabase.from("timetable_entries").insert({
+    const { data: area } = await supabase
+      .from("learning_areas")
+      .select("learning_area_id")
+      .ilike("name", input.subject)
+      .maybeSingle();
+    if (!area) throw new Error(`Learning area "${input.subject}" not found`);
+    const [yearResult, termResult] = await Promise.all([
+      supabase.from("academic_years").select("academic_year_id").eq("school_id", schoolId).eq("is_active", true).maybeSingle(),
+      supabase.from("terms").select("term_id").eq("school_id", schoolId).eq("is_active", true).maybeSingle(),
+    ]);
+    const academicYearId = yearResult.data?.academic_year_id;
+    const termId = termResult.data?.term_id;
+    if (!academicYearId || !termId) throw new Error("No active academic year or term found");
+    const { error } = await supabase.from("timetable_slots").insert({
       school_id: schoolId,
       class_id: input.classId,
-      subject: input.subject,
+      learning_area_id: area.learning_area_id,
+      teacher_id: input.teacherId ?? null,
       day_of_week: input.dayOfWeek,
       start_time: input.startTime,
       end_time: input.endTime,
-      teacher_id: input.teacherId ?? null,
+      academic_year_id: academicYearId,
+      term_id: termId,
+      room: null,
+      is_active: true,
     });
     if (error) throw new Error(`Failed to create timetable slot: ${error.message}`);
     return { success: true, message: `Timetable slot created: ${input.subject}` };
@@ -1017,16 +1034,16 @@ const change_user_role = makeTool(
   "critical",
   toolInputSchemas.change_user_role,
   voidOutput,
-  async (input, { schoolId, user }) => {
+  async (input, { user }) => {
     if (!canManageRole(user.role as any, input.newRole as any)) {
       throw new Error(`You cannot assign the role "${input.newRole}" — it is at or above your own role level`);
     }
     const supabase = await createSupabaseServerClient();
-    const { data: target } = await supabase.from("user_roles").select("name").eq("user_id", input.userId).maybeSingle();
-    if (target && !canManageRole(user.role as any, target.name as any)) {
+    const { data: target } = await supabase.from("users").select("role").eq("user_id", input.userId).maybeSingle();
+    if (target && !canManageRole(user.role as any, target.role as any)) {
       throw new Error("You cannot change this user's role — they are at or above your role level");
     }
-    const { error } = await supabase.from("user_roles").update({ name: input.newRole }).eq("user_id", input.userId).eq("school_id", schoolId);
+    const { error } = await supabase.from("users").update({ role: input.newRole }).eq("user_id", input.userId);
     if (error) throw new Error(`Failed to change role: ${error.message}`);
     return { success: true, message: `User role changed to ${input.newRole}: ${input.reason}` };
   },
@@ -1043,7 +1060,7 @@ const waive_fee = makeTool(
   voidOutput,
   async (input, { schoolId, user }) => {
     const supabase = await createSupabaseServerClient();
-    const { error } = await supabase.from("fee_waivers").insert({
+    const { error } = await supabase.from("fee_exemptions").insert({
       school_id: schoolId,
       student_id: input.studentId,
       amount: input.amount,
