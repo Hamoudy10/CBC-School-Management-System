@@ -43,7 +43,7 @@ export default function ParentEngagementPage() {
     fetch("/api/students?limit=100")
       .then((r) => r.json())
       .then((d) => {
-        if (d.success) {setStudents(d.data || []);}
+        if (d.success && Array.isArray(d.data)) {setStudents(d.data);}
       })
       .catch(() => {});
   }, []);
@@ -116,7 +116,7 @@ function WeeklySummaryView({ students, toastError }: { students: any[]; toastErr
               <label className="block text-sm font-medium text-gray-700 mb-1">Student</label>
               <Select value={selectedStudent} onChange={(e) => setSelectedStudent(e.target.value)}>
                 <option value="">Select student...</option>
-                {students.map((s: any) => (
+                {(students || []).map((s: any) => (
                   <option key={s.student_id} value={s.student_id}>
                     {s.first_name} {s.last_name}
                   </option>
@@ -455,7 +455,7 @@ function MeetingSchedulerView({ students, toastError }: { students: any[]; toast
               <label className="block text-sm font-medium text-gray-700 mb-1">Student</label>
               <Select value={selectedStudent} onChange={(e) => setSelectedStudent(e.target.value)}>
                 <option value="">Select student...</option>
-                {students.map((s: any) => (
+                {(students || []).map((s: any) => (
                   <option key={s.student_id} value={s.student_id}>
                     {s.first_name} {s.last_name}
                   </option>
