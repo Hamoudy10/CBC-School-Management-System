@@ -117,8 +117,8 @@ function WeeklySummaryView({ students, toastError }: { students: any[]; toastErr
               <Select value={selectedStudent} onChange={(e) => setSelectedStudent(e.target.value)}>
                 <option value="">Select student...</option>
                 {(students || []).map((s: any) => (
-                  <option key={s.student_id} value={s.student_id}>
-                    {s.first_name} {s.last_name}
+                  <option key={s.studentId} value={s.studentId}>
+                    {s.firstName} {s.lastName}
                   </option>
                 ))}
               </Select>
@@ -456,8 +456,8 @@ function MeetingSchedulerView({ students, toastError }: { students: any[]; toast
               <Select value={selectedStudent} onChange={(e) => setSelectedStudent(e.target.value)}>
                 <option value="">Select student...</option>
                 {(students || []).map((s: any) => (
-                  <option key={s.student_id} value={s.student_id}>
-                    {s.first_name} {s.last_name}
+                  <option key={s.studentId} value={s.studentId}>
+                    {s.firstName} {s.lastName}
                   </option>
                 ))}
               </Select>

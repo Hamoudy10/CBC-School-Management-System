@@ -64,7 +64,6 @@ export default function ParentPage() {
   useEffect(() => {
     if (authLoading) {return;}
     if (!user) { router.replace('/login'); return; }
-    if (user.role !== 'parent') { router.replace('/dashboard'); return; }
 
     async function fetchData() {
       try {

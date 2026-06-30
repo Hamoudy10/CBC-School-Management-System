@@ -23,7 +23,10 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
 
   const visibleNavItems = useMemo(() => {
     if (loading || !user) {return [];}
-    return NAV_ITEMS.filter((item) => accessibleModuleSet.has(item.module));
+    return NAV_ITEMS.filter((item) => {
+      if (item.href === "/parent") {return user.role === "parent";}
+      return accessibleModuleSet.has(item.module);
+    });
   }, [accessibleModuleSet, loading, user]);
 
   const categories = useMemo(
@@ -35,10 +38,18 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
     setPendingHref(null);
   }, [pathname]);
 
-  const isActive = (href: string) => {
-    if (href === "/dashboard") {return pathname === "/dashboard";}
-    return pathname.startsWith(href);
-  };
+  const activeHref = useMemo(() => {
+    let best = "";
+    for (const item of visibleNavItems) {
+      const href = item.href;
+      if (href === "/dashboard") {
+        if (pathname === "/dashboard" && href.length > best.length) { best = href; }
+      } else if (pathname === href || pathname.startsWith(`${href}/`)) {
+        if (href.length > best.length) { best = href; }
+      }
+    }
+    return best;
+  }, [pathname, visibleNavItems]);
 
   return (
     <aside
@@ -91,7 +102,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                 )}
                 <ul className="space-y-0.5">
                   {category.items.map((item) => {
-                    const active = isActive(item.href);
+                    const active = item.href === activeHref;
                     const Icon = item.icon;
                     return (
                       <li key={item.href}>
