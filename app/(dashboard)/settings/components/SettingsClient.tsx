@@ -117,6 +117,7 @@ function SchoolProfileSection() {
     motto: "",
     contact_email: "",
     contact_phone: "",
+    secondary_phone: "",
     website: "",
     county: "",
     sub_county: "",
@@ -136,6 +137,7 @@ function SchoolProfileSection() {
       motto: schoolData?.motto || "",
       contact_email: schoolData?.contact_email || "",
       contact_phone: schoolData?.contact_phone || "",
+      secondary_phone: schoolData?.secondary_phone || "",
       website: schoolData?.website || "",
       county: schoolData?.county || "",
       sub_county: schoolData?.sub_county || "",
@@ -207,6 +209,7 @@ function SchoolProfileSection() {
         motto: form.motto.trim(),
         contact_email: form.contact_email.trim(),
         contact_phone: form.contact_phone.trim(),
+        secondary_phone: form.secondary_phone.trim(),
         website: form.website.trim(),
         county: form.county.trim(),
         sub_county: form.sub_county.trim(),
@@ -403,6 +406,16 @@ function SchoolProfileSection() {
               value={form.contact_phone}
               onChange={(e) =>
                 setForm((prev) => ({ ...prev, contact_phone: e.target.value }))
+              }
+              disabled={!isEditing}
+            />
+            <Input
+              label="Secondary Phone"
+              type="tel"
+              placeholder="e.g., +254 712 345 679"
+              value={form.secondary_phone}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, secondary_phone: e.target.value }))
               }
               disabled={!isEditing}
             />

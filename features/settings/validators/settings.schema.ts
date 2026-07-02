@@ -34,6 +34,11 @@ export const updateSchoolProfileSchema = z.object({
     .regex(/^\+?[\d\s-]{10,15}$/, "Invalid phone number")
     .optional()
     .or(z.literal("")),
+  secondary_phone: z
+    .string()
+    .regex(/^\+?[\d\s-]{10,15}$/, "Invalid secondary phone")
+    .optional()
+    .or(z.literal("")),
   website: z.string().url("Invalid URL").optional().or(z.literal("")),
   motto: z.string().max(200).optional().or(z.literal("")),
   mission: z.string().max(1000).optional().or(z.literal("")),
