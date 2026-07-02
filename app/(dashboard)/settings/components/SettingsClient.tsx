@@ -230,7 +230,12 @@ function SchoolProfileSection() {
 
       const result = await response.json();
       if (!response.ok) {
-        throw new Error(result?.error || "Failed to update school profile");
+        const fieldError = result?.details
+          ? Object.entries(result.details)
+              .map(([field, msgs]) => `${field}: ${(msgs as string[])[0]}`)
+              .join("; ")
+          : null;
+        throw new Error(fieldError || result?.error || "Failed to update school profile");
       }
 
       setSchool(result.data || null);
