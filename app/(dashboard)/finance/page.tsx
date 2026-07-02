@@ -881,11 +881,9 @@ export default function FinancePage() {
       return [];
     }
     const tabs = ["overview", "payments", "balances"];
-    if (canManageFees) {
-      tabs.push("structures");
-    }
+    tabs.push("structures");
     return tabs;
-  }, [canViewFinance, canManageFees]);
+  }, [canViewFinance]);
 
   // ─── Fetch Data ────────────────────────────────────────────
   const fetchOverviewData = useCallback(async () => {

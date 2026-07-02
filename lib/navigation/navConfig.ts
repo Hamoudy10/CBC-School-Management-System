@@ -60,6 +60,7 @@ export const NAV_ITEMS: NavItem[] = [
 
   // Admin
   { label: 'Finance', href: '/finance', icon: Banknote, module: 'finance', category: 'admin' },
+  { label: 'Fee Structures', href: '/finance/fee-structures', icon: FileText, module: 'finance', category: 'admin' },
   { label: 'Admissions', href: '/admissions', icon: Users, module: 'students', category: 'admin' },
   { label: 'Discipline', href: '/discipline', icon: ShieldAlert, module: 'compliance', category: 'admin' },
   { label: 'Communication', href: '/communication', icon: MessageSquare, module: 'communication', category: 'admin' },
