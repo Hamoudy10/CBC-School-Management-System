@@ -10,7 +10,6 @@ export interface SchoolProfile {
   sub_county?: string;
   contact_email: string;
   contact_phone: string;
-  secondary_phone?: string;
   website?: string;
   logo_url?: string;
   motto?: string;
