@@ -446,7 +446,7 @@ export function StaffForm({
           onUpload={handlePhotoUpload}
           disabled={isSubmitting}
         />
-        <input type="hidden" {...register('photoUrl')} />
+        <input type="hidden" {...register('photoUrl')} value={photoUrl} readOnly />
       </FormSection>
 
       <FormSection

@@ -646,7 +646,8 @@ export async function updateStaff(
 
   // Update profile photo if provided
   if (payload.photoUrl !== undefined) {
-    const { error: profileError } = await supabase
+    const adminClient = await createSupabaseAdminClient();
+    const { error: profileError } = await adminClient
       .from('user_profiles')
       .upsert(
         {
