@@ -342,6 +342,9 @@ export function StaffForm({
     if (!isCreate && !payload.password) {
       delete payload.password;
     }
+    if (!isCreate && !payload.photoUrl) {
+      delete payload.photoUrl;
+    }
 
     if (isCreate) {
       payload.middleName = toUndefinedIfEmpty(payload.middleName);

@@ -468,11 +468,23 @@ export async function createStaff(
   }
 
   // Step 7: Create user_profiles record
-  await adminClient.from('user_profiles').insert({
-    user_id: userId,
-    school_id: schoolId,
-    photo_url: payload.photoUrl || null,
-  });
+  const { error: profileInsertError } = await adminClient
+    .from('user_profiles')
+    .insert({
+      user_id: userId,
+      school_id: schoolId,
+      photo_url: payload.photoUrl || null,
+    });
+
+  if (profileInsertError) {
+    // Rollback auth user and users record
+    await adminClient.from('users').delete().eq('user_id', userId);
+    await adminClient.auth.admin.deleteUser(userId);
+    return {
+      success: false,
+      message: `Profile creation failed: ${profileInsertError.message}`,
+    };
+  }
 
   // Step 8: Create staff record
   const { data: staffData, error: staffInsertError } = await adminClient

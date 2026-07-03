@@ -105,7 +105,7 @@ export const createStaffSchema = z.object({
     .optional(),
 
   // Optional profile photo URL
-  photoUrl: z.string().url('Photo URL must be a valid URL').optional(),
+  photoUrl: z.string().url('Photo URL must be a valid URL').optional().or(z.literal('')),
 
   // Password for the new user account
   password: z
@@ -152,7 +152,7 @@ export const updateStaffSchema = z.object({
   status: staffStatusSchema.optional(),
 
   // Optional profile photo URL
-  photoUrl: z.string().url().optional().nullable(),
+  photoUrl: z.string().url().optional().nullable().or(z.literal('')),
 });
 
 // ============================================================
