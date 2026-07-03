@@ -1141,12 +1141,10 @@ export default function FeeStructuresPage() {
             />
             Refresh
           </Button>
-          {canManageFees && (
-            <Button variant="primary" size="sm" onClick={handleCreateNew}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Fee
-            </Button>
-          )}
+          <Button variant="primary" size="sm" onClick={handleCreateNew}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Fee
+          </Button>
         </div>
       </PageHeader>
 
