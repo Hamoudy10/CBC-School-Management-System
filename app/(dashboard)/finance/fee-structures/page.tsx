@@ -998,7 +998,7 @@ export default function FeeStructuresPage() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'Failed to save fee structure');
+        throw new Error(error.error || error.message || 'Failed to save fee structure');
       }
 
       success(formMode === 'edit' ? 'Fee Structure Updated' : 'Fee Structure Created', `${data.name} has been ${formMode === 'edit' ? 'updated' : 'created'} successfully.`);
@@ -1027,7 +1027,7 @@ export default function FeeStructuresPage() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'Failed to assign fee');
+        throw new Error(error.error || error.message || 'Failed to assign fee');
       }
 
       const result = await response.json();
@@ -1058,7 +1058,7 @@ export default function FeeStructuresPage() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'Failed to delete fee structure');
+        throw new Error(error.error || error.message || 'Failed to delete fee structure');
       }
 
       success('Fee Structure Deleted', `${deleteStructure.name} has been deleted.`);
