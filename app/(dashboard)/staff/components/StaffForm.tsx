@@ -330,6 +330,7 @@ export function StaffForm({
     const result = await response.json();
     setValue('photoUrl', result.data?.url || result.url, {
       shouldDirty: true,
+      shouldValidate: true,
     });
   };
 
