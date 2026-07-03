@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   BadgeInfo,
   CalendarDays,
@@ -170,11 +170,17 @@ export default function ProfilePage() {
     return uploadedUrl;
   };
 
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
   const handlePhotoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !file.type.startsWith("image/")) {return;}
+    if (!file || !file.type.startsWith("image/")) {
+      if (photoInputRef.current) { photoInputRef.current.value = ''; }
+      return;
+    }
     if (file.size > 5 * 1024 * 1024) {
       toastError("File Too Large", "File must be less than 5MB");
+      if (photoInputRef.current) { photoInputRef.current.value = ''; }
       return;
     }
     try {
@@ -182,6 +188,8 @@ export default function ProfilePage() {
       setEditForm((prev) => ({ ...prev, photoUrl: url }));
     } catch {
       toastError("Upload Failed", "Could not upload photo");
+    } finally {
+      if (photoInputRef.current) { photoInputRef.current.value = ''; }
     }
   };
 
@@ -423,7 +431,7 @@ export default function ProfilePage() {
           {/* Photo */}
           <div className="flex flex-col items-center gap-3 pb-4">
             <div className="relative">
-              <div className="flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-4 border-dashed border-gray-300 bg-gray-50">
+              <div className="flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-dashed border-gray-300 bg-gray-50">
                 {editForm.photoUrl ? (
                   <img src={editForm.photoUrl} alt="Profile" className="h-full w-full object-cover" />
                 ) : (
@@ -432,7 +440,7 @@ export default function ProfilePage() {
               </div>
               <label className="absolute -bottom-1 -right-1 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700">
                 <Camera className="h-5 w-5" />
-                <input type="file" accept="image/*" onChange={handlePhotoFile} className="hidden" />
+                <input ref={photoInputRef} type="file" accept="image/*" onChange={handlePhotoFile} className="hidden" />
               </label>
             </div>
             <p className="text-xs text-gray-500">Click to upload new photo</p>

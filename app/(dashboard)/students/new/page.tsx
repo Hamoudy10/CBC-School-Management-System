@@ -1,7 +1,7 @@
 // app/(dashboard)/students/new/page.tsx
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -113,31 +113,30 @@ interface PhotoUploadProps {
 function PhotoUpload({ value, onChange, disabled }: PhotoUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(value || null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) {return;}
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       alert('Please select an image file');
+      if (fileInputRef.current) { fileInputRef.current.value = ''; }
       return;
     }
 
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       alert('File size must be less than 5MB');
+      if (fileInputRef.current) { fileInputRef.current.value = ''; }
       return;
     }
 
-    // Create preview
     const reader = new FileReader();
     reader.onload = () => {
       setPreviewUrl(reader.result as string);
     };
     reader.readAsDataURL(file);
 
-    // Upload to server
     setIsUploading(true);
     try {
       const formData = new FormData();
@@ -165,6 +164,7 @@ function PhotoUpload({ value, onChange, disabled }: PhotoUploadProps) {
       console.error('Upload error:', err);
       setPreviewUrl(value || null);
     } finally {
+      if (fileInputRef.current) { fileInputRef.current.value = ''; }
       setIsUploading(false);
     }
   };
@@ -174,7 +174,7 @@ function PhotoUpload({ value, onChange, disabled }: PhotoUploadProps) {
       <div className="relative">
         <div
           className={cn(
-            'flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-4 border-dashed border-gray-300 bg-gray-50 transition-colors',
+            'flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-dashed border-gray-300 bg-gray-50 transition-colors',
             !disabled && 'hover:border-blue-400 hover:bg-blue-50'
           )}
         >
@@ -204,6 +204,7 @@ function PhotoUpload({ value, onChange, disabled }: PhotoUploadProps) {
           >
             <Camera className="h-5 w-5" />
             <input
+              ref={fileInputRef}
               type="file"
               accept="image/*"
               onChange={handleFileChange}

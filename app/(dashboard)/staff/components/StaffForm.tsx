@@ -1,7 +1,7 @@
 // app/(dashboard)/staff/components/StaffForm.tsx
 'use client';
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -330,7 +330,6 @@ export function StaffForm({
     const result = await response.json();
     setValue('photoUrl', result.data?.url || result.url, {
       shouldDirty: true,
-      shouldValidate: true,
     });
   };
 
@@ -806,6 +805,7 @@ interface PhotoUploadProps {
 function PhotoUpload({ value, onUpload, disabled }: PhotoUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(value || null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setPreviewUrl(value || null);
@@ -817,11 +817,13 @@ function PhotoUpload({ value, onUpload, disabled }: PhotoUploadProps) {
 
     if (!file.type.startsWith('image/')) {
       alert('Please select an image file');
+      if (fileInputRef.current) { fileInputRef.current.value = ''; }
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
       alert('File size must be less than 5MB');
+      if (fileInputRef.current) { fileInputRef.current.value = ''; }
       return;
     }
 
@@ -839,27 +841,28 @@ function PhotoUpload({ value, onUpload, disabled }: PhotoUploadProps) {
       setPreviewUrl(value || null);
       alert(err instanceof Error ? err.message : 'Upload failed');
     } finally {
+      if (fileInputRef.current) { fileInputRef.current.value = ''; }
       setIsUploading(false);
     }
   };
 
   return (
-    <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-end">
-      <div className="relative">
-        <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-secondary-300 bg-secondary-50">
-          {previewUrl ? (
-            <img src={previewUrl} alt="Staff photo" className="h-full w-full object-cover" />
-          ) : (
-            <User className="h-10 w-10 text-secondary-400" />
-          )}
+      <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-end">
+        <div className="relative">
+          <div className="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-secondary-300 bg-secondary-50">
+            {previewUrl ? (
+              <img src={previewUrl} alt="Staff photo" className="h-full w-full object-cover" />
+            ) : (
+              <User className="h-10 w-10 text-secondary-400" />
+            )}
 
-          {isUploading && (
-            <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-white">
-              <span className="text-xs">Uploading...</span>
-            </div>
-          )}
+            {isUploading && (
+              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-white">
+                <span className="text-xs">Uploading...</span>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
 
       <div className="flex flex-col gap-2">
         <label className="text-sm font-medium text-secondary-700">
@@ -875,6 +878,7 @@ function PhotoUpload({ value, onUpload, disabled }: PhotoUploadProps) {
           >
             Choose File
             <input
+              ref={fileInputRef}
               type="file"
               accept="image/*"
               onChange={handleFileChange}

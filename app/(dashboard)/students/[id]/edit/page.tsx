@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Save, Camera, Loader2, User } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -26,16 +26,19 @@ function PhotoUpload({
 }) {
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(value || null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) {return;}
     if (!file.type.startsWith('image/')) {
       alert('Please select an image file');
+      if (fileInputRef.current) { fileInputRef.current.value = ''; }
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
       alert('File size must be less than 5MB');
+      if (fileInputRef.current) { fileInputRef.current.value = ''; }
       return;
     }
 
@@ -68,6 +71,7 @@ function PhotoUpload({
       console.error('Upload error:', err);
       setPreviewUrl(value || null);
     } finally {
+      if (fileInputRef.current) { fileInputRef.current.value = ''; }
       setIsUploading(false);
     }
   };
@@ -77,7 +81,7 @@ function PhotoUpload({
       <div className="relative">
         <div
           className={cn(
-            'flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-4 border-dashed border-gray-300 bg-gray-50',
+            'flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-full border-4 border-dashed border-gray-300 bg-gray-50',
             !disabled && 'hover:border-blue-400 hover:bg-blue-50'
           )}
         >
@@ -101,6 +105,7 @@ function PhotoUpload({
           >
             <Camera className="h-5 w-5" />
             <input
+              ref={fileInputRef}
               type="file"
               accept="image/*"
               onChange={handleFileChange}
