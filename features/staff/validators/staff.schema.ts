@@ -126,7 +126,8 @@ export const updateStaffSchema = z.object({
     .string()
     .min(8, 'Password must be at least 8 characters')
     .max(72, 'Password must be 72 characters or less')
-    .optional(),
+    .optional()
+    .or(z.literal('')),
   firstName: z
     .string()
     .min(1, 'First name is required')

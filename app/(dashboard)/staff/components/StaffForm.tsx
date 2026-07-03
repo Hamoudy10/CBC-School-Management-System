@@ -338,6 +338,9 @@ export function StaffForm({
 
     const payload: Record<string, unknown> = { ...values };
     delete payload.confirmPassword;
+    if (!isCreate && !payload.password) {
+      delete payload.password;
+    }
 
     if (isCreate) {
       payload.middleName = toUndefinedIfEmpty(payload.middleName);
