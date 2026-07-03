@@ -4,6 +4,8 @@
 // Displays full profile, leaves, assignments, and actions
 // ============================================================
 
+export const dynamic = 'force-dynamic';
+
 import { Suspense } from 'react';
 import { Metadata } from 'next';
 import Link from 'next/link';

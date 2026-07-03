@@ -4,6 +4,8 @@
 // Form for adding a new staff member to the system
 // ============================================================
 
+export const dynamic = 'force-dynamic';
+
 import { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeft, UserPlus } from 'lucide-react';

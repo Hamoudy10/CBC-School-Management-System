@@ -413,11 +413,10 @@ export function StaffForm({
 
       const targetId = isCreate ? result?.data?.staffId : staffId;
       if (targetId) {
-        router.push(`/staff/${targetId}`);
+        window.location.href = `/staff/${targetId}`;
       } else {
-        router.push('/staff');
+        window.location.href = '/staff';
       }
-      router.refresh();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred';
       setSubmitError(message);

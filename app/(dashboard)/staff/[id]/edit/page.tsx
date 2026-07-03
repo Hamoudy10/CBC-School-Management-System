@@ -4,6 +4,8 @@
 // Form for updating an existing staff member's details
 // ============================================================
 
+export const dynamic = 'force-dynamic';
+
 import { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
