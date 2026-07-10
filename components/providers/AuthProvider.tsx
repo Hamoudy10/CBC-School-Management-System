@@ -152,11 +152,9 @@ export function AuthProvider({
   );
 
   const logout = useCallback(async () => {
-    setLoading(true);
-    await logoutService();
     setUser(null);
-    setLoading(false);
     try { sessionStorage.removeItem("auth_user"); } catch { /* ignore */ }
+    await logoutService();
   }, []);
 
   const accessibleModules = useMemo(() => {
