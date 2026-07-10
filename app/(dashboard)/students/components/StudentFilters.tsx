@@ -117,7 +117,7 @@ export function StudentFilters({
                 </label>
                 <Select
                   value={filters.gradeId || ''}
-                  onChange={(val) => handleFilterChange('gradeId', val)}
+                  onChange={(e) => handleFilterChange('gradeId', e.target.value)}
                 >
                   <option value="">All Grades</option>
                   {grades.map((g) => (
@@ -134,7 +134,7 @@ export function StudentFilters({
                 </label>
                 <Select
                   value={filters.classId || ''}
-                  onChange={(val) => handleFilterChange('classId', val)}
+                  onChange={(e) => handleFilterChange('classId', e.target.value)}
                 >
                   <option value="">All Classes</option>
                   {classes
@@ -153,7 +153,7 @@ export function StudentFilters({
                 </label>
                 <Select
                   value={filters.status || ''}
-                  onChange={(val) => handleFilterChange('status', val)}
+                  onChange={(e) => handleFilterChange('status', e.target.value)}
                 >
                   <option value="">All Statuses</option>
                   {STATUS_OPTIONS.map((opt) => (
@@ -170,7 +170,7 @@ export function StudentFilters({
                 </label>
                 <Select
                   value={filters.gender || ''}
-                  onChange={(val) => handleFilterChange('gender', val)}
+                  onChange={(e) => handleFilterChange('gender', e.target.value)}
                 >
                   <option value="">All Genders</option>
                   {GENDER_OPTIONS.map((opt) => (

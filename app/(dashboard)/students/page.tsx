@@ -384,7 +384,7 @@ export default function StudentsPage() {
 
   const handleStatClick = (status?: EnrollmentStatus) => {
     if (status) {
-      setFilters({ ...filters, status });
+      setFilters((prev) => ({ ...prev, status }));
     } else {
       setFilters({});
     }
@@ -573,7 +573,7 @@ export default function StudentsPage() {
             color="red"
             subtitle="Require additional support"
             onClick={() =>
-              setFilters({ ...filters, hasSpecialNeeds: true })
+              setFilters((prev) => ({ ...prev, hasSpecialNeeds: true }))
             }
           />
         </div>

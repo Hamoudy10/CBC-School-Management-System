@@ -257,6 +257,10 @@ export default function PaymentsPage() {
         params.set("paymentMethod", paymentMethod);
       }
 
+      if (searchTerm) {
+        params.set("search", searchTerm);
+      }
+
       const response = await fetch(`/api/payments?${params.toString()}`, {
         credentials: "include",
       });
@@ -280,7 +284,7 @@ export default function PaymentsPage() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [page, paymentMethod, toastError]);
+  }, [page, paymentMethod, searchTerm, toastError]);
 
   useEffect(() => {
     if (!loading && user && canViewFinance) {
@@ -300,6 +304,10 @@ export default function PaymentsPage() {
 
       if (exceptionType) {
         params.set("type", exceptionType);
+      }
+
+      if (exceptionSearchTerm) {
+        params.set("search", exceptionSearchTerm);
       }
 
       const response = await fetch(
@@ -329,7 +337,7 @@ export default function PaymentsPage() {
     } finally {
       setIsExceptionsLoading(false);
     }
-  }, [exceptionPage, exceptionType, toastError]);
+  }, [exceptionPage, exceptionType, exceptionSearchTerm, toastError]);
 
   useEffect(() => {
     if (!loading && user && canViewFinance) {

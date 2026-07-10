@@ -75,7 +75,7 @@ export default function SpecialNeedsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user, page, typeFilter, statusFilter]);
+  }, [user, page, typeFilter, statusFilter, search]);
 
   useEffect(() => {
     fetchRecords();

@@ -61,6 +61,7 @@ export default function AuditLogsPage() {
 
         if (tableFilter) {params.set("tableName", tableFilter);}
         if (actionFilter) {params.set("action", actionFilter);}
+        if (search) {params.set("search", search);}
 
         const res = await fetch(`/api/audit-logs?${params}`);
         const json = await res.json();
@@ -77,7 +78,7 @@ export default function AuditLogsPage() {
     };
 
     fetchLogs();
-  }, [user, page, tableFilter, actionFilter]);
+  }, [user, page, tableFilter, actionFilter, search]);
 
   const filteredLogs = search
     ? logs.filter(
