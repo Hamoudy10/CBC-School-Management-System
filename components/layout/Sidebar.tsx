@@ -24,7 +24,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
   const visibleNavItems = useMemo(() => {
     if (loading || !user) {return [];}
     return NAV_ITEMS.filter((item) => {
-      if (item.href === "/parent") {return user.role === "parent";}
+      if (item.roles) {return item.roles.includes(user.role) && accessibleModuleSet.has(item.module);}
       return accessibleModuleSet.has(item.module);
     });
   }, [accessibleModuleSet, loading, user]);

@@ -1,4 +1,4 @@
-import type { ModuleName } from '@/types/roles';
+import type { ModuleName, RoleName } from '@/types/roles';
 import {
   LayoutDashboard,
   GraduationCap,
@@ -33,48 +33,58 @@ export interface NavItem {
   icon: LucideIcon;
   module: ModuleName;
   category?: 'core' | 'academic' | 'admin' | 'support';
+  roles?: RoleName[];
 }
 
+const SYS = ["super_admin", "school_admin"] as RoleName[];
+const LEAD = ["principal", "deputy_principal"] as RoleName[];
+const TEACH = ["teacher", "class_teacher", "subject_teacher"] as RoleName[];
+const FIN = ["finance_officer", "bursar"] as RoleName[];
+const PARENT = ["parent"] as RoleName[];
+const STUDENT = ["student"] as RoleName[];
+const LIB = ["librarian"] as RoleName[];
+const ICT = ["ict_admin"] as RoleName[];
+
 export const NAV_ITEMS: NavItem[] = [
-  // Core
+  // Core — everyone sees Dashboard
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, module: 'dashboard', category: 'core' },
 
   // Academic
-  { label: 'Students', href: '/students', icon: GraduationCap, module: 'students', category: 'academic' },
-  { label: 'Staff', href: '/staff', icon: Users, module: 'teachers', category: 'academic' },
-  { label: 'Classes', href: '/classes', icon: Building2, module: 'classes', category: 'academic' },
-  { label: 'Academics', href: '/academics', icon: BookOpen, module: 'academics', category: 'academic' },
-  { label: 'CBC Copilot', href: '/cbc-copilot', icon: Sparkles, module: 'academics', category: 'academic' },
-  { label: 'Teacher AI', href: '/teacher-ai', icon: Brain, module: 'assessments', category: 'academic' },
-  { label: 'AI Grading', href: '/ai-tools/grading', icon: ClipboardCheck, module: 'assessments', category: 'academic' },
-  { label: 'AI Lesson Planner', href: '/ai-tools/lesson-planner', icon: BookOpen, module: 'academics', category: 'academic' },
-  { label: 'Assessments', href: '/assessments', icon: ClipboardCheck, module: 'assessments', category: 'academic' },
-  { label: 'Portfolio', href: '/assessments/portfolio', icon: FolderOpen, module: 'assessments', category: 'academic' },
-  { label: 'Extracurricular', href: '/extracurricular', icon: Trophy, module: 'academics', category: 'academic' },
-  { label: 'Exam Bank', href: '/exams', icon: FileText, module: 'exams', category: 'academic' },
-  { label: 'Exam Seating', href: '/exams/seating', icon: LayoutGrid, module: 'exams', category: 'academic' },
-  { label: 'Transport', href: '/transport', icon: Bus, module: 'timetable', category: 'support' },
-  { label: 'Inventory', href: '/inventory', icon: Package, module: 'library', category: 'support' },
-  { label: 'Attendance', href: '/attendance', icon: CheckCircle2, module: 'attendance', category: 'academic' },
-  { label: 'Timetable', href: '/timetable', icon: CalendarDays, module: 'timetable', category: 'academic' },
+  { label: 'Students', href: '/students', icon: GraduationCap, module: 'students', category: 'academic', roles: [...SYS, ...LEAD, ...TEACH, ...FIN, ...LIB, ...ICT] },
+  { label: 'Staff', href: '/staff', icon: Users, module: 'teachers', category: 'academic', roles: [...SYS, ...LEAD, ...ICT] },
+  { label: 'Classes', href: '/classes', icon: Building2, module: 'classes', category: 'academic', roles: [...SYS, ...LEAD, ...TEACH, ...ICT] },
+  { label: 'Academics', href: '/academics', icon: BookOpen, module: 'academics', category: 'academic', roles: [...SYS, ...LEAD, ...TEACH] },
+  { label: 'CBC Copilot', href: '/cbc-copilot', icon: Sparkles, module: 'academics', category: 'academic', roles: [...SYS, ...LEAD, ...TEACH] },
+  { label: 'Teacher AI', href: '/teacher-ai', icon: Brain, module: 'assessments', category: 'academic', roles: [...SYS, ...LEAD, ...TEACH] },
+  { label: 'AI Grading', href: '/ai-tools/grading', icon: ClipboardCheck, module: 'assessments', category: 'academic', roles: [...SYS, ...TEACH] },
+  { label: 'AI Lesson Planner', href: '/ai-tools/lesson-planner', icon: BookOpen, module: 'academics', category: 'academic', roles: [...SYS, ...TEACH] },
+  { label: 'Assessments', href: '/assessments', icon: ClipboardCheck, module: 'assessments', category: 'academic', roles: [...SYS, ...LEAD, ...TEACH] },
+  { label: 'Portfolio', href: '/assessments/portfolio', icon: FolderOpen, module: 'assessments', category: 'academic', roles: [...SYS, ...LEAD, ...TEACH] },
+  { label: 'Extracurricular', href: '/extracurricular', icon: Trophy, module: 'academics', category: 'academic', roles: [...SYS, ...LEAD, ...TEACH] },
+  { label: 'Exam Bank', href: '/exams', icon: FileText, module: 'exams', category: 'academic', roles: [...SYS, ...LEAD, ...TEACH, ...ICT] },
+  { label: 'Exam Seating', href: '/exams/seating', icon: LayoutGrid, module: 'exams', category: 'academic', roles: [...SYS, ...LEAD, ...TEACH, ...ICT] },
+  { label: 'Transport', href: '/transport', icon: Bus, module: 'timetable', category: 'support', roles: [...SYS, ...LEAD, ...TEACH, ...PARENT, ...STUDENT] },
+  { label: 'Inventory', href: '/inventory', icon: Package, module: 'library', category: 'support', roles: [...SYS, ...LIB] },
+  { label: 'Attendance', href: '/attendance', icon: CheckCircle2, module: 'attendance', category: 'academic', roles: [...SYS, ...LEAD, ...TEACH] },
+  { label: 'Timetable', href: '/timetable', icon: CalendarDays, module: 'timetable', category: 'academic', roles: [...SYS, ...LEAD, ...TEACH, ...PARENT, ...STUDENT] },
 
   // Admin
-  { label: 'Finance', href: '/finance', icon: Banknote, module: 'finance', category: 'admin' },
-  { label: 'Fee Structures', href: '/finance/fee-structures', icon: FileText, module: 'finance', category: 'admin' },
-  { label: 'Admissions', href: '/admissions', icon: Users, module: 'students', category: 'admin' },
-  { label: 'Discipline', href: '/discipline', icon: ShieldAlert, module: 'compliance', category: 'admin' },
-  { label: 'Communication', href: '/communication', icon: MessageSquare, module: 'communication', category: 'admin' },
-  { label: 'Parent Portal', href: '/parent', icon: Users, module: 'communication', category: 'core' },
-  { label: 'Parent Engagement', href: '/parent/engagement', icon: MessageSquare, module: 'communication', category: 'core' },
-  { label: 'Reports', href: '/reports', icon: BarChart3, module: 'reports', category: 'admin' },
-  { label: 'Analytics AI', href: '/analytics', icon: LineChart, module: 'analytics', category: 'admin' },
-  { label: 'Predictive Analytics', href: '/analytics/predictive', icon: LineChart, module: 'analytics', category: 'admin' },
-  { label: 'AI Data Query', href: '/analytics/nl-query', icon: MessageSquare, module: 'analytics', category: 'admin' },
+  { label: 'Finance', href: '/finance', icon: Banknote, module: 'finance', category: 'admin', roles: [...SYS, ...LEAD, ...FIN] },
+  { label: 'Fee Structures', href: '/finance/fee-structures', icon: FileText, module: 'finance', category: 'admin', roles: [...SYS, ...FIN] },
+  { label: 'Admissions', href: '/admissions', icon: Users, module: 'students', category: 'admin', roles: [...SYS, ...LEAD] },
+  { label: 'Discipline', href: '/discipline', icon: ShieldAlert, module: 'compliance', category: 'admin', roles: [...SYS, ...LEAD, ...TEACH] },
+  { label: 'Communication', href: '/communication', icon: MessageSquare, module: 'communication', category: 'admin', roles: [...SYS, ...LEAD, ...TEACH, ...FIN, ...LIB, ...ICT, ...PARENT] },
+  { label: 'Parent Portal', href: '/parent', icon: Users, module: 'communication', category: 'core', roles: PARENT },
+  { label: 'Parent Engagement', href: '/parent/engagement', icon: MessageSquare, module: 'communication', category: 'core', roles: PARENT },
+  { label: 'Reports', href: '/reports', icon: BarChart3, module: 'reports', category: 'admin', roles: [...SYS, ...LEAD, ...TEACH, ...FIN, ...PARENT] },
+  { label: 'Analytics AI', href: '/analytics', icon: LineChart, module: 'analytics', category: 'admin', roles: [...SYS, ...LEAD, ...TEACH, ...FIN] },
+  { label: 'Predictive Analytics', href: '/analytics/predictive', icon: LineChart, module: 'analytics', category: 'admin', roles: [...SYS, ...LEAD] },
+  { label: 'AI Data Query', href: '/analytics/nl-query', icon: MessageSquare, module: 'analytics', category: 'admin', roles: [...SYS, ...LEAD, ...TEACH] },
 
   // Support
-  { label: 'Library', href: '/library', icon: Library, module: 'library', category: 'support' },
-  { label: 'Users', href: '/users', icon: UserCog, module: 'users', category: 'support' },
-  { label: 'Settings', href: '/settings', icon: Settings, module: 'settings', category: 'support' },
+  { label: 'Library', href: '/library', icon: Library, module: 'library', category: 'support', roles: [...SYS, ...LIB, ...STUDENT] },
+  { label: 'Users', href: '/users', icon: UserCog, module: 'users', category: 'support', roles: [...SYS, ...ICT] },
+  { label: 'Settings', href: '/settings', icon: Settings, module: 'settings', category: 'support', roles: [...SYS, ...ICT] },
   { label: 'AI Assistant', href: '/ai-agent', icon: Brain, module: 'dashboard', category: 'core' },
 ];
 

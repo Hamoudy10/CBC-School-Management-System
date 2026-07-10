@@ -250,6 +250,7 @@ export const PERMISSION_MATRIX: PermissionMatrix = {
     communication: ["view", "create"],
     compliance: ["view", "update"], // Own consent management
     special_needs: ["view"], // Own children's special needs
+    timetable: ["view"], // Own children's timetable
   },
 
   // ─── STUDENT ───
@@ -261,6 +262,7 @@ export const PERMISSION_MATRIX: PermissionMatrix = {
     communication: ["view"],
     library: ["view"],
     special_needs: ["view"], // Own special needs
+    timetable: ["view"], // Own timetable
   },
 
   // ─── LIBRARIAN ───

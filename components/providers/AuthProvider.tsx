@@ -19,6 +19,7 @@ import {
   getAllowedActions,
   getAccessibleModules,
 } from "@/lib/auth/permissions";
+import { isSystemAdmin, isSchoolLeader, isTeachingRole, isGuardian, isLearner } from "@/lib/auth/roleUiConfig";
 import type { AuthResponse, AuthUser, LoginCredentials } from "@/types/auth";
 import type { ActionName, ModuleName } from "@/types/roles";
 
@@ -185,15 +186,10 @@ export function AuthProvider({
   const value = useMemo<AuthContextValue>(() => {
     const isAuthenticated = !!user;
     const isAdmin =
-      !!user &&
-      ["super_admin", "school_admin", "principal", "deputy_principal"].includes(
-        user.role,
-      );
-    const isTeacher =
-      !!user &&
-      ["teacher", "class_teacher", "subject_teacher"].includes(user.role);
-    const isParent = !!user && user.role === "parent";
-    const isStudent = !!user && user.role === "student";
+      !!user && (isSystemAdmin(user.role) || isSchoolLeader(user.role));
+    const isTeacher = !!user && isTeachingRole(user.role);
+    const isParent = !!user && isGuardian(user.role);
+    const isStudent = !!user && isLearner(user.role);
 
     return {
       user,
