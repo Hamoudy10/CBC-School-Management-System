@@ -45,8 +45,9 @@ export async function reviewApplication(id: string, input: any, userId: string, 
   const { data, error } = await supabase.from('admission_applications').update({
     status: input.status, notes: input.notes || null,
     reviewed_by: userId, reviewed_at: new Date().toISOString(),
-  }).eq('application_id', id).eq('school_id', schoolId).select().single();
+  }).eq('application_id', id).eq('school_id', schoolId).select().maybeSingle();
   if (error) throw new Error(error.message);
+  if (!data) throw new Error("Application not found or already updated.");
   return mapApplication(data);
 }
 
