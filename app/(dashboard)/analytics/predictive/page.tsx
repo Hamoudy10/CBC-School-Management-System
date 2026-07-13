@@ -311,7 +311,7 @@ export default function PredictiveAnalyticsPage() {
             classId: c.classId ?? c.class_id ?? c.id,
             name: c.name,
             gradeName: c.gradeName ?? c.grade_name ?? "",
-          })).filter((c: any) => c.classId));
+          })).filter((c: any) => c.classId && c.classId !== "undefined"));
         }
       })
       .catch(() => {});
@@ -335,7 +335,7 @@ export default function PredictiveAnalyticsPage() {
               <Select value={classId} onChange={(e) => setClassId(e.target.value)}>
                 <option value="">Select a class...</option>
                 {classes.map((c) => (
-                  <option key={c.classId} value={c.classId}>
+                  <option key={c.classId} value={c.classId || ""}>
                     {c.name} {c.gradeName ? `- ${c.gradeName}` : ""}
                   </option>
                 ))}

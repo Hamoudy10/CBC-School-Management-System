@@ -42,14 +42,14 @@ export default function NLQueryPage() {
         <CardContent>
           <div className="w-64">
             <label className="block text-sm font-medium text-gray-700 mb-1">Class (optional)</label>
-            <Select value={classId} onChange={(e) => setClassId(e.target.value)}>
-              <option value="">All classes...</option>
-              {classes.map((c) => (
-                <option key={c.classId} value={c.classId}>
-                  {c.name} {c.gradeName ? `- ${c.gradeName}` : ""}
-                </option>
-              ))}
-            </Select>
+              <Select value={classId} onChange={(e) => setClassId(e.target.value)}>
+                <option value="">All classes...</option>
+                {classes.map((c) => (
+                  <option key={c.classId} value={c.classId || ""}>
+                    {c.name} {c.gradeName ? `- ${c.gradeName}` : ""}
+                  </option>
+                ))}
+              </Select>
           </div>
         </CardContent>
       </Card>

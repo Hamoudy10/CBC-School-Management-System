@@ -8,6 +8,10 @@ import { generateInterventionRecommendations } from "@/features/predictive-analy
 export const POST = withPermission(
   { module: "analytics", action: "view" },
   async (request: NextRequest, { user }: any) => {
+    if (!user.school_id) {
+      return errorResponse("User account is not associated with a school. Contact administrator.", 400);
+    }
+
     const validation = await validateBody(request, interventionRecommendationRequestSchema);
     if (!validation.success) {return validationErrorResponse(validation.errors ?? {});}
 
