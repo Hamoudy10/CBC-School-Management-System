@@ -42,12 +42,19 @@ export async function listApplications(schoolId: string, status?: string): Promi
 
 export async function reviewApplication(id: string, input: any, userId: string, schoolId: string): Promise<AdmissionApplication> {
   const supabase = await createSupabaseServerClient();
+  console.log("[reviewApplication]", { id, schoolId, userId, status: input.status });
   const { data, error } = await supabase.from('admission_applications').update({
     status: input.status, notes: input.notes || null,
     reviewed_by: userId, reviewed_at: new Date().toISOString(),
   }).eq('application_id', id).eq('school_id', schoolId).select().maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error("Application not found or already updated.");
+  if (error) {
+    console.error("[reviewApplication] DB error:", error.message, error);
+    throw new Error(error.message);
+  }
+  if (!data) {
+    console.warn("[reviewApplication] No row matched", { id, schoolId, status: input.status });
+    throw new Error("Application not found or already updated.");
+  }
   return mapApplication(data);
 }
 
