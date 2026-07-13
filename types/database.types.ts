@@ -116,6 +116,49 @@ export type Database = {
         };
         Relationships: [];
       };
+      school_inventory: {
+        Row: {
+          item_id: string;
+          school_id: string;
+          name: string;
+          category: string;
+          quantity: number;
+          condition: string | null;
+          location: string | null;
+          assigned_to: string | null;
+          notes: string | null;
+        };
+        Insert: {
+          item_id?: string;
+          school_id: string;
+          name: string;
+          category?: string;
+          quantity?: number;
+          condition?: string | null;
+          location?: string | null;
+          assigned_to?: string | null;
+          notes?: string | null;
+        };
+        Update: {
+          item_id?: string;
+          school_id?: string;
+          name?: string;
+          category?: string;
+          quantity?: number;
+          condition?: string | null;
+          location?: string | null;
+          assigned_to?: string | null;
+          notes?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "school_inventory_school_id_fkey";
+            columns: ["school_id"];
+            referencedRelation: "schools";
+            referencedColumns: ["school_id"];
+          },
+        ];
+      };
       users: {
         Row: {
           user_id: string;
