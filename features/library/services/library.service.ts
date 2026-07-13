@@ -39,7 +39,7 @@ export async function updateBook(bookId: string, input: any, schoolId: string): 
   if (input.year !== undefined) updates.year = input.year;
   if (input.totalQuantity !== undefined) {
     updates.total_quantity = input.totalQuantity;
-    const { data: book } = await supabase.from('library_books').select('available_quantity').eq('book_id', bookId).eq('school_id', schoolId).single();
+    const { data: book } = await supabase.from('library_books').select('total_quantity, available_quantity').eq('book_id', bookId).eq('school_id', schoolId).single();
     const diff = input.totalQuantity - (book?.total_quantity ?? 0);
     updates.available_quantity = (book?.available_quantity ?? 0) + diff;
   }
