@@ -1202,6 +1202,107 @@ export type Database = {
           },
         ];
       };
+      messages: {
+        Row: {
+          id: string;
+          sender_id: string;
+          subject: string;
+          body: string;
+          priority: string;
+          category: string | null;
+          school_id: string;
+          created_at: string;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          sender_id: string;
+          subject: string;
+          body: string;
+          priority?: string;
+          category?: string | null;
+          school_id: string;
+          created_at?: string;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          sender_id?: string;
+          subject?: string;
+          body?: string;
+          priority?: string;
+          category?: string | null;
+          school_id?: string;
+          created_at?: string;
+          updated_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "messages_sender_id_fkey";
+            columns: ["sender_id"];
+            referencedRelation: "users";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "messages_school_id_fkey";
+            columns: ["school_id"];
+            referencedRelation: "schools";
+            referencedColumns: ["school_id"];
+          },
+        ];
+      };
+      message_recipients: {
+        Row: {
+          id: string;
+          message_id: string;
+          recipient_id: string;
+          recipient_type: string;
+          read_status: boolean;
+          read_at: string | null;
+          deleted: boolean;
+          school_id: string;
+        };
+        Insert: {
+          id?: string;
+          message_id: string;
+          recipient_id: string;
+          recipient_type: string;
+          read_status?: boolean;
+          read_at?: string | null;
+          deleted?: boolean;
+          school_id: string;
+        };
+        Update: {
+          id?: string;
+          message_id?: string;
+          recipient_id?: string;
+          recipient_type?: string;
+          read_status?: boolean;
+          read_at?: string | null;
+          deleted?: boolean;
+          school_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "message_recipients_message_id_fkey";
+            columns: ["message_id"];
+            referencedRelation: "messages";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "message_recipients_recipient_id_fkey";
+            columns: ["recipient_id"];
+            referencedRelation: "users";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "message_recipients_school_id_fkey";
+            columns: ["school_id"];
+            referencedRelation: "schools";
+            referencedColumns: ["school_id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
