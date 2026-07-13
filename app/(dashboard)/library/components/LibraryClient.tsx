@@ -7,12 +7,14 @@ import {
   BookOpen,
   BookPlus,
   RotateCcw,
+  ScanLine,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
+import { BarcodeScanner } from '@/components/ui/BarcodeScanner';
 import {
   Modal,
   ModalBody,
@@ -26,7 +28,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/hooks/useAuth';
 import { formatDate } from '@/lib/utils';
 
-type TabType = 'overview' | 'catalog' | 'borrowing' | 'returns';
+type TabType = 'overview' | 'catalog' | 'borrowing' | 'returns' | 'scan';
 type VisibleTab = {
   key: TabType;
   label: string;
@@ -231,6 +233,7 @@ export function LibraryClient() {
         { key: 'catalog', label: 'Book Catalog', allowed: canView },
         { key: 'borrowing', label: 'Borrowing', allowed: canManage },
         { key: 'returns', label: 'Returns', allowed: canManage },
+        { key: 'scan', label: 'Scan', allowed: canView },
       ] as VisibleTab[]).filter((tab) => tab.allowed),
     [canView, canManage],
   );
@@ -610,6 +613,10 @@ export function LibraryClient() {
         />
       )}
 
+      {activeTab === 'scan' && canView && (
+        <ScanSection onScannedBook={(book) => { setActiveTab('catalog'); info('Book found', `"${book.title}" scanned.`); }} />
+      )}
+
       <Modal open={addBookOpen} onClose={() => setAddBookOpen(false)} size="lg">
         <ModalHeader>
           <ModalTitle>Add Book</ModalTitle>
@@ -948,6 +955,60 @@ function ReturnsSection({ overdueCount, returnRows, onProcessReturn }: { overdue
         </Card>
       )}
     </div>
+  );
+}
+
+function ScanSection({ onScannedBook }: { onScannedBook: (book: any) => void }) {
+  const [scanResult, setScanResult] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [errorScan, setErrorScan] = useState<string | null>(null);
+  const { error: toastError } = useToast();
+
+  const handleScan = async (barcode: string) => {
+    setLoading(true);
+    setErrorScan(null);
+    setScanResult(null);
+    try {
+      const res = await fetch('/api/library/scan', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ barcode }),
+      });
+      const json = await res.json();
+      if (json.success && json.data) {
+        setScanResult(json.data);
+        if (json.data.title) {onScannedBook(json.data);}
+      } else {
+        setErrorScan('No item found with that barcode.');
+      }
+    } catch {
+      setErrorScan('Failed to scan. Check connection.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card>
+      <div className="p-4 space-y-4">
+        <h3 className="text-sm font-semibold text-gray-900">Scan Barcode</h3>
+        <p className="text-xs text-gray-500">Scan a book or inventory item barcode to look it up instantly.</p>
+        <BarcodeScanner onScan={handleScan} />
+        {loading && <p className="text-xs text-gray-400">Looking up barcode...</p>}
+        {errorScan && <p className="text-xs text-red-600">{errorScan}</p>}
+        {scanResult && (
+          <div className="rounded-lg border border-green-200 bg-green-50 p-3 space-y-1">
+            <p className="text-sm font-medium text-green-800">{scanResult.title || scanResult.name}</p>
+            {scanResult.author && <p className="text-xs text-green-700">by {scanResult.author}</p>}
+            {scanResult.isbn && <p className="text-xs text-green-700">ISBN: {scanResult.isbn}</p>}
+            {'availableQuantity' in scanResult && (
+              <p className="text-xs text-green-700">{scanResult.availableQuantity} of {scanResult.totalQuantity} available</p>
+            )}
+            {scanResult.category && <p className="text-xs text-green-700">Category: {scanResult.category}</p>}
+            {scanResult.barcode && <p className="text-xs text-green-700">Barcode: {scanResult.barcode}</p>}
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }
 
