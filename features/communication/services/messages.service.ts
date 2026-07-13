@@ -20,6 +20,7 @@ export async function sendMessage(
     .from("messages")
     .insert({
       sender_id: senderId,
+      receiver_id: null,
       subject: input.subject,
       body: input.body,
       priority: input.priority || "normal",

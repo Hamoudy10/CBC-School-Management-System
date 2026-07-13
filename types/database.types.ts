@@ -1206,6 +1206,7 @@ export type Database = {
         Row: {
           id: string;
           sender_id: string;
+          receiver_id: string | null;
           subject: string;
           body: string;
           priority: string;
@@ -1217,6 +1218,7 @@ export type Database = {
         Insert: {
           id?: string;
           sender_id: string;
+          receiver_id?: string | null;
           subject: string;
           body: string;
           priority?: string;
@@ -1228,6 +1230,7 @@ export type Database = {
         Update: {
           id?: string;
           sender_id?: string;
+          receiver_id?: string | null;
           subject?: string;
           body?: string;
           priority?: string;
