@@ -199,7 +199,7 @@ export const assessmentFiltersSchema = z.object({
   startDate: dateField.optional(),
   endDate: dateField.optional(),
   page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+  pageSize: z.coerce.number().int().min(1).max(1000).default(50),
 });
 
 export type AssessmentFiltersInput = z.infer<typeof assessmentFiltersSchema>;
@@ -215,7 +215,7 @@ export const reportCardFiltersSchema = z.object({
     .transform((v) => v === "true")
     .optional(),
   page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+  pageSize: z.coerce.number().int().min(1).max(1000).default(50),
 });
 
 export type ReportCardFiltersInput = z.infer<typeof reportCardFiltersSchema>;
