@@ -19,6 +19,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/Alert";
 import { useToast } from "@/components/ui/Toast";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 type ClassOption = { classId: string; name: string; gradeName: string };
 
 interface TabConfig {
@@ -55,6 +57,7 @@ function ForecastView({ classId }: { classId: string }) {
 
   const run = useCallback(async () => {
     if (!classId) {return;}
+    if (!UUID_RE.test(classId)) {toastError("Validation Error", "Invalid class selection."); return;}
     setLoading(true);
     try {
       const res = await fetch("/api/predictive-analytics/performance-forecast", {
@@ -134,6 +137,7 @@ function ClusterView({ classId }: { classId: string }) {
 
   const run = useCallback(async () => {
     if (!classId) {return;}
+    if (!UUID_RE.test(classId)) {toastError("Validation Error", "Invalid class selection."); return;}
     setLoading(true);
     try {
       const res = await fetch("/api/predictive-analytics/student-clusters", {
@@ -211,6 +215,7 @@ function InterventionView({ classId }: { classId: string }) {
 
   const run = useCallback(async () => {
     if (!classId) {return;}
+    if (!UUID_RE.test(classId)) {toastError("Validation Error", "Invalid class selection."); return;}
     setLoading(true);
     try {
       const res = await fetch("/api/predictive-analytics/intervention-recommendations", {
@@ -298,10 +303,16 @@ export default function PredictiveAnalyticsPage() {
   const [activeTab, setActiveTab] = useState("forecast");
 
   useEffect(() => {
-    fetch("/api/classes")
+    fetch("/api/settings/classes")
       .then((r) => r.json())
       .then((d) => {
-        if (d.success) {setClasses(d.data || []);}
+        if (d.success) {
+          setClasses((d.data ?? []).map((c: any) => ({
+            classId: c.classId ?? c.class_id ?? c.id,
+            name: c.name,
+            gradeName: c.gradeName ?? c.grade_name ?? "",
+          })).filter((c: any) => c.classId));
+        }
       })
       .catch(() => {});
   }, []);
@@ -386,7 +397,11 @@ function StudentRecommendationView({ classId }: { classId: string }) {
     fetch(`/api/students?classId=${classId}`)
       .then((r) => r.json())
       .then((d) => {
-        if (d.success) {setStudents(d.data || []);}
+        if (d.success) {setStudents((d.data ?? []).map((s: any) => ({
+          student_id: s.studentId ?? s.student_id,
+          first_name: s.firstName ?? s.first_name ?? "",
+          last_name: s.lastName ?? s.last_name ?? "",
+        })).filter((s: any) => s.student_id));}
       })
       .catch(() => {});
   }, [classId]);

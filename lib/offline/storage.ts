@@ -52,9 +52,10 @@ function openDB(): Promise<IDBDatabase> {
 function getStore(storeName: string, mode: IDBTransactionMode = 'readonly'): Promise<IDBObjectStore> {
   return openDB().then(db => {
     const transaction = db.transaction(storeName, mode);
+    const store = transaction.objectStore(storeName);
     return new Promise((resolve, reject) => {
-      transaction.oncomplete = () => resolve(transaction.objectStore(storeName));
       transaction.onerror = () => reject(transaction.error);
+      resolve(store);
     });
   });
 }

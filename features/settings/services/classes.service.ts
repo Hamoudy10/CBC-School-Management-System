@@ -113,18 +113,29 @@ export async function getClasses(
   const classes = (data || [])
     .map((c: any) => ({
       class_id: c.class_id,
+      classId: c.class_id,
       name: c.name,
+      grade_name: c.grades?.name ?? "",
+      gradeName: c.grades?.name ?? "",
       grade_level: c.grades?.level_order ?? 0,
+      gradeLevel: c.grades?.level_order ?? 0,
       stream: c.stream ?? undefined,
       capacity: c.capacity ?? 0,
       class_teacher_id: c.class_teacher_id ?? undefined,
+      classTeacherId: c.class_teacher_id ?? undefined,
       academic_year: c.academic_years?.year ?? "",
+      academicYear: c.academic_years?.year ?? "",
       status: c.is_active ? "active" : "inactive",
+      is_active: c.is_active,
+      isActive: c.is_active,
       school_id: c.school_id,
+      schoolId: c.school_id,
       created_at: c.created_at,
       updated_at: c.updated_at,
       class_teacher: c.class_teacher ?? undefined,
+      classTeacher: c.class_teacher ?? undefined,
       student_count: c.student_count?.[0]?.count || 0,
+      studentCount: c.student_count?.[0]?.count || 0,
     }))
     .sort((a, b) => a.grade_level - b.grade_level || a.name.localeCompare(b.name));
 

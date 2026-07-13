@@ -13,11 +13,14 @@ export const GET = withAuth(async (req: NextRequest, user) => {
     const result = await getUnreadCounts(user.id, user.school_id);
 
     if (!result.success) {
+      console.error("[unread-count] getUnreadCounts failed:", result.message);
       return apiError(result.message || "Failed to fetch unread counts", 500);
     }
 
     return apiSuccess(result.data);
   } catch (error) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    console.error("[unread-count] Unexpected error:", msg, error);
     return apiError("Internal server error", 500);
   }
 });

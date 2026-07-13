@@ -211,6 +211,7 @@ export async function getUnreadCounts(
     .eq("read_status", false);
 
   if (notifError) {
+    console.error("[getUnreadCounts] notifications query failed:", notifError.message, notifError);
     return { success: false, message: notifError.message };
   }
 
@@ -223,6 +224,7 @@ export async function getUnreadCounts(
     .eq("deleted", false);
 
   if (msgError) {
+    console.error("[getUnreadCounts] message_recipients query failed:", msgError.message, msgError);
     return { success: false, message: msgError.message };
   }
 

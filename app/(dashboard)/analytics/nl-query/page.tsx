@@ -14,10 +14,16 @@ export default function NLQueryPage() {
   const [classId, setClassId] = useState("");
 
   useEffect(() => {
-    fetch("/api/classes")
+    fetch("/api/settings/classes")
       .then((r) => r.json())
       .then((d) => {
-        if (d.success) {setClasses(d.data || []);}
+        if (d.success) {
+          setClasses((d.data ?? []).map((c: any) => ({
+            classId: c.classId ?? c.class_id ?? c.id,
+            name: c.name,
+            gradeName: c.gradeName ?? c.grade_name ?? "",
+          })).filter((c: any) => c.classId));
+        }
       })
       .catch(() => {});
   }, []);
