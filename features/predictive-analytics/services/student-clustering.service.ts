@@ -37,7 +37,7 @@ export async function generateStudentClusters(
 
   const { data: students } = await supabase
     .from("students")
-    .select("student_id, first_name, last_name, users!inner(first_name, last_name)")
+    .select("student_id, first_name, last_name, users!left(first_name, last_name)")
     .eq("current_class_id", classId)
     .eq("school_id", schoolId)
     .eq("status", "active");

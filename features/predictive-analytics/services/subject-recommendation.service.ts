@@ -34,7 +34,7 @@ export async function generateSubjectRecommendation(
 
   const { data: student } = await supabase
     .from("students")
-    .select("*, users!inner(first_name, last_name), classes!inner(name, grade:grades(name, level_order))")
+    .select("*, users!left(first_name, last_name), classes!inner(name, grade:grades(name, level_order))")
     .eq("student_id", studentId)
     .eq("school_id", schoolId)
     .single();
