@@ -394,14 +394,17 @@ function StudentRecommendationView({ classId }: { classId: string }) {
 
   useEffect(() => {
     if (!classId) {return;}
-    fetch(`/api/students?classId=${classId}`)
+    fetch(`/api/students?classId=${classId}&limit=200`)
       .then((r) => r.json())
       .then((d) => {
-        if (d.success) {setStudents((d.data ?? []).map((s: any) => ({
-          student_id: s.studentId ?? s.student_id,
-          first_name: s.firstName ?? s.first_name ?? "",
-          last_name: s.lastName ?? s.last_name ?? "",
-        })).filter((s: any) => s.student_id));}
+        if (d.success) {
+          const items = d.data?.data ?? d.data?.students ?? [];
+          setStudents(items.map((s: any) => ({
+            student_id: s.studentId ?? s.student_id,
+            first_name: s.firstName ?? s.first_name ?? "",
+            last_name: s.lastName ?? s.last_name ?? "",
+          })).filter((s: any) => s.student_id));
+        }
       })
       .catch(() => {});
   }, [classId]);
