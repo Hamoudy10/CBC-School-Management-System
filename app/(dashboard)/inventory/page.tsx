@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Package, Plus, BookOpen, Box, Search } from 'lucide-react';
+import { Package, Plus, BookOpen, Box, Search, ScanLine, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -10,8 +10,9 @@ import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { useToast } from '@/components/ui/Toast';
+import { BarcodeScanner } from '@/components/ui/BarcodeScanner';
 
-interface InvItem { itemId: string; name: string; category: string; quantity: number; condition: string | null; location: string | null; assignedTo: string | null; notes: string | null; }
+interface InvItem { itemId: string; name: string; category: string; quantity: number; condition: string | null; location: string | null; assignedTo: string | null; notes: string | null; barcode: string | null; }
 interface BookItem { bookId: string; title: string; author: string; isbn: string | null; totalQuantity: number; availableQuantity: number; category: string | null; }
 
 const CATEGORIES = ['Furniture', 'Electronics', 'Sports', 'Lab Equipment', 'Stationery', 'Textbooks', 'Other'];
@@ -41,20 +42,64 @@ export default function InventoryPage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  const [scanBarcode, setScanBarcode] = useState('');
+  const [scanResult, setScanResult] = useState<any>(null);
+  const [scanning, setScanning] = useState(false);
+  const [lookupLoading, setLookupLoading] = useState(false);
+
+  const handleScanForAdd = async (barcode: string) => {
+    setScanBarcode(barcode);
+    setScanResult(null);
+    setScanning(false);
+    try {
+      const res = await fetch('/api/library/scan', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ barcode }),
+      });
+      const json = await res.json();
+      if (json.success && json.data) {
+        setScanResult({ exists: true, item: json.data });
+        success(`Found existing item: "${json.data.title || json.data.name}"`);
+        return;
+      }
+    } catch {}
+    setLookupLoading(true);
+    try {
+      const upcRes = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`);
+      if (upcRes.ok) {
+        const upcJson = await upcRes.json();
+        if (upcJson.items?.length > 0) {
+          const product = upcJson.items[0];
+          setIName(product.title || '');
+          const cat = product.category ? product.category.split(' > ')[0] : CATEGORIES[0];
+          if (CATEGORIES.includes(cat)) {setICategory(cat);}
+          setScanResult({ exists: false, barcode, name: product.title, category: cat });
+          success('Product info found! Fill in details and add.');
+          return;
+        }
+      }
+    } catch {}
+    setScanResult({ exists: false, barcode, name: '', category: '' });
+    setIName('');
+    setLookupLoading(false);
+  };
+
   const addItem = useCallback(async () => {
     if (!iName.trim() || !iCategory) { error('Enter name and category'); return; }
     try {
+      const payload: any = { name: iName.trim(), category: iCategory, quantity: parseInt(iQty) || 1, condition: iCondition.trim() || undefined, location: iLocation.trim() || undefined, assignedTo: iAssigned.trim() || undefined };
+      if (scanBarcode) { payload.barcode = scanBarcode; }
       const res = await fetch('/api/inventory/items', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: iName.trim(), category: iCategory, quantity: parseInt(iQty) || 1, condition: iCondition.trim() || undefined, location: iLocation.trim() || undefined, assignedTo: iAssigned.trim() || undefined }),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
       if (!res.ok) {throw new Error(json.error || 'Failed');}
       setItems((prev) => [...prev, json.data]);
-      setIName(''); setIQty('1'); setICondition(''); setILocation(''); setIAssigned('');
+      setIName(''); setIQty('1'); setICondition(''); setILocation(''); setIAssigned(''); setScanBarcode(''); setScanResult(null);
       success('Item added');
     } catch (err) { error(err instanceof Error ? err.message : 'Failed'); }
-  }, [iName, iCategory, iQty, iCondition, iLocation, iAssigned, success, error]);
+  }, [iName, iCategory, iQty, iCondition, iLocation, iAssigned, scanBarcode, success, error]);
 
   const totalItems = items.reduce((s, i) => s + i.quantity, 0);
   const availableBooks = books.reduce((s, b) => s + b.availableQuantity, 0);
@@ -105,6 +150,29 @@ export default function InventoryPage() {
             </TabsList>
 
             <TabsContent value="inventory" className="space-y-4">
+              <Card>
+                <CardHeader><CardTitle className="text-base">Scan & Add Item</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-xs text-gray-500">Scan a barcode to look up product info and pre-fill the add form. If the item already exists in inventory, it will be shown instead.</p>
+                  <BarcodeScanner onScan={handleScanForAdd} />
+                  {lookupLoading && <p className="text-xs text-blue-600"><Loader2 className="h-3 w-3 inline animate-spin mr-1" />Looking up product database...</p>}
+                  {scanResult && !scanResult.exists && (
+                    <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                      <p className="font-medium">Barcode: {scanResult.barcode}</p>
+                      {scanResult.name && <p className="text-xs mt-1">Product: {scanResult.name}</p>}
+                      <p className="text-xs mt-1">Category: {scanResult.category}</p>
+                      <p className="text-xs text-blue-600 mt-1">Fill in details below and add to inventory.</p>
+                    </div>
+                  )}
+                  {scanResult?.exists && scanResult.item && (
+                    <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+                      <p className="font-medium">{scanResult.item.title || scanResult.item.name}</p>
+                      <p className="text-xs mt-1">Already in inventory</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardHeader><CardTitle className="text-base">Add Inventory Item</CardTitle></CardHeader>
                 <CardContent className="flex flex-wrap items-end gap-3">
