@@ -16,14 +16,13 @@ CREATE TABLE IF NOT EXISTS admission_applications (
     notes TEXT DEFAULT NULL,
     submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     reviewed_at TIMESTAMPTZ DEFAULT NULL,
-    reviewed_by UUID DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL
+    reviewed_by UUID DEFAULT NULL
 );
 
--- Index for school lookup
+-- Indexes
 CREATE INDEX IF NOT EXISTS idx_admission_applications_school_id ON admission_applications(school_id);
-
--- Index for status filtering
 CREATE INDEX IF NOT EXISTS idx_admission_applications_status ON admission_applications(status);
+CREATE INDEX IF NOT EXISTS idx_admission_applications_reviewed_by ON admission_applications(reviewed_by);
 
 -- Enable RLS
 ALTER TABLE admission_applications ENABLE ROW LEVEL SECURITY;
@@ -39,6 +38,6 @@ CREATE POLICY "School staff can view applications"
     USING (
         auth.role() = 'authenticated' 
         AND school_id IN (
-            SELECT school_id FROM users WHERE id = auth.uid()
+            SELECT school_id FROM users WHERE user_id = auth.uid()
         )
     );

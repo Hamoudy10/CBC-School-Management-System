@@ -75,12 +75,6 @@ export type Database = {
             referencedRelation: "schools";
             referencedColumns: ["school_id"];
           },
-          {
-            foreignKeyName: "admission_applications_reviewed_by_fkey";
-            columns: ["reviewed_by"];
-            referencedRelation: "users";
-            referencedColumns: ["id"];
-          },
         ];
       };
       schools: {
