@@ -12,6 +12,7 @@ const forecastSchema = z.object({
   forecasts: z.array(
     z.object({
       studentId: z.string(),
+      learningAreaId: z.string(),
       predictedEndTermScore: z.number().min(0).max(4),
       predictedEndYearScore: z.number().min(0).max(4),
       riskOfDecline: z.enum(["low", "medium", "high"]),
@@ -179,13 +180,27 @@ Rules:
       }
     }
 
+    const avgCurrent = forecasts.length > 0 ? forecasts.reduce((s, f) => s + f.currentScore, 0) / forecasts.length : 0;
+    const avgPredicted = forecasts.length > 0 ? forecasts.reduce((s, f) => s + f.predictedEndTermScore, 0) / forecasts.length : 0;
+    const improvingCount = forecasts.filter((f) => f.trend === "improving").length;
+    const decliningCount = forecasts.filter((f) => f.trend === "declining").length;
+    const stableCount = forecasts.filter((f) => f.trend === "stable").length;
+    const atRiskCount = forecasts.filter((f) => f.riskOfDecline === "high").length;
+
     return {
       classId: input.classId,
       className: classData?.name ?? "",
       termId: input.termId ?? "",
       academicYearId: input.academicYearId ?? "",
       forecasts,
-      classSummary: parsed.classSummary,
+      classSummary: {
+        averageCurrentScore: Math.round(avgCurrent * 100) / 100,
+        averagePredictedScore: Math.round(avgPredicted * 100) / 100,
+        improvingCount,
+        decliningCount,
+        stableCount,
+        atRiskCount,
+      },
       generatedAt: startedAt,
     };
   } catch (error) {

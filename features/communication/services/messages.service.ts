@@ -1,10 +1,8 @@
 // features/communication/services/messages.service.ts
 // Internal messaging service
 
-import { createClient } from "@/lib/supabase/client";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Message, MessageFilters, SendMessageInput } from "../types";
-
-const supabase = createClient();
 
 // ============================================================
 // SEND MESSAGE
@@ -15,6 +13,8 @@ export async function sendMessage(
   senderId: string,
   schoolId: string,
 ): Promise<{ success: boolean; id?: string; message: string }> {
+  const supabase = await createSupabaseServerClient();
+
   // Create message
   const { data: msg, error: msgError } = await supabase
     .from("messages")
@@ -56,7 +56,6 @@ export async function sendMessage(
         school_id: schoolId,
       });
     } else if (r.recipient_type === "role") {
-      // Get all users with this role
       const { data: roleUsers } = await supabase
         .from("users")
         .select("user_id")
@@ -77,7 +76,6 @@ export async function sendMessage(
         }
       });
     } else if (r.recipient_type === "class") {
-      // Get all students + their parents in this class
       const { data: classStudents } = await supabase
         .from("student_classes")
         .select(
@@ -104,7 +102,6 @@ export async function sendMessage(
             school_id: schoolId,
           });
         }
-        // Also notify parent if exists
         if (sc.student?.parent_id) {
           recipientRecords.push({
             message_id: msg.id,
@@ -119,7 +116,6 @@ export async function sendMessage(
     }
   }
 
-  // Deduplicate recipients
   const uniqueRecipients = Array.from(
     new Map(recipientRecords.map((r) => [r.recipient_id, r])).values(),
   );
@@ -130,12 +126,10 @@ export async function sendMessage(
       .insert(uniqueRecipients);
 
     if (recipError) {
-      // Message was created but recipients failed - log error
-      console.error("Failed to add recipients:", recipError.message);
+      await supabase.from("messages").delete().eq("id", msg.id);
       return {
-        success: true,
-        id: msg.id,
-        message: `Message created but ${uniqueRecipients.length} recipients may not have been added`,
+        success: false,
+        message: recipError.message || "Failed to add recipients",
       };
     }
   }
@@ -163,6 +157,7 @@ export async function getInbox(
   total: number;
   message?: string;
 }> {
+  const supabase = await createSupabaseServerClient();
   const offset = (page - 1) * pageSize;
 
   let query = supabase
@@ -233,6 +228,7 @@ export async function getSentMessages(
   total: number;
   message?: string;
 }> {
+  const supabase = await createSupabaseServerClient();
   const offset = (page - 1) * pageSize;
 
   const { data, error, count } = await supabase
@@ -273,6 +269,7 @@ export async function markMessageAsRead(
   userId: string,
   schoolId: string,
 ): Promise<{ success: boolean; message: string }> {
+  const supabase = await createSupabaseServerClient();
   const { error } = await supabase
     .from("message_recipients")
     .update({
@@ -294,6 +291,7 @@ export async function markAllMessagesAsRead(
   userId: string,
   schoolId: string,
 ): Promise<{ success: boolean; message: string }> {
+  const supabase = await createSupabaseServerClient();
   const { error } = await supabase
     .from("message_recipients")
     .update({
@@ -316,6 +314,7 @@ export async function deleteMessage(
   userId: string,
   schoolId: string,
 ): Promise<{ success: boolean; message: string }> {
+  const supabase = await createSupabaseServerClient();
   const { data: recipientRecord, error: lookupError } = await supabase
     .from("message_recipients")
     .select("id")
@@ -353,6 +352,7 @@ export async function getMessageById(
   userId: string,
   schoolId: string,
 ): Promise<{ success: boolean; data?: Message; message?: string }> {
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("messages")
     .select(

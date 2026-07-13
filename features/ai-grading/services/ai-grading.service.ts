@@ -30,7 +30,7 @@ const gradingOutputSchema = z.object({
   }),
 });
 
-function computeLevel(percentage: number): "exceeding" | "meeting" | "approaching" | "below_expectation" {
+export function computeLevel(percentage: number): "exceeding" | "meeting" | "approaching" | "below_expectation" {
   if (percentage >= 80) return "exceeding";
   if (percentage >= 60) return "meeting";
   if (percentage >= 40) return "approaching";
@@ -175,10 +175,53 @@ Rules:
     });
 
     const parsed = gradingOutputSchema.parse(ai.data);
+    const warnings: string[] = [...(ai.warnings || [])];
 
-    const gradedResponses: GradedResponse[] = parsed.gradedResponses.map((r: any) => {
-      const totalScore = r.totalScore;
+    const inputStudentIds = new Set(input.studentResponses.map((s) => s.studentId));
+    const outputStudentIds = new Set(parsed.gradedResponses.map((r: any) => r.studentId));
+    const inputQuestionNumbers = new Set(input.questions.map((q) => q.number));
+
+    const missingStudents = input.studentResponses.filter((s) => !outputStudentIds.has(s.studentId));
+    const extraStudents = parsed.gradedResponses.filter((r: any) => !inputStudentIds.has(r.studentId));
+
+    if (missingStudents.length > 0) {
+      warnings.push(`AI did not return results for ${missingStudents.length} student(s): ${missingStudents.map((s) => s.studentName).join(", ")}`);
+    }
+    if (extraStudents.length > 0) {
+      warnings.push(`AI returned results for ${extraStudents.length} unknown student(s) that were not in the input.`);
+    }
+
+    const gradedResponses: GradedResponse[] = parsed.gradedResponses
+      .filter((r: any) => inputStudentIds.has(r.studentId))
+      .map((r: any) => {
+      const outputQuestionNumbers = new Set(r.questionResults.map((qr: any) => qr.questionNumber));
+      const missingQuestions = [...inputQuestionNumbers].filter((n) => !outputQuestionNumbers.has(n));
+      const extraQuestions = r.questionResults.filter((qr: any) => !inputQuestionNumbers.has(qr.questionNumber));
+
+      if (missingQuestions.length > 0) {
+        warnings.push(`Student "${r.studentName}" is missing results for question(s): ${missingQuestions.join(", ")}`);
+      }
+      if (extraQuestions.length > 0) {
+        warnings.push(`Student "${r.studentName}" has results for extra question(s) not in the exam: ${extraQuestions.map((qr: any) => qr.questionNumber).join(", ")}`);
+      }
+
+      const validQuestionResults = r.questionResults.filter((qr: any) => inputQuestionNumbers.has(qr.questionNumber));
+
+      const clampedQuestionResults = validQuestionResults.map((qr: any) => {
+        const maxScore = input.questions.find((q) => q.number === qr.questionNumber)?.marks ?? 0;
+        return {
+          questionNumber: qr.questionNumber,
+          score: Math.max(0, Math.min(qr.score, maxScore)),
+          maxScore,
+          feedback: qr.feedback,
+          strengths: qr.strengths || [],
+          weaknesses: qr.weaknesses || [],
+        };
+      });
+
+      const totalScore = clampedQuestionResults.reduce((sum: number, qr: any) => sum + qr.score, 0);
       const percentage = maxTotalScore > 0 ? (totalScore / maxTotalScore) * 100 : 0;
+
       return {
         studentId: r.studentId,
         studentName: r.studentName,
@@ -186,26 +229,54 @@ Rules:
         maxTotalScore,
         percentage: Math.round(percentage * 100) / 100,
         performanceLevel: computeLevel(percentage),
-        questionResults: r.questionResults.map((qr: any) => ({
-          questionNumber: qr.questionNumber,
-          score: qr.score,
-          maxScore: input.questions.find((q) => q.number === qr.questionNumber)?.marks ?? 0,
-          feedback: qr.feedback,
-          strengths: qr.strengths || [],
-          weaknesses: qr.weaknesses || [],
-        })),
+        questionResults: clampedQuestionResults,
         overallFeedback: r.overallFeedback,
       };
     });
+
+    for (const missing of missingStudents) {
+      const questionResults = input.questions.map((q) => ({
+        questionNumber: q.number,
+        score: 0,
+        maxScore: q.marks,
+        feedback: "No response graded by AI.",
+        strengths: [] as string[],
+        weaknesses: ["Not assessed"] as string[],
+      }));
+      gradedResponses.push({
+        studentId: missing.studentId,
+        studentName: missing.studentName,
+        totalScore: 0,
+        maxTotalScore,
+        percentage: 0,
+        performanceLevel: "below_expectation",
+        questionResults,
+        overallFeedback: "AI did not return a grade for this student.",
+      });
+    }
+
+    const scores = gradedResponses.map((r) => r.totalScore);
+    const sorted = [...scores].sort((a, b) => a - b);
+    const avg = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+    const distribution: Record<string, number> = {};
+    for (const r of gradedResponses) {
+      distribution[r.performanceLevel] = (distribution[r.performanceLevel] || 0) + 1;
+    }
 
     return {
       subject: input.subject,
       grade: input.grade,
       totalStudents: input.studentResponses.length,
       gradedResponses,
-      classSummary: parsed.classSummary,
+      classSummary: {
+        averageScore: Math.round(avg * 100) / 100,
+        highestScore: scores.length > 0 ? Math.max(...scores) : 0,
+        lowestScore: scores.length > 0 ? Math.min(...scores) : 0,
+        medianScore: sorted.length > 0 ? sorted[Math.floor(sorted.length / 2)] : 0,
+        levelDistribution: distribution,
+      },
       confidence: ai.confidence,
-      warnings: ai.warnings || [],
+      warnings,
       generatedAt: new Date().toISOString(),
     };
   } catch (error) {

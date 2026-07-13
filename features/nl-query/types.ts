@@ -17,7 +17,7 @@ export interface NLQueryResult {
     title: string;
     description: string;
   };
-  sqlGenerated: string;
+  queryPlanPreview: string;
   summary: string;
   confidence: number;
   warnings: string[];

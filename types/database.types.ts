@@ -1080,6 +1080,61 @@ export type Database = {
           },
         ];
       };
+      broadcast_messages: {
+        Row: {
+          id: string;
+          school_id: string;
+          created_by: string;
+          subject: string;
+          body: string;
+          priority: string;
+          category: string;
+          target_roles: string[];
+          target_classes: string[];
+          created_at: string;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          school_id: string;
+          created_by: string;
+          subject: string;
+          body: string;
+          priority?: string;
+          category?: string;
+          target_roles?: string[];
+          target_classes?: string[];
+          created_at?: string;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          school_id?: string;
+          created_by?: string;
+          subject?: string;
+          body?: string;
+          priority?: string;
+          category?: string;
+          target_roles?: string[];
+          target_classes?: string[];
+          created_at?: string;
+          updated_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "broadcast_messages_school_id_fkey";
+            columns: ["school_id"];
+            referencedRelation: "schools";
+            referencedColumns: ["school_id"];
+          },
+          {
+            foreignKeyName: "broadcast_messages_created_by_fkey";
+            columns: ["created_by"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

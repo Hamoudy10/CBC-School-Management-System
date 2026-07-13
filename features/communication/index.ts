@@ -9,6 +9,7 @@ import {
   getMessageById,
   deleteMessage,
 } from "./services/messages.service";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   createNotification,
   createBulkNotifications,
@@ -96,7 +97,7 @@ export const MessagesService = {
         })),
       ];
 
-    return sendMessage(
+    const result = await sendMessage(
       {
         subject: input.subject,
         body: input.body,
@@ -107,6 +108,30 @@ export const MessagesService = {
       userId,
       schoolId,
     );
+
+    if (result.success) {
+      const supabase = await createSupabaseServerClient();
+      const { error: broadcastError } = await supabase.from("broadcast_messages").insert({
+        id: result.id,
+        school_id: schoolId,
+        created_by: userId,
+        subject: input.subject,
+        body: input.body,
+        priority: input.priority || "normal",
+        category: input.category || "announcement",
+        target_roles: input.roles || [],
+        target_classes: input.classes || [],
+        created_at: new Date().toISOString(),
+      });
+
+      if (broadcastError) {
+        await supabase.from("message_recipients").delete().eq("message_id", result.id);
+        await supabase.from("messages").delete().eq("id", result.id);
+        return { success: false, message: "Failed to persist broadcast message." };
+      }
+    }
+
+    return result;
   },
   async getMessage(schoolId: string, messageId: string, userId: string) {
     const result = await getMessageById(messageId, userId, schoolId);

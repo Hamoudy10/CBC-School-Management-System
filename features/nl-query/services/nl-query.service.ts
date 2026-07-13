@@ -404,7 +404,7 @@ Rules:
         title: plan.visualizationTitle,
         description: plan.visualizationDescription,
       },
-      sqlGenerated: sql,
+      queryPlanPreview: sql,
       summary,
       confidence: ai.confidence,
       warnings: [
@@ -412,6 +412,11 @@ Rules:
         dataSource === "fallback_context"
           ? "Used contextual data extraction (AI query plan could not be fully executed)"
           : "",
+        schoolData.students.length >= 200 ? "Data is sampled (max 200 students loaded)" : "",
+        schoolData.aggregates.length >= 500 ? "Assessment data is sampled (max 500 records)" : "",
+        schoolData.attendance.length >= 500 ? "Attendance data is sampled (max 500 records)" : "",
+        schoolData.discipline.length >= 200 ? "Discipline data is sampled (max 200 records)" : "",
+        schoolData.fees.length >= 200 ? "Fee data is sampled (max 200 records)" : "",
       ].filter(Boolean),
     };
   } catch (error) {
@@ -431,12 +436,13 @@ Rules:
         title: "Query Results",
         description: `Results based on your query: "${input.query}"`,
       },
-      sqlGenerated: "Fallback mode - contextual data extraction",
+      queryPlanPreview: "Fallback mode - contextual data extraction",
       summary: `Here is what I found based on your question. The available data covers ${schoolData.students.length} students, ${schoolData.classes.length} classes, and ${schoolData.learningAreas.length} learning areas.`,
       confidence: 0.6,
       warnings: [
         "AI interpretation was unavailable - showing contextual data overview",
-      ],
+        schoolData.students.length >= 200 ? "Data is sampled (max 200 students loaded)" : "",
+      ].filter(Boolean),
     };
   }
 }

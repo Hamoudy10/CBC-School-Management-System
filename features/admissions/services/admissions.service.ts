@@ -4,11 +4,21 @@ import type { AdmissionApplication } from '../types';
 
 export async function submitApplication(input: any): Promise<AdmissionApplication> {
   const supabase = await createSupabaseServerClient();
-  const { data: school } = await supabase.from('schools').select('school_id').limit(1).single();
-  if (!school) throw new Error('No school found');
+  const defaultSchoolId = process.env.DEFAULT_SCHOOL_ID;
+
+  if (!defaultSchoolId) {
+    const { count } = await supabase
+      .from("schools")
+      .select("school_id", { count: "exact", head: true });
+    if (!count || count === 0) throw new Error("No school found. Contact the administrator.");
+    if (count > 1) throw new Error("This school has not configured public admissions. Please contact the school directly.");
+  }
+
+  const schoolId = defaultSchoolId || (await supabase.from("schools").select("school_id").single()).data?.school_id;
+  if (!schoolId) throw new Error("No school found. Contact the administrator.");
 
   const { data, error } = await supabase.from('admission_applications').insert({
-    school_id: school.school_id,
+    school_id: schoolId,
     first_name: input.firstName, last_name: input.lastName,
     date_of_birth: input.dateOfBirth, gender: input.gender,
     grade_applying_for: input.gradeApplyingFor,
