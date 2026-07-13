@@ -41,3 +41,13 @@ CREATE POLICY "School staff can view applications"
             SELECT school_id FROM users WHERE user_id = auth.uid()
         )
     );
+
+-- School staff can update applications in their school
+CREATE POLICY "School staff can update applications"
+    ON admission_applications FOR UPDATE
+    USING (
+        auth.role() = 'authenticated'
+        AND school_id IN (
+            SELECT school_id FROM users WHERE user_id = auth.uid()
+        )
+    );
