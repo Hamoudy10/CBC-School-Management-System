@@ -7,8 +7,9 @@ import { generateStudentClusters } from "@/features/predictive-analytics/service
 
 export const POST = withPermission(
   { module: "analytics", action: "view" },
-  async (request: NextRequest, { user }: any) => {
-    if (!user.school_id) {
+  async (request: NextRequest, context: any) => {
+    const schoolId = context.school_id ?? context.user?.schoolId;
+    if (!schoolId) {
       return errorResponse("User account is not associated with a school. Contact administrator.", 400);
     }
 
@@ -19,7 +20,7 @@ export const POST = withPermission(
       const result = await generateStudentClusters(
         validation.data.classId,
         validation.data.clusterCount,
-        user.school_id,
+        schoolId,
         validation.data.termId,
         validation.data.academicYearId
       );

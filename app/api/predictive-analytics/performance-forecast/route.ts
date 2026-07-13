@@ -7,8 +7,9 @@ import { generatePerformanceForecast } from "@/features/predictive-analytics/ser
 
 export const POST = withPermission(
   { module: "analytics", action: "view" },
-  async (request: NextRequest, { user }: any) => {
-    if (!user.school_id) {
+  async (request: NextRequest, context: any) => {
+    const schoolId = context.school_id ?? context.user?.schoolId;
+    if (!schoolId) {
       return errorResponse("User account is not associated with a school. Contact administrator.", 400);
     }
 
@@ -16,7 +17,7 @@ export const POST = withPermission(
     if (!validation.success) {return validationErrorResponse(validation.errors!);}
 
     try {
-      const result = await generatePerformanceForecast(validation.data, user.school_id);
+      const result = await generatePerformanceForecast(validation.data, schoolId);
       return successResponse(result);
     } catch (error) {
       return errorResponse(
