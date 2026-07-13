@@ -54,14 +54,25 @@ export async function generatePerformanceForecast(
     .eq("school_id", schoolId)
     .single();
 
-  const { data: students } = await supabase
+  const { data: students, error: studentsError } = await supabase
     .from("students")
     .select("student_id, first_name, last_name, users!left(first_name, last_name)")
     .eq("current_class_id", input.classId)
     .eq("school_id", schoolId)
     .eq("status", "active");
 
+  if (studentsError) {
+    console.error("[performance-forecast] Students query failed:", studentsError.message, { classId: input.classId, schoolId });
+    throw new Error(`Database error querying students: ${studentsError.message}`);
+  }
+
   if (!students || students.length === 0) {
+    console.warn("[performance-forecast] No students found", {
+      classId: input.classId,
+      schoolId,
+      classFound: !!classData,
+      className: classData?.name,
+    });
     throw new Error("No active students found in this class");
   }
 

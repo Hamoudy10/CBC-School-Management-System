@@ -40,14 +40,20 @@ export async function generateInterventionRecommendations(
     .eq("school_id", schoolId)
     .single();
 
-  const { data: students } = await supabase
+  const { data: students, error: studentsError } = await supabase
     .from("students")
     .select("student_id, first_name, last_name, users!left(first_name, last_name)")
     .eq("current_class_id", classId)
     .eq("school_id", schoolId)
     .eq("status", "active");
 
+  if (studentsError) {
+    console.error("[intervention] Students query failed:", studentsError.message, { classId, schoolId });
+    throw new Error(`Database error querying students: ${studentsError.message}`);
+  }
+
   if (!students || students.length === 0) {
+    console.warn("[intervention] No students found", { classId, schoolId, classFound: !!classData, className: classData?.name });
     throw new Error("No active students found");
   }
 
