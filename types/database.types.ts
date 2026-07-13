@@ -10,6 +10,79 @@ type BaseTable = {
 export type Database = {
   public: {
     Tables: Record<string, BaseTable> & {
+      admission_applications: {
+        Row: {
+          application_id: string;
+          school_id: string;
+          first_name: string;
+          last_name: string;
+          date_of_birth: string;
+          gender: string;
+          grade_applying_for: string;
+          previous_school: string | null;
+          parent_name: string;
+          parent_phone: string;
+          parent_email: string | null;
+          parent_id_number: string | null;
+          status: string;
+          notes: string | null;
+          submitted_at: string;
+          reviewed_at: string | null;
+          reviewed_by: string | null;
+        };
+        Insert: {
+          application_id?: string;
+          school_id: string;
+          first_name: string;
+          last_name: string;
+          date_of_birth: string;
+          gender: string;
+          grade_applying_for: string;
+          previous_school?: string | null;
+          parent_name: string;
+          parent_phone: string;
+          parent_email?: string | null;
+          parent_id_number?: string | null;
+          status?: string;
+          notes?: string | null;
+          submitted_at?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+        };
+        Update: {
+          application_id?: string;
+          school_id?: string;
+          first_name?: string;
+          last_name?: string;
+          date_of_birth?: string;
+          gender?: string;
+          grade_applying_for?: string;
+          previous_school?: string | null;
+          parent_name?: string;
+          parent_phone?: string;
+          parent_email?: string | null;
+          parent_id_number?: string | null;
+          status?: string;
+          notes?: string | null;
+          submitted_at?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "admission_applications_school_id_fkey";
+            columns: ["school_id"];
+            referencedRelation: "schools";
+            referencedColumns: ["school_id"];
+          },
+          {
+            foreignKeyName: "admission_applications_reviewed_by_fkey";
+            columns: ["reviewed_by"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       schools: {
         Row: {
           school_id: string;
