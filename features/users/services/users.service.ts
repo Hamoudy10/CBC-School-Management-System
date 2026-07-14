@@ -52,6 +52,9 @@ export async function listUsers(
       created_at,
       roles!inner (
         name
+      ),
+      user_profiles!left (
+        photo_url
       )
     `,
     { count: "exact" },
@@ -98,6 +101,7 @@ export async function listUsers(
     gender: row.gender,
     status: row.status,
     roleName: row.roles?.name as RoleName,
+    photoUrl: (Array.isArray(row.user_profiles) ? row.user_profiles[0] : row.user_profiles)?.photo_url ?? null,
     lastLoginAt: row.last_login_at,
     createdAt: row.created_at,
   }));

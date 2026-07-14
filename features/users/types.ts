@@ -37,6 +37,7 @@ export interface UserListItem {
   gender: "male" | "female" | "other" | null;
   status: "active" | "inactive" | "suspended" | "archived";
   roleName: RoleName;
+  photoUrl: string | null;
   lastLoginAt: string | null;
   createdAt: string;
 }

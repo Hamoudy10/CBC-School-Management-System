@@ -629,6 +629,7 @@ export function UsersClient() {
                       <div className="flex items-center gap-3">
                         <Avatar
                           name={resolveUserName(row)}
+                          src={(row as any).photoUrl}
                           size="sm"
                         />
                         <div>
