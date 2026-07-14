@@ -18,13 +18,16 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const streamRef = useRef<MediaStream | null>(null);
   const decoderRef = useRef<any>(null);
   const timerRef = useRef<any>(null);
+  const scanningRef = useRef(false);
 
   const stopCamera = useCallback(() => {
+    scanningRef.current = false;
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
+    if (videoRef.current) { videoRef.current.srcObject = null; }
     setScanning(false);
   }, []);
 
@@ -33,57 +36,53 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   }, [stopCamera]);
 
   const tryDecode = useCallback(async () => {
-    if (!videoRef.current || !videoRef.current.videoWidth) {return;}
+    if (!scanningRef.current || !videoRef.current || !videoRef.current.videoWidth) {return;}
     try {
       const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
+      canvas.width = videoRef.current.videoWidth || 320;
+      canvas.height = videoRef.current.videoHeight || 240;
       canvas.getContext('2d')!.drawImage(videoRef.current, 0, 0);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-      if (!decoderRef.current) {
-        const { Html5Qrcode } = await import('html5-qrcode');
-        decoderRef.current = new Html5Qrcode('barcode-decoder-el');
-      }
-      const result = await decoderRef.current.scanFile(dataUrl, false);
-      if (result) {
+      const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.8));
+      if (!blob || !decoderRef.current) {return;}
+      const result = await decoderRef.current.scanFile(blob, false);
+      if (result && scanningRef.current) {
         setDecoded(result);
+        setTimeout(() => { onScan(result); }, 100);
         stopCamera();
-        onScan(result);
       }
-    } catch { /* no barcode this frame */ }
+    } catch { /* no barcode */ }
   }, [onScan, stopCamera]);
 
   const startCamera = useCallback(async () => {
     setError(null);
     setDecoded('');
+    scanningRef.current = true;
+    // Pre-import html5-qrcode before starting camera
+    const { Html5Qrcode } = await import('html5-qrcode');
+    decoderRef.current = new Html5Qrcode('barcode-decoder-el');
     setScanning(true);
     await new Promise((r) => setTimeout(r, 50));
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } },
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        timerRef.current = setInterval(tryDecode, 1500);
-      }
-    } catch {
+    for (const facing of ['environment', 'user'] as const) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+          video: { facingMode: facing, width: { ideal: 640 }, height: { ideal: 480 } },
         });
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-          timerRef.current = setInterval(tryDecode, 1500);
+          await new Promise<void>((resolve) => {
+            videoRef.current!.onloadedmetadata = () => {
+              videoRef.current!.play().then(resolve);
+            };
+          });
+          timerRef.current = setInterval(tryDecode, 1000);
         }
-      } catch {
-        setScanning(false);
-        setError('Camera not available. Use manual entry below.');
-      }
+        return;
+      } catch { /* try next facing */ }
     }
+    setScanning(false);
+    scanningRef.current = false;
+    setError('Camera not available. Use manual entry below.');
   }, [tryDecode]);
 
   const handleManualSubmit = () => {
