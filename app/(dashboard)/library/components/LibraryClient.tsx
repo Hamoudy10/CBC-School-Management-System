@@ -133,6 +133,7 @@ function createDefaultIssueForm(bookId = ''): IssueBookFormState {
     borrowerType: 'student',
     borrowerName: '',
     borrowerReference: '',
+    studentId: '',
     issueDate: today,
     dueDate: today,
     notes: '',
