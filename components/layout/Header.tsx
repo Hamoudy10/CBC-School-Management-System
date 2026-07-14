@@ -187,6 +187,7 @@ function Header({
           >
             <Avatar
               name={user ? `${user.firstName} ${user.lastName}` : undefined}
+              src={user?.photoUrl}
               size="sm"
             />
             <ChevronDown className="h-4 w-4 text-secondary-400" />

@@ -162,13 +162,24 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
       {/* Footer */}
       {!collapsed && (
         <div className="border-t border-gray-200/80 p-3">
-          <div className="rounded-xl bg-gradient-to-r from-gray-900 to-gray-800 px-3 py-2.5">
-            <p className="text-xs font-medium text-white">
-              {user?.firstName ?? "User"}
-            </p>
-            <p className="text-[10px] text-gray-400 capitalize">
-              {user?.role?.replace("_", " ") ?? "Loading..."}
-            </p>
+          <div className="flex items-center gap-3 rounded-xl bg-gradient-to-r from-gray-900 to-gray-800 px-3 py-2.5">
+            {user && (
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-bold text-white overflow-hidden">
+                {user.photoUrl ? (
+                  <img src={user.photoUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span>{(user.firstName?.[0] ?? '') + (user.lastName?.[0] ?? '')}</span>
+                )}
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-white truncate">
+                {user?.firstName ?? "User"}
+              </p>
+              <p className="text-[10px] text-gray-400 capitalize truncate">
+                {user?.role?.replace("_", " ") ?? "Loading..."}
+              </p>
+            </div>
           </div>
         </div>
       )}
