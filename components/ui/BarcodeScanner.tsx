@@ -14,53 +14,77 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const [error, setError] = useState<string | null>(null);
   const [manualInput, setManualInput] = useState('');
   const [decoded, setDecoded] = useState('');
-  const scannerRef = useRef<any>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const decoderRef = useRef<any>(null);
+  const timerRef = useRef<any>(null);
 
   const stopCamera = useCallback(() => {
-    if (scannerRef.current) {
-      try { scannerRef.current.stop().catch(() => {}); } catch {}
-      scannerRef.current = null;
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
     }
     setScanning(false);
   }, []);
+
+  useEffect(() => {
+    return () => { stopCamera(); };
+  }, [stopCamera]);
+
+  const tryDecode = useCallback(async () => {
+    if (!videoRef.current || !videoRef.current.videoWidth) {return;}
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      canvas.getContext('2d')!.drawImage(videoRef.current, 0, 0);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      if (!decoderRef.current) {
+        const { Html5Qrcode } = await import('html5-qrcode');
+        decoderRef.current = new Html5Qrcode('barcode-decoder-el');
+      }
+      const result = await decoderRef.current.scanFile(dataUrl, false);
+      if (result) {
+        setDecoded(result);
+        stopCamera();
+        onScan(result);
+      }
+    } catch { /* no barcode this frame */ }
+  }, [onScan, stopCamera]);
 
   const startCamera = useCallback(async () => {
     setError(null);
     setDecoded('');
     setScanning(true);
-    // Wait for DOM to render the scanner div before initializing the camera
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    const { Html5Qrcode } = await import('html5-qrcode');
+    await new Promise((r) => setTimeout(r, 50));
     try {
-      const scanner = new Html5Qrcode('barcode-reader-el');
-      scannerRef.current = scanner;
-      const cameras = await Html5Qrcode.getCameras().catch(() => []);
-      const cameraId = cameras.find((c: any) => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('rear'))?.id
-        || cameras[0]?.id;
-      if (!cameraId && cameras.length === 0) {
-        await scanner.start(
-          { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 250, height: 150 } },
-          (decodedText) => { setDecoded(decodedText); scanner.pause(); onScan(decodedText); },
-          () => {},
-        );
-      } else {
-        await scanner.start(
-          { deviceId: cameraId },
-          { fps: 10, qrbox: { width: 250, height: 150 } },
-          (decodedText) => { setDecoded(decodedText); scanner.pause(); onScan(decodedText); },
-          () => {},
-        );
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+        timerRef.current = setInterval(tryDecode, 1500);
       }
     } catch {
-      setScanning(false);
-      setError('Camera not available. Use manual entry below.');
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+        });
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+          timerRef.current = setInterval(tryDecode, 1500);
+        }
+      } catch {
+        setScanning(false);
+        setError('Camera not available. Use manual entry below.');
+      }
     }
-  }, [onScan]);
-
-  useEffect(() => {
-    return () => { stopCamera(); };
-  }, [stopCamera]);
+  }, [tryDecode]);
 
   const handleManualSubmit = () => {
     if (manualInput.trim()) {
@@ -71,6 +95,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
 
   return (
     <div className="space-y-3">
+      <div id="barcode-decoder-el" className="hidden" />
       <div className="flex items-center gap-2">
         {!scanning ? (
           <Button size="sm" onClick={startCamera} leftIcon={<Camera className="h-4 w-4" />}>
@@ -88,22 +113,23 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         )}
       </div>
 
-      <div className={scanning ? '' : 'hidden'}>
-        <div className="relative rounded-lg overflow-hidden border border-gray-300 bg-black" style={{ maxWidth: 400, minHeight: 200 }}>
-          <div id="barcode-reader-el" />
+      {scanning && (
+        <div className="relative rounded-lg overflow-hidden border border-gray-300 bg-black" style={{ maxWidth: 400, height: 240 }}>
+          <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover" />
+          <div className="absolute inset-0 border-2 border-red-500 opacity-50 pointer-events-none" style={{ margin: '15%' }} />
           {decoded && (
-            <div className="absolute top-2 left-2 right-2 bg-green-600 text-white text-xs px-2 py-1 rounded text-center">
+            <div className="absolute top-2 left-2 right-2 bg-green-600 text-white text-xs px-2 py-1 rounded text-center z-10">
               Scanned: {decoded}
             </div>
           )}
           {!decoded && (
-            <p className="absolute bottom-2 left-0 right-0 text-center text-xs text-white bg-black/50 py-1">
+            <p className="absolute bottom-2 left-0 right-0 text-center text-xs text-white bg-black/50 py-1 z-10">
               <Loader2 className="h-3 w-3 inline animate-spin mr-1" />
               Point camera at barcode
             </p>
           )}
         </div>
-      </div>
+      )}
 
       {error && <p className="text-xs text-red-600">{error}</p>}
 
