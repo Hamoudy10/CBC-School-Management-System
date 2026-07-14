@@ -976,49 +976,62 @@ function ReturnsSection({ overdueCount, returnRows, onProcessReturn }: { overdue
 function StudentSelector({ value, onChange }: { value: string; onChange: (id: string, name: string, admission: string) => void }) {
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [classes, setClasses] = useState<any[]>([]);
   const [classFilter, setClassFilter] = useState('');
   const [genderFilter, setGenderFilter] = useState('');
 
-  const fetchStudents = useCallback(async () => {
+  useEffect(() => {
+    fetch('/api/settings/classes', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => { if (d.success) { setClasses((d.data ?? []).map((c: any) => ({ classId: c.classId ?? c.class_id, name: c.name, gradeName: c.gradeName ?? c.grade_name ?? '' })).filter((c: any) => c.classId)); } })
+      .catch(() => {});
+  }, []);
+
+  const fetchStudents = useCallback(async (cls?: string, gen?: string) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ limit: '200' });
-      if (classFilter) {params.set('classId', classFilter);}
-      if (genderFilter) {params.set('gender', genderFilter);}
+      const c = cls ?? classFilter;
+      const g = gen ?? genderFilter;
+      if (c) {params.set('classId', c);}
+      if (g) {params.set('gender', g);}
       const res = await fetch(`/api/students?${params}`, { credentials: 'include' });
       const json = await res.json();
       if (json.success) {
-        const items = json.data?.data ?? json.data?.students ?? json.data ?? [];
-        setStudents(items);
+        setStudents(json.data?.data ?? json.data?.students ?? json.data ?? []);
       }
     } catch {} finally { setLoading(false); }
   }, [classFilter, genderFilter]);
 
+  useEffect(() => { fetchStudents(); }, []);
+
   return (
     <div className="space-y-2">
       <div className="flex gap-2">
-        <input type="text" placeholder="Class ID filter" value={classFilter} onChange={(e) => setClassFilter(e.target.value)} className="flex-1 px-2 py-1 border border-gray-300 rounded text-xs" />
-        <select value={genderFilter} onChange={(e) => setGenderFilter(e.target.value)} className="px-2 py-1 border border-gray-300 rounded text-xs">
+        <select value={classFilter} onChange={(e) => { setClassFilter(e.target.value); fetchStudents(e.target.value, genderFilter); }} className="flex-1 px-2 py-1 border border-gray-300 rounded text-xs">
+          <option value="">All classes</option>
+          {classes.map((c: any) => (
+            <option key={c.classId} value={c.classId}>{c.name} {c.gradeName ? `(${c.gradeName})` : ''}</option>
+          ))}
+        </select>
+        <select value={genderFilter} onChange={(e) => { setGenderFilter(e.target.value); fetchStudents(classFilter, e.target.value); }} className="px-2 py-1 border border-gray-300 rounded text-xs">
           <option value="">All genders</option>
           <option value="male">Male</option>
           <option value="female">Female</option>
         </select>
-        <Button size="sm" onClick={fetchStudents} disabled={loading}>{loading ? 'Loading...' : 'Search'}</Button>
       </div>
-      {students.length > 0 && (
-        <select value={value} onChange={(e) => {
-          const s = students.find((st: any) => (st.studentId ?? st.student_id) === e.target.value);
-          if (s) {onChange(e.target.value, `${s.firstName ?? s.first_name} ${s.lastName ?? s.last_name}`.trim(), s.admissionNumber ?? s.admission_number ?? '');}
-        }} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
-          <option value="">Select a student...</option>
-          {students.map((s: any) => (
-            <option key={s.studentId ?? s.student_id} value={s.studentId ?? s.student_id}>
-              {s.firstName ?? s.first_name} {s.lastName ?? s.last_name} ({s.admissionNumber ?? s.admission_number ?? 'no adm'})
-            </option>
-          ))}
-        </select>
-      )}
-      {!loading && students.length === 0 && <p className="text-xs text-gray-400">Click Search to load students.</p>}
+      <select value={value} onChange={(e) => {
+        const s = students.find((st: any) => (st.studentId ?? st.student_id) === e.target.value);
+        if (s) {onChange(e.target.value, `${s.firstName ?? s.first_name} ${s.lastName ?? s.last_name}`.trim(), s.admissionNumber ?? s.admission_number ?? '');}
+      }} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+        <option value="">Select a student...</option>
+        {students.map((s: any) => (
+          <option key={s.studentId ?? s.student_id} value={s.studentId ?? s.student_id}>
+            {s.firstName ?? s.first_name} {s.lastName ?? s.last_name} ({s.admissionNumber ?? s.admission_number ?? 'no adm'})
+          </option>
+        ))}
+      </select>
+      {loading && <p className="text-xs text-gray-400">Loading students...</p>}
     </div>
   );
 }

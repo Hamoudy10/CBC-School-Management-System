@@ -28,6 +28,7 @@ export default function InventoryPage() {
   const [iName, setIName] = useState(''); const [iCategory, setICategory] = useState(CATEGORIES[0]);
   const [iQty, setIQty] = useState('1'); const [iCondition, setICondition] = useState('');
   const [iLocation, setILocation] = useState(''); const [iAssigned, setIAssigned] = useState('');
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
   const fetchAll = useCallback(async () => {
     try {
@@ -89,17 +90,22 @@ export default function InventoryPage() {
     try {
       const payload: any = { name: iName.trim(), category: iCategory, quantity: parseInt(iQty) || 1, condition: iCondition.trim() || undefined, location: iLocation.trim() || undefined, assignedTo: iAssigned.trim() || undefined };
       if (scanBarcode) { payload.barcode = scanBarcode; }
-      const res = await fetch('/api/inventory/items', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const json = await res.json();
-      if (!res.ok) {throw new Error(json.error || 'Failed');}
-      setItems((prev) => [...prev, json.data]);
-      setIName(''); setIQty('1'); setICondition(''); setILocation(''); setIAssigned(''); setScanBarcode(''); setScanResult(null);
-      success('Item added');
+      if (editingItemId) {
+        const res = await fetch(`/api/inventory/items/${editingItemId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), credentials: 'include' });
+        const json = await res.json();
+        if (!res.ok) {throw new Error(json.error || 'Failed');}
+        setItems((prev) => prev.map((i) => i.itemId === editingItemId ? json.data : i));
+        success('Item updated');
+      } else {
+        const res = await fetch('/api/inventory/items', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), credentials: 'include' });
+        const json = await res.json();
+        if (!res.ok) {throw new Error(json.error || 'Failed');}
+        setItems((prev) => [...prev, json.data]);
+        success('Item added');
+      }
+      setIName(''); setIQty('1'); setICondition(''); setILocation(''); setIAssigned(''); setScanBarcode(''); setScanResult(null); setEditingItemId(null);
     } catch (err) { error(err instanceof Error ? err.message : 'Failed'); }
-  }, [iName, iCategory, iQty, iCondition, iLocation, iAssigned, scanBarcode, success, error]);
+  }, [iName, iCategory, iQty, iCondition, iLocation, iAssigned, scanBarcode, editingItemId, success, error]);
 
   const totalItems = items.reduce((s, i) => s + i.quantity, 0);
   const availableBooks = books.reduce((s, b) => s + b.availableQuantity, 0);
@@ -174,7 +180,7 @@ export default function InventoryPage() {
               </Card>
 
               <Card>
-                <CardHeader><CardTitle className="text-base">Add Inventory Item</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-base">{editingItemId ? 'Edit Inventory Item' : 'Add Inventory Item'}</CardTitle></CardHeader>
                 <CardContent className="flex flex-wrap items-end gap-3">
                   <div className="w-56"><label className="block text-xs font-medium text-gray-600 mb-1">Item Name *</label><input className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="Item name" value={iName} onChange={(e) => setIName(e.target.value)} /></div>
                   <div className="w-36"><label className="block text-xs font-medium text-gray-600 mb-1">Category</label>
@@ -186,7 +192,8 @@ export default function InventoryPage() {
                   <div className="w-36"><label className="block text-xs font-medium text-gray-600 mb-1">Condition</label><input className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="New/Good/Fair" value={iCondition} onChange={(e) => setICondition(e.target.value)} /></div>
                   <div className="w-40"><label className="block text-xs font-medium text-gray-600 mb-1">Location</label><input className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="e.g., Store Room B" value={iLocation} onChange={(e) => setILocation(e.target.value)} /></div>
                   <div className="w-44"><label className="block text-xs font-medium text-gray-600 mb-1">Assigned To</label><input className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="Person/Department" value={iAssigned} onChange={(e) => setIAssigned(e.target.value)} /></div>
-                  <Button leftIcon={<Plus className="h-4 w-4" />} onClick={addItem}>Add</Button>
+                  <Button leftIcon={editingItemId ? undefined : <Plus className="h-4 w-4" />} onClick={addItem}>{editingItemId ? 'Update' : 'Add'}</Button>
+                  {editingItemId && <Button variant="ghost" onClick={() => { setIName(''); setIQty('1'); setICondition(''); setILocation(''); setIAssigned(''); setEditingItemId(null); setScanBarcode(''); }}>Cancel</Button>}
                 </CardContent>
               </Card>
 
@@ -214,15 +221,10 @@ export default function InventoryPage() {
                             <td className="px-4 py-2.5 text-gray-600">{item.location ?? '-'}</td>
                             <td className="px-4 py-2.5 text-gray-600">{item.assignedTo ?? '-'}</td>
                             <td className="px-4 py-2.5 text-center">
-                              <button onClick={async () => {
-                                const newName = prompt('Item name:', item.name);
-                                if (!newName) {return;}
-                                try {
-                                  const res = await fetch(`/api/inventory/items/${item.itemId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName }), credentials: 'include' });
-                                  if (!res.ok) {throw new Error('Failed');}
-                                  setItems((prev) => prev.map((i) => i.itemId === item.itemId ? { ...i, name: newName } : i));
-                                  success('Item updated');
-                                } catch { error('Failed to update'); }
+                              <button onClick={() => {
+                                setIName(item.name); setICategory(item.category); setIQty(String(item.quantity));
+                                setICondition(item.condition || ''); setILocation(item.location || ''); setIAssigned(item.assignedTo || '');
+                                setEditingItemId(item.itemId); setScanBarcode(item.barcode || '');
                               }} className="text-blue-600 hover:text-blue-800 mr-2" title="Edit"><Pencil className="h-3.5 w-3.5 inline" /></button>
                               <button onClick={async () => {
                                 if (!confirm('Delete this item?')) {return;}
