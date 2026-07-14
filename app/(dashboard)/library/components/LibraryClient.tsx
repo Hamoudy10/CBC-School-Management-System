@@ -8,6 +8,9 @@ import {
   BookPlus,
   RotateCcw,
   ScanLine,
+  Pencil,
+  Trash2,
+  Search as SearchIcon,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -92,6 +95,7 @@ interface IssueBookFormState {
   issueDate: string;
   dueDate: string;
   notes: string;
+  studentId: string;
 }
 
 interface ReturnBookFormState {
@@ -594,6 +598,8 @@ export function LibraryClient() {
           onSearchChange={setCatalogSearch}
           onAddBook={openAddBookModal}
           onIssueBook={openIssueBookModal}
+          onEditBook={(book) => { setBookForm({ title: book.title, author: book.author, isbn: book.isbn, category: book.category || '', shelf: book.shelf || '', totalCopies: String(book.totalCopies), description: book.description || '' }); setAddBookOpen(true); }}
+          onDeleteBook={(id) => { if (confirm('Delete this book?')) { setBooks((prev) => prev.filter((b) => b.id !== id)); success('Book deleted'); } }}
         />
       )}
 
@@ -667,6 +673,14 @@ export function LibraryClient() {
                     </option>
                   ))}
                 </Select>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="text-sm font-medium text-gray-700 mb-1 block">Select Student</label>
+                <StudentSelector
+                  value={issueForm.studentId}
+                  onChange={(id, name, admission) => setIssueForm((prev) => ({ ...prev, studentId: id, borrowerName: name, borrowerReference: admission }))}
+                />
               </div>
 
               <Select label="Borrower Type" value={issueForm.borrowerType} onChange={(event) => setIssueForm((current) => ({ ...current, borrowerType: event.target.value as BorrowerType }))}>
@@ -794,7 +808,7 @@ function LibraryOverview({ canManage, recentActivity, summary, onAddBook, onIssu
 }
 
 
-function BookCatalog({ canManage, books, search, onSearchChange, onAddBook, onIssueBook }: { canManage: boolean; books: Array<LibraryBook & { checkedOutCopies: number; availableCopies: number }>; search: string; onSearchChange: (value: string) => void; onAddBook: () => void; onIssueBook: (bookId?: string) => void; }) {
+function BookCatalog({ canManage, books, search, onSearchChange, onAddBook, onIssueBook, onEditBook, onDeleteBook }: { canManage: boolean; books: Array<LibraryBook & { checkedOutCopies: number; availableCopies: number }>; search: string; onSearchChange: (value: string) => void; onAddBook: () => void; onIssueBook: (bookId?: string) => void; onEditBook: (book: LibraryBook & { checkedOutCopies: number; availableCopies: number }) => void; onDeleteBook: (id: string) => void; }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -836,7 +850,7 @@ function BookCatalog({ canManage, books, search, onSearchChange, onAddBook, onIs
                       <td className="px-4 py-4 text-sm text-gray-600">{book.totalCopies}</td>
                       <td className="px-4 py-4 text-sm text-gray-600">{book.availableCopies}</td>
                       <td className="px-4 py-4"><Badge variant={status.variant}>{status.label}</Badge></td>
-                      {canManage && <td className="px-4 py-4 text-right"><Button size="sm" variant="secondary" onClick={() => onIssueBook(book.id)} disabled={book.availableCopies <= 0}>Issue Book</Button></td>}
+                      {canManage && <td className="px-4 py-4 text-right"><div className="flex items-center justify-end gap-1"><Button size="sm" variant="secondary" onClick={() => onIssueBook(book.id)} disabled={book.availableCopies <= 0}>Issue</Button><Button size="sm" variant="ghost" onClick={() => onEditBook(book)}><Pencil className="h-3.5 w-3.5" /></Button><Button size="sm" variant="ghost" onClick={() => onDeleteBook(book.id)} className="text-red-500 hover:text-red-700"><Trash2 className="h-3.5 w-3.5" /></Button></div></td>}
                     </tr>
                   );
                 })}
@@ -954,6 +968,56 @@ function ReturnsSection({ overdueCount, returnRows, onProcessReturn }: { overdue
           </div>
         </Card>
       )}
+    </div>
+  );
+}
+
+function StudentSelector({ value, onChange }: { value: string; onChange: (id: string, name: string, admission: string) => void }) {
+  const [students, setStudents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [classFilter, setClassFilter] = useState('');
+  const [genderFilter, setGenderFilter] = useState('');
+
+  const fetchStudents = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: '200' });
+      if (classFilter) {params.set('classId', classFilter);}
+      if (genderFilter) {params.set('gender', genderFilter);}
+      const res = await fetch(`/api/students?${params}`, { credentials: 'include' });
+      const json = await res.json();
+      if (json.success) {
+        const items = json.data?.data ?? json.data?.students ?? json.data ?? [];
+        setStudents(items);
+      }
+    } catch {} finally { setLoading(false); }
+  }, [classFilter, genderFilter]);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <input type="text" placeholder="Class ID filter" value={classFilter} onChange={(e) => setClassFilter(e.target.value)} className="flex-1 px-2 py-1 border border-gray-300 rounded text-xs" />
+        <select value={genderFilter} onChange={(e) => setGenderFilter(e.target.value)} className="px-2 py-1 border border-gray-300 rounded text-xs">
+          <option value="">All genders</option>
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+        </select>
+        <Button size="sm" onClick={fetchStudents} disabled={loading}>{loading ? 'Loading...' : 'Search'}</Button>
+      </div>
+      {students.length > 0 && (
+        <select value={value} onChange={(e) => {
+          const s = students.find((st: any) => (st.studentId ?? st.student_id) === e.target.value);
+          if (s) {onChange(e.target.value, `${s.firstName ?? s.first_name} ${s.lastName ?? s.last_name}`.trim(), s.admissionNumber ?? s.admission_number ?? '');}
+        }} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+          <option value="">Select a student...</option>
+          {students.map((s: any) => (
+            <option key={s.studentId ?? s.student_id} value={s.studentId ?? s.student_id}>
+              {s.firstName ?? s.first_name} {s.lastName ?? s.last_name} ({s.admissionNumber ?? s.admission_number ?? 'no adm'})
+            </option>
+          ))}
+        </select>
+      )}
+      {!loading && students.length === 0 && <p className="text-xs text-gray-400">Click Search to load students.</p>}
     </div>
   );
 }

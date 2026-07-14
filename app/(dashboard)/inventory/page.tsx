@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Package, Plus, BookOpen, Box, Search, ScanLine, Loader2 } from 'lucide-react';
+import { Package, Plus, BookOpen, Box, Search, ScanLine, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -192,30 +192,52 @@ export default function InventoryPage() {
 
               {items.length > 0 ? (
                 <div className="overflow-x-auto rounded-lg border">
-                  <table className="min-w-full divide-y divide-gray-200 text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-2.5 text-left font-medium text-gray-600">Item</th>
-                        <th className="px-4 py-2.5 text-left font-medium text-gray-600">Category</th>
-                        <th className="px-4 py-2.5 text-right font-medium text-gray-600">Qty</th>
-                        <th className="px-4 py-2.5 text-left font-medium text-gray-600">Condition</th>
-                        <th className="px-4 py-2.5 text-left font-medium text-gray-600">Location</th>
-                        <th className="px-4 py-2.5 text-left font-medium text-gray-600">Assigned To</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {items.map((item) => (
-                        <tr key={item.itemId} className="hover:bg-gray-50">
-                          <td className="px-4 py-2.5 font-medium text-gray-900">{item.name}</td>
-                          <td className="px-4 py-2.5"><Badge variant="default" size="xs">{item.category}</Badge></td>
-                          <td className="px-4 py-2.5 text-right font-medium">{item.quantity}</td>
-                          <td className="px-4 py-2.5 text-gray-600">{item.condition ?? '-'}</td>
-                          <td className="px-4 py-2.5 text-gray-600">{item.location ?? '-'}</td>
-                          <td className="px-4 py-2.5 text-gray-600">{item.assignedTo ?? '-'}</td>
+                    <table className="min-w-full divide-y divide-gray-200 text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2.5 text-left font-medium text-gray-600">Item</th>
+                          <th className="px-4 py-2.5 text-left font-medium text-gray-600">Category</th>
+                          <th className="px-4 py-2.5 text-right font-medium text-gray-600">Qty</th>
+                          <th className="px-4 py-2.5 text-left font-medium text-gray-600">Condition</th>
+                          <th className="px-4 py-2.5 text-left font-medium text-gray-600">Location</th>
+                          <th className="px-4 py-2.5 text-left font-medium text-gray-600">Assigned To</th>
+                          <th className="px-4 py-2.5 text-center font-medium text-gray-600">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {items.map((item) => (
+                          <tr key={item.itemId} className="hover:bg-gray-50">
+                            <td className="px-4 py-2.5 font-medium text-gray-900">{item.name}</td>
+                            <td className="px-4 py-2.5"><Badge variant="default" size="xs">{item.category}</Badge></td>
+                            <td className="px-4 py-2.5 text-right font-medium">{item.quantity}</td>
+                            <td className="px-4 py-2.5 text-gray-600">{item.condition ?? '-'}</td>
+                            <td className="px-4 py-2.5 text-gray-600">{item.location ?? '-'}</td>
+                            <td className="px-4 py-2.5 text-gray-600">{item.assignedTo ?? '-'}</td>
+                            <td className="px-4 py-2.5 text-center">
+                              <button onClick={async () => {
+                                const newName = prompt('Item name:', item.name);
+                                if (!newName) {return;}
+                                try {
+                                  const res = await fetch(`/api/inventory/items/${item.itemId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName }), credentials: 'include' });
+                                  if (!res.ok) {throw new Error('Failed');}
+                                  setItems((prev) => prev.map((i) => i.itemId === item.itemId ? { ...i, name: newName } : i));
+                                  success('Item updated');
+                                } catch { error('Failed to update'); }
+                              }} className="text-blue-600 hover:text-blue-800 mr-2" title="Edit"><Pencil className="h-3.5 w-3.5 inline" /></button>
+                              <button onClick={async () => {
+                                if (!confirm('Delete this item?')) {return;}
+                                try {
+                                  const res = await fetch(`/api/inventory/items/${item.itemId}`, { method: 'DELETE', credentials: 'include' });
+                                  if (!res.ok) {throw new Error('Failed');}
+                                  setItems((prev) => prev.filter((i) => i.itemId !== item.itemId));
+                                  success('Item deleted');
+                                } catch { error('Failed to delete'); }
+                              }} className="text-red-600 hover:text-red-800" title="Delete"><Trash2 className="h-3.5 w-3.5 inline" /></button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                 </div>
               ) : (
                 <Card><CardContent className="py-8 text-center text-sm text-gray-500">No inventory items yet.</CardContent></Card>
