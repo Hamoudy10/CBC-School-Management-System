@@ -15,7 +15,6 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const [manualInput, setManualInput] = useState('');
   const [decoded, setDecoded] = useState('');
   const scannerRef = useRef<any>(null);
-  const elRef = useRef<HTMLDivElement>(null);
 
   const stopCamera = useCallback(() => {
     if (scannerRef.current) {
@@ -30,8 +29,6 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     setDecoded('');
     const { Html5Qrcode } = await import('html5-qrcode');
     try {
-      const el = elRef.current;
-      if (!el) { setError('Scanner element not found.'); return; }
       const scanner = new Html5Qrcode('barcode-reader-el');
       scannerRef.current = scanner;
       await scanner.start(
@@ -48,8 +45,6 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     } catch (err) {
       try {
         const { Html5Qrcode } = await import('html5-qrcode');
-        const el = elRef.current;
-        if (!el) { setError('Camera not available.'); return; }
         const scanner = new Html5Qrcode('barcode-reader-el');
         scannerRef.current = scanner;
         await scanner.start(
@@ -95,9 +90,9 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         )}
       </div>
 
-      {scanning && (
+      <div className={scanning ? '' : 'hidden'}>
         <div className="relative rounded-lg overflow-hidden border border-gray-300 bg-black" style={{ maxWidth: 400, minHeight: 200 }}>
-          <div ref={elRef} id="barcode-reader-el" />
+          <div id="barcode-reader-el" />
           {decoded && (
             <div className="absolute top-2 left-2 right-2 bg-green-600 text-white text-xs px-2 py-1 rounded text-center">
               Scanned: {decoded}
@@ -110,7 +105,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
             </p>
           )}
         </div>
-      )}
+      </div>
 
       {error && <p className="text-xs text-red-600">{error}</p>}
 
