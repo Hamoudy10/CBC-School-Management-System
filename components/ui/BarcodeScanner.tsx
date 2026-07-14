@@ -42,15 +42,38 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
       canvas.width = videoRef.current.videoWidth || 320;
       canvas.height = videoRef.current.videoHeight || 240;
       canvas.getContext('2d')!.drawImage(videoRef.current, 0, 0);
-      const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.8));
-      if (!blob || !decoderRef.current) {return;}
-      const result = await decoderRef.current.scanFile(blob, false);
-      if (result && scanningRef.current) {
-        setDecoded(result);
-        setTimeout(() => { onScan(result); }, 100);
-        stopCamera();
+      
+      // Try native BarcodeDetector first (Chrome/Edge)
+      if ('BarcodeDetector' in window) {
+        try {
+          const detector = new (window as any).BarcodeDetector({
+            formats: ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'data_matrix', 'itf', 'codabar'],
+          });
+          const barcodes = await detector.detect(canvas);
+          if (barcodes.length > 0 && barcodes[0].rawValue && scanningRef.current) {
+            setDecoded(barcodes[0].rawValue);
+            setTimeout(() => { onScan(barcodes[0].rawValue); }, 100);
+            stopCamera();
+            return;
+          }
+        } catch { /* native detector failed, try fallback */ }
       }
-    } catch { /* no barcode */ }
+
+      // Fallback to html5-qrcode scanFile
+      if (decoderRef.current) {
+        const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.9));
+        if (!blob) {return;}
+        const file = new File([blob], 'frame.jpg', { type: 'image/jpeg' });
+        const result = await decoderRef.current.scanFile(file, false);
+        if (result && scanningRef.current) {
+          setDecoded(result);
+          setTimeout(() => { onScan(result); }, 100);
+          stopCamera();
+        }
+      }
+    } catch {
+      // No barcode detected this frame
+    }
   }, [onScan, stopCamera]);
 
   const startCamera = useCallback(async () => {
@@ -75,7 +98,7 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
               videoRef.current!.play().then(resolve);
             };
           });
-          timerRef.current = setInterval(tryDecode, 1000);
+          timerRef.current = setInterval(tryDecode, 600);
         }
         return;
       } catch { /* try next facing */ }
