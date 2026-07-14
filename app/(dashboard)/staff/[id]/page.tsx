@@ -125,7 +125,7 @@ async function getStaffData(staffId: string) {
     .maybeSingle();
 
   const userData = data.users as any;
-  const profile = profileData || {};
+  const profile: any = profileData || {};
 
   return {
     staffId: data.staff_id,
