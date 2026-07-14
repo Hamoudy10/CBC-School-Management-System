@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/lib/api/withAuth";
 import { errorResponse } from "@/lib/api/response";
 import { rateLimit } from "@/lib/api/rateLimit";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   ensureStorageBucket,
   STORAGE_BUCKET,
@@ -124,15 +125,15 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     const contentType = EXTENSION_TO_MIME[extension] || "application/octet-stream";
 
     const storageSetup = await ensureStorageBucket();
-    if (!storageSetup.success) {
-      return errorResponse(
-        `Storage setup failed: ${storageSetup.message}. Please ensure the "${STORAGE_BUCKET}" bucket is available.`,
-        500,
-      );
+    let storageClient: any;
+    if (storageSetup.success) {
+      storageClient = storageSetup.client;
+    } else {
+      // Fall back to server client if admin client (service role key) unavailable
+      storageClient = await createSupabaseServerClient();
     }
 
-    const { client: adminClient } = storageSetup;
-    const { error: uploadError } = await adminClient.storage
+    const { error: uploadError } = await storageClient.storage
       .from(STORAGE_BUCKET)
       .upload(fileName, file, {
         cacheControl: "3600",
@@ -141,15 +142,16 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       });
 
     if (uploadError) {
+      console.error("[upload] Storage upload error:", uploadError);
       return errorResponse(
         /bucket/i.test(uploadError.message)
-          ? `Upload failed because the "${STORAGE_BUCKET}" storage bucket is unavailable.`
+          ? `Upload failed: the "${STORAGE_BUCKET}" bucket may not exist. Create it in Supabase dashboard (Storage -> New Bucket -> Name: "${STORAGE_BUCKET}", Public).`
           : uploadError.message,
         500,
       );
     }
 
-    const { data: urlData } = adminClient.storage
+    const { data: urlData } = storageClient.storage
       .from(STORAGE_BUCKET)
       .getPublicUrl(fileName);
 
