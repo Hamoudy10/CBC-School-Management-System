@@ -27,6 +27,9 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
   const startCamera = useCallback(async () => {
     setError(null);
     setDecoded('');
+    setScanning(true);
+    // Wait for DOM to render the scanner div before initializing the camera
+    await new Promise((resolve) => setTimeout(resolve, 50));
     const { Html5Qrcode } = await import('html5-qrcode');
     try {
       const scanner = new Html5Qrcode('barcode-reader-el');
@@ -49,8 +52,8 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
           () => {},
         );
       }
-      setScanning(true);
     } catch {
+      setScanning(false);
       setError('Camera not available. Use manual entry below.');
     }
   }, [onScan]);
