@@ -84,10 +84,7 @@ export async function StaffTable({ filters, schoolId }: StaffTableProps) {
         first_name,
         last_name,
         phone,
-        gender,
-        user_profiles (
-          photo_url
-        )
+        gender
       )
     `,
       { count: 'exact' }
@@ -135,6 +132,25 @@ export async function StaffTable({ filters, schoolId }: StaffTableProps) {
   const staff = data || [];
   const total = count || 0;
   const totalPages = Math.ceil(total / pageSize);
+
+  // Fetch photo_url from user_profiles separately (FK may not exist for nested join)
+  const userIds = staff.map((s: any) => s.user_id).filter(Boolean);
+  const photoMap = new Map<string, string>();
+  if (userIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('user_profiles')
+      .select('user_id, photo_url')
+      .in('user_id', userIds);
+    if (profiles) {
+      profiles.forEach((p: any) => { if (p.photo_url) {photoMap.set(p.user_id, p.photo_url);} });
+    }
+  }
+  // Attach photo_url to each staff member's user data
+  staff.forEach((s: any) => {
+    if (s.users && photoMap.has(s.user_id)) {
+      s.users.user_profiles = [{ photo_url: photoMap.get(s.user_id) }];
+    }
+  });
 
   if (staff.length === 0) {
     return (
