@@ -127,6 +127,9 @@ export type Database = {
           location: string | null;
           assigned_to: string | null;
           notes: string | null;
+          barcode: string | null;
+          barcode_format: string | null;
+          book_id: string | null;
         };
         Insert: {
           item_id?: string;
@@ -138,6 +141,9 @@ export type Database = {
           location?: string | null;
           assigned_to?: string | null;
           notes?: string | null;
+          barcode?: string | null;
+          barcode_format?: string | null;
+          book_id?: string | null;
         };
         Update: {
           item_id?: string;
@@ -149,6 +155,9 @@ export type Database = {
           location?: string | null;
           assigned_to?: string | null;
           notes?: string | null;
+          barcode?: string | null;
+          barcode_format?: string | null;
+          book_id?: string | null;
         };
         Relationships: [
           {
@@ -156,6 +165,12 @@ export type Database = {
             columns: ["school_id"];
             referencedRelation: "schools";
             referencedColumns: ["school_id"];
+          },
+          {
+            foreignKeyName: "school_inventory_book_id_fkey";
+            columns: ["book_id"];
+            referencedRelation: "library_books";
+            referencedColumns: ["book_id"];
           },
         ];
       };

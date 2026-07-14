@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { useToast } from '@/components/ui/Toast';
 import { BarcodeScanner } from '@/components/ui/BarcodeScanner';
 
-interface InvItem { itemId: string; name: string; category: string; quantity: number; condition: string | null; location: string | null; assignedTo: string | null; notes: string | null; barcode: string | null; }
+interface InvItem { itemId: string; name: string; category: string; quantity: number; condition: string | null; location: string | null; assignedTo: string | null; notes: string | null; barcode: string | null; bookId: string | null; }
 interface BookItem { bookId: string; title: string; author: string; isbn: string | null; totalQuantity: number; availableQuantity: number; category: string | null; }
 
 const CATEGORIES = ['Furniture', 'Electronics', 'Sports', 'Lab Equipment', 'Stationery', 'Textbooks', 'Other'];
@@ -149,11 +149,16 @@ export default function InventoryPage() {
             </Card>
           </div>
 
-          <Tabs defaultValue="inventory">
+          <Tabs defaultValue="all">
             <TabsList>
-              <TabsTrigger value="inventory"><Box className="h-4 w-4 mr-1" /> School Inventory ({items.length})</TabsTrigger>
-              <TabsTrigger value="library"><BookOpen className="h-4 w-4 mr-1" /> Library Books ({books.length})</TabsTrigger>
+              <TabsTrigger value="all"><Search className="h-4 w-4 mr-1" /> All Items ({items.length + books.length})</TabsTrigger>
+              <TabsTrigger value="inventory"><Box className="h-4 w-4 mr-1" /> Inventory ({items.length})</TabsTrigger>
+              <TabsTrigger value="library"><BookOpen className="h-4 w-4 mr-1" /> Books ({books.length})</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="all" className="space-y-4">
+              <AllItemsTab items={items} books={books} />
+            </TabsContent>
 
             <TabsContent value="inventory" className="space-y-4">
               <Card>
@@ -288,6 +293,67 @@ export default function InventoryPage() {
           </Tabs>
         </>
       )}
+    </div>
+  );
+}
+
+function AllItemsTab({ items, books }: { items: InvItem[]; books: BookItem[] }) {
+  const [search, setSearch] = useState('');
+
+  const allItems = [
+    ...items.map((i) => ({ id: i.itemId, name: i.name, category: i.category, source: 'inventory' as const, author: i.condition || '', isbn: i.location || '', qty: i.quantity, available: i.quantity, location: i.location || '-', barcode: i.barcode })),
+    ...books.map((b) => ({ id: b.bookId, name: b.title, category: b.category || 'Book', source: 'library' as const, author: b.author, isbn: b.isbn || '', qty: b.totalQuantity, available: b.availableQuantity, location: '', barcode: '' })),
+  ];
+
+  const filtered = search
+    ? allItems.filter((item) =>
+        [item.name, item.author, item.isbn, item.category, item.barcode, item.location]
+          .filter(Boolean)
+          .some((v) => v!.toLowerCase().includes(search.toLowerCase()))
+      )
+    : allItems;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        <input type="text" placeholder="Search across all items (name, author, barcode, ISBN, location)..." value={search} onChange={(e) => setSearch(e.target.value)} className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+      </div>
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="min-w-full divide-y divide-gray-200 text-sm">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-2.5 text-left font-medium text-gray-600">Item</th>
+              <th className="px-4 py-2.5 text-left font-medium text-gray-600">Type</th>
+              <th className="px-4 py-2.5 text-left font-medium text-gray-600">Details</th>
+              <th className="px-4 py-2.5 text-left font-medium text-gray-600">Category</th>
+              <th className="px-4 py-2.5 text-right font-medium text-gray-600">Qty</th>
+              <th className="px-4 py-2.5 text-right font-medium text-gray-600">Available</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {filtered.map((item) => (
+              <tr key={`${item.source}-${item.id}`} className="hover:bg-gray-50">
+                <td className="px-4 py-2.5 font-medium text-gray-900">{item.name}</td>
+                <td className="px-4 py-2.5">
+                  <Badge variant={item.source === 'library' ? 'info' : 'default'} size="xs">
+                    {item.source === 'library' ? 'Book' : 'Inventory'}
+                  </Badge>
+                </td>
+                <td className="px-4 py-2.5 text-gray-600 text-xs">
+                  {item.source === 'library' ? `${item.author}${item.isbn ? ` · ${item.isbn}` : ''}` : item.location}
+                </td>
+                <td className="px-4 py-2.5 text-gray-600">{item.category}</td>
+                <td className="px-4 py-2.5 text-right font-medium">{item.qty}</td>
+                <td className="px-4 py-2.5 text-right">
+                  <Badge variant={item.available > 0 ? 'success' : 'error'} size="xs">{item.available}</Badge>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filtered.length === 0 && <p className="p-4 text-center text-sm text-gray-500">No items match your search.</p>}
+      </div>
+      <p className="text-xs text-gray-400">Showing {filtered.length} of {allItems.length} total items across Inventory and Library.</p>
     </div>
   );
 }
