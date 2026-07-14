@@ -26,9 +26,7 @@ SELECT
     b.shelf_location AS location,
     b.total_quantity AS quantity,
     b.available_quantity AS available,
-    b.description,
-    b.created_at,
-    b.updated_at
+    b.description
 FROM library_books b
 UNION ALL
 SELECT
@@ -44,8 +42,6 @@ SELECT
     i.location,
     i.quantity,
     i.quantity AS available,
-    i.notes AS description,
-    NULL AS created_at,
-    NULL AS updated_at
+    i.notes AS description
 FROM school_inventory i
 WHERE i.book_id IS NULL;
