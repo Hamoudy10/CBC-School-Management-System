@@ -44,6 +44,9 @@ export const getServerUser = cache(async (): Promise<AuthUser | null> => {
       email_verified,
       roles (
         name
+      ),
+      user_profiles!left (
+        photo_url
       )
     `,
     )
@@ -53,6 +56,8 @@ export const getServerUser = cache(async (): Promise<AuthUser | null> => {
   if (!profile) {
     return null;
   }
+
+  const profileData = Array.isArray(profile.user_profiles) ? profile.user_profiles[0] : profile.user_profiles;
 
   return {
     id: profile.user_id,
@@ -65,6 +70,7 @@ export const getServerUser = cache(async (): Promise<AuthUser | null> => {
     school_id: profile.school_id,
     status: profile.status as AuthUser["status"],
     emailVerified: profile.email_verified,
+    photoUrl: profileData?.photo_url ?? null,
   };
 });
 

@@ -70,6 +70,9 @@ export async function authenticateRequest(): Promise<
       email_verified,
       roles (
         name
+      ),
+      user_profiles!left (
+        photo_url
       )
     `,
     )
@@ -92,6 +95,8 @@ export async function authenticateRequest(): Promise<
     };
   }
 
+  const profileData = Array.isArray((profile as any).user_profiles) ? (profile as any).user_profiles[0] : (profile as any).user_profiles;
+
   const user: AuthUser = {
     id: profile.user_id,
     email: profile.email,
@@ -101,6 +106,7 @@ export async function authenticateRequest(): Promise<
     schoolId: profile.school_id,
     status: profile.status,
     emailVerified: profile.email_verified,
+    photoUrl: profileData?.photo_url ?? null,
   };
 
   return { authenticated: true, user, supabase };

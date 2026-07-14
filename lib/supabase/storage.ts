@@ -25,7 +25,7 @@ export const MAX_FILE_SIZES: Record<string, number> = {
   document: 20 * 1024 * 1024, // 20MB
   report: 10 * 1024 * 1024, // 10MB
   logo: 2 * 1024 * 1024, // 2MB
-  avatar: 1 * 1024 * 1024, // 1MB
+  avatar: 5 * 1024 * 1024, // 5MB (increased from 1MB for profile photos)
 };
 
 // Magic byte signatures for file type verification

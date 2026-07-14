@@ -260,6 +260,9 @@ async function getUserProfile(authUserId: string): Promise<AuthUser | null> {
       locked_until,
       roles (
         name
+      ),
+      user_profiles!left (
+        photo_url
       )
     `,
     )
@@ -270,6 +273,8 @@ async function getUserProfile(authUserId: string): Promise<AuthUser | null> {
     console.error("Failed to fetch user profile:", error);
     return null;
   }
+
+  const profileData = Array.isArray(data.user_profiles) ? data.user_profiles[0] : data.user_profiles;
 
   return {
     id: data.user_id,
@@ -282,6 +287,7 @@ async function getUserProfile(authUserId: string): Promise<AuthUser | null> {
     school_id: data.school_id,
     status: data.status as AuthUser["status"],
     emailVerified: data.email_verified,
+    photoUrl: profileData?.photo_url ?? null,
     lockedUntil: data.locked_until,
   };
 }

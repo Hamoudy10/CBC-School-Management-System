@@ -20,6 +20,7 @@ export interface AuthUser {
   school_id?: string | null;
   status: "active" | "inactive" | "suspended" | "archived";
   emailVerified: boolean;
+  photoUrl: string | null;
   lockedUntil?: string | null;
 }
 
