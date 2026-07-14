@@ -76,9 +76,6 @@ async function getStaffForEdit(staffId: string) {
         roles!inner (
           role_id,
           name
-        ),
-        user_profiles (
-          photo_url
         )
       )
     `
@@ -88,6 +85,18 @@ async function getStaffForEdit(staffId: string) {
     .single();
 
   const staffData: any = staffDataRaw;
+
+  // Fetch photo_url separately (nested join FK may not exist)
+  if (staffData) {
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('photo_url')
+      .eq('user_id', staffData.user_id)
+      .maybeSingle();
+    if (staffData.users) {
+      staffData.users.user_profiles = profile ? [profile] : [];
+    }
+  }
 
   // Fetch staff-eligible roles
   const { data: roles } = await supabase
