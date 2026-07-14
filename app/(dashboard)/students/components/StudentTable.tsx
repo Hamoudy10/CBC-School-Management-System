@@ -1,7 +1,7 @@
 // app/(dashboard)/students/components/StudentTable.tsx
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Eye,
@@ -137,9 +137,19 @@ function ActionDropdown({
   onDelete,
 }: ActionDropdownProps) {
   const [open, setopen] = useState(false);
+  const btnRef = useRef<HTMLDivElement>(null);
+  const [dropdownUp, setDropdownUp] = useState(false);
+
+  useEffect(() => {
+    if (open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      setDropdownUp(spaceBelow < 250);
+    }
+  }, [open]);
 
   return (
-    <div className="relative">
+    <div className="relative" ref={btnRef}>
       <Button
         variant="ghost"
         size="sm"
@@ -159,7 +169,7 @@ function ActionDropdown({
           />
 
           {/* Dropdown */}
-          <div className="absolute right-0 z-20 mt-1 w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+          <div className={`absolute right-0 z-20 w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-lg ${dropdownUp ? 'bottom-full mb-1' : 'mt-1'}`}>
             <button
               onClick={() => {
                 onView();
