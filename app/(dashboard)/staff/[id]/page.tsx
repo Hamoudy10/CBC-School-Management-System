@@ -107,16 +107,6 @@ async function getStaffData(staffId: string) {
         last_login_at,
         roles!inner (
           name
-        ),
-        user_profiles (
-          photo_url,
-          date_of_birth,
-          national_id,
-          address,
-          emergency_contact_name,
-          emergency_contact_phone,
-          blood_group,
-          medical_conditions
         )
       )
     `
@@ -127,8 +117,15 @@ async function getStaffData(staffId: string) {
 
   if (error || !data) {return null;}
 
+  // Fetch user_profiles separately (nested join FK may not exist)
+  const { data: profileData } = await supabase
+    .from('user_profiles')
+    .select('photo_url, date_of_birth, national_id, address, emergency_contact_name, emergency_contact_phone, blood_group, medical_conditions')
+    .eq('user_id', data.user_id)
+    .maybeSingle();
+
   const userData = data.users as any;
-  const profile = userData?.user_profiles?.[0] || {};
+  const profile = profileData || {};
 
   return {
     staffId: data.staff_id,
