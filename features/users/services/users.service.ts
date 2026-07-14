@@ -472,10 +472,13 @@ export async function updateUserProfile(
   if (payload.medicalConditions !== undefined)
     updateData.medical_conditions = payload.medicalConditions;
 
+  // Upsert: create row if it doesn't exist, update if it does
   const { error } = await (supabase
     .from("user_profiles") as any)
-    .update(updateData)
-    .eq("user_id", userId);
+    .upsert(
+      { user_id: userId, ...updateData },
+      { onConflict: "user_id" }
+    );
 
   if (error) {
     return {
