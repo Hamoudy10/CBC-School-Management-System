@@ -31,32 +31,27 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
     try {
       const scanner = new Html5Qrcode('barcode-reader-el');
       scannerRef.current = scanner;
-      await scanner.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 150 } },
-        (decodedText) => {
-          setDecoded(decodedText);
-          scanner.pause();
-          onScan(decodedText);
-        },
-        () => {},
-      );
-      setScanning(true);
-    } catch (err) {
-      try {
-        const { Html5Qrcode } = await import('html5-qrcode');
-        const scanner = new Html5Qrcode('barcode-reader-el');
-        scannerRef.current = scanner;
+      const cameras = await Html5Qrcode.getCameras().catch(() => []);
+      const cameraId = cameras.find((c: any) => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('rear'))?.id
+        || cameras[0]?.id;
+      if (!cameraId && cameras.length === 0) {
         await scanner.start(
-          { facingMode: 'user' },
+          { facingMode: 'environment' },
           { fps: 10, qrbox: { width: 250, height: 150 } },
           (decodedText) => { setDecoded(decodedText); scanner.pause(); onScan(decodedText); },
           () => {},
         );
-        setScanning(true);
-      } catch {
-        setError('Camera not available. Use manual entry below.');
+      } else {
+        await scanner.start(
+          { deviceId: cameraId },
+          { fps: 10, qrbox: { width: 250, height: 150 } },
+          (decodedText) => { setDecoded(decodedText); scanner.pause(); onScan(decodedText); },
+          () => {},
+        );
       }
+      setScanning(true);
+    } catch {
+      setError('Camera not available. Use manual entry below.');
     }
   }, [onScan]);
 
