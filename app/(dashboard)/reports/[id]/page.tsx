@@ -77,6 +77,7 @@ export default async function ReportDetailPage({
     schoolId: user.school_id,
     status: "active",
     emailVerified: true,
+    photoUrl: null,
   });
 
   if (!reportCard) {

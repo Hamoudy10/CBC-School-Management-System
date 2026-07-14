@@ -39,6 +39,9 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
         email_verified,
         roles (
           name
+        ),
+        user_profiles!left (
+          photo_url
         )
       `
       )
@@ -49,6 +52,8 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       console.error("Profile fetch error:", profileError);
       return null;
     }
+
+    const profileData = Array.isArray(profile.user_profiles) ? profile.user_profiles[0] : profile.user_profiles;
 
     return {
       id: profile.user_id,
@@ -61,6 +66,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       school_id: profile.school_id,
       status: profile.status as AuthUser["status"],
       emailVerified: profile.email_verified,
+      photoUrl: profileData?.photo_url ?? null,
     };
   } catch (error) {
     console.error("Session error:", error);
